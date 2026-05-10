@@ -34,7 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     await AuthFieldUtils.commitAutofill();
     if (!mounted) return;
-    final validation = AuthFieldUtils.validateEmailPassword(
+    final validation = AuthFieldUtils.validateLogin(
       _email.text,
       _password.text,
     );
@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await supabase.auth.signInWithPassword(
-        email: _email.text.trim(),
+        email: AuthFieldUtils.toAuthEmail(_email.text),
         password: _password.text.trim(),
       );
       if (!mounted) return;
@@ -107,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
-                                '이메일 로그인',
+                                '아이디·이메일 로그인',
                                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
@@ -131,10 +131,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _email,
                           decoration: const InputDecoration(
-                            labelText: '이메일',
-                            hintText: 'name@example.com',
+                            labelText: '아이디 또는 이메일',
+                            helperText: '아이디만 입력해도 됩니다.',
+                            hintText: '예: study01',
                           ),
-                          keyboardType: TextInputType.emailAddress,
+                          keyboardType: TextInputType.visiblePassword,
+                          autocorrect: false,
                           textInputAction: TextInputAction.next,
                           autofillHints: const [
                             AutofillHints.username,

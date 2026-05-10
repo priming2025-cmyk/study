@@ -5,14 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
-import '../auth_feature_flags.dart';
 import '../infra/auth_oauth_launch.dart';
 import 'auth_field_utils.dart';
-import 'widgets/sign_up_email_form_card.dart';
 import 'widgets/sign_up_email_pending_card.dart';
-import 'widgets/social_login_section.dart';
+import 'widgets/sign_up_main_card.dart';
 
-/// 이메일 회원가입 전용 화면 (로그인과 분리).
+/// 아이디(+내부 pseudo 이메일)·소셜 회원가입 화면.
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
 
@@ -21,25 +19,28 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  final _email = TextEditingController();
+  final _username = TextEditingController();
   final _password = TextEditingController();
+  final _passwordConfirm = TextEditingController();
   bool _loading = false;
   String _role = 'student';
   bool _awaitingEmailVerification = false;
 
   @override
   void dispose() {
-    _email.dispose();
+    _username.dispose();
     _password.dispose();
+    _passwordConfirm.dispose();
     super.dispose();
   }
 
   Future<void> _signUp() async {
     await AuthFieldUtils.commitAutofill();
     if (!mounted) return;
-    final validation = AuthFieldUtils.validateEmailPassword(
-      _email.text,
+    final validation = AuthFieldUtils.validateSimpleSignUp(
+      _username.text,
       _password.text,
+      _passwordConfirm.text,
     );
     if (validation != null) {
       AppSnacks.show(context, validation);
@@ -47,10 +48,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
     setState(() => _loading = true);
     try {
+      final authEmail = AuthFieldUtils.toAuthEmail(_username.text);
       final res = await supabase.auth.signUp(
-        email: _email.text.trim(),
+        email: authEmail,
         password: _password.text.trim(),
-        data: {'role': _role},
+        data: {
+          'role': _role,
+          'display_login': AuthFieldUtils.normalizeUsername(_username.text),
+        },
       );
       if (!mounted) return;
       if (res.session != null) {
@@ -104,71 +109,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
               const SizedBox(height: 24),
               if (_awaitingEmailVerification)
                 SignUpEmailPendingCard(onGoLogin: () => context.go('/login'))
-              else ...[
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (AuthFeatureFlags.socialLoginUiEnabled) ...[
-                          SocialLoginSection(
-                            title: '간편 가입',
-                            enabled: !_loading,
-                            onProviderTap: (p) async {
-                              if (_loading) return;
-                              setState(() => _loading = true);
-                              try {
-                                await AuthOAuthLaunch.signInWithProvider(context, p);
-                              } finally {
-                                if (mounted) setState(() => _loading = false);
-                              }
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '소셜로 가입하면 역할(학생/부모)은 이후 설정에서 바꿀 수 있어요.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              const Expanded(child: Divider()),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text(
-                                  '이메일로 가입',
-                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                              ),
-                              const Expanded(child: Divider()),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                        ] else ...[
-                          Text(
-                            '이메일로 가입',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        SignUpEmailFormCard(
-                          emailController: _email,
-                          passwordController: _password,
-                          role: _role,
-                          onRoleChanged: (r) => setState(() => _role = r),
-                          loading: _loading,
-                          onSignUp: _signUp,
-                        ),
-                      ],
-                    ),
-                  ),
+              else
+                SignUpMainCard(
+                  loading: _loading,
+                  role: _role,
+                  onRoleChanged: (r) => setState(() => _role = r),
+                  usernameController: _username,
+                  passwordController: _password,
+                  passwordConfirmController: _passwordConfirm,
+                  onSignUp: _signUp,
+                  onSocialOAuth: (p) async {
+                    if (_loading) return;
+                    setState(() => _loading = true);
+                    try {
+                      await AuthOAuthLaunch.signInWithProvider(context, p);
+                    } finally {
+                      if (mounted) setState(() => _loading = false);
+                    }
+                  },
                 ),
-              ],
               const SizedBox(height: 20),
               Text(
                 l10n.legalNoticeShort,
