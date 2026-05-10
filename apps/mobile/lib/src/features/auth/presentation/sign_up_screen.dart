@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../auth_feature_flags.dart';
 import '../infra/auth_oauth_launch.dart';
 import 'auth_field_utils.dart';
 import 'widgets/sign_up_email_form_card.dart';
@@ -65,16 +66,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
   }
 
-  Future<void> _oauth(OAuthProvider provider) async {
-    if (_loading) return;
-    setState(() => _loading = true);
-    try {
-      await AuthOAuthLaunch.signInWithProvider(context, provider);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -120,35 +111,51 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SocialLoginSection(
-                          title: '간편 가입',
-                          enabled: !_loading,
-                          onProviderTap: _oauth,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '소셜로 가입하면 역할(학생/부모)은 이후 설정에서 바꿀 수 있어요.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        if (AuthFeatureFlags.socialLoginUiEnabled) ...[
+                          SocialLoginSection(
+                            title: '간편 가입',
+                            enabled: !_loading,
+                            onProviderTap: (p) async {
+                              if (_loading) return;
+                              setState(() => _loading = true);
+                              try {
+                                await AuthOAuthLaunch.signInWithProvider(context, p);
+                              } finally {
+                                if (mounted) setState(() => _loading = false);
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '소셜로 가입하면 역할(학생/부모)은 이후 설정에서 바꿀 수 있어요.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: Text(
+                                  '이메일로 가입',
+                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
                               ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Expanded(child: Divider()),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(
-                                '이메일로 가입',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ),
-                            const Expanded(child: Divider()),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                        ] else ...[
+                          Text(
+                            '이메일로 가입',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
                         SignUpEmailFormCard(
                           emailController: _email,
                           passwordController: _password,

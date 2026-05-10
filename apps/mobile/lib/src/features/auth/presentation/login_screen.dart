@@ -6,8 +6,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
-import '../infra/auth_oauth_launch.dart';
+import '../auth_feature_flags.dart';
 import 'auth_field_utils.dart';
+import '../infra/auth_login_error_message.dart';
+import '../infra/auth_oauth_launch.dart';
 import 'widgets/social_login_section.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -50,17 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       context.go('/');
     } on AuthException catch (e) {
       if (!mounted) return;
-      AppSnacks.show(context, e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _oauth(OAuthProvider provider) async {
-    if (_loading) return;
-    setState(() => _loading = true);
-    try {
-      await AuthOAuthLaunch.signInWithProvider(context, provider);
+      AppSnacks.show(context, AuthLoginErrorMessage.forSignIn(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,27 +87,43 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SocialLoginSection(
-                        enabled: !_loading,
-                        onProviderTap: _oauth,
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          const Expanded(child: Divider()),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(
-                              '이메일 로그인',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
+                      if (AuthFeatureFlags.socialLoginUiEnabled) ...[
+                        SocialLoginSection(
+                          enabled: !_loading,
+                          onProviderTap: (p) async {
+                            if (_loading) return;
+                            setState(() => _loading = true);
+                            try {
+                              await AuthOAuthLaunch.signInWithProvider(context, p);
+                            } finally {
+                              if (mounted) setState(() => _loading = false);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            const Expanded(child: Divider()),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                '이메일 로그인',
+                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
                             ),
-                          ),
-                          const Expanded(child: Divider()),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                            const Expanded(child: Divider()),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ] else ...[
+                        Text(
+                          '로그인',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       AutofillGroup(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
