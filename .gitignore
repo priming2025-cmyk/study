@@ -1,0 +1,18 @@
+.DS_Store
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+**/.buildlog
+
+# IDE
+.idea/
+.vscode/
+
+# Secrets
+apps/mobile/.env
+supabase/.env
+

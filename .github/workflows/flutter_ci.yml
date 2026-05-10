@@ -1,0 +1,41 @@
+# apps/mobile 전용 — PR/푸시 시 분석·테스트·웹 빌드로 회귀를 막습니다.
+name: Flutter CI (mobile)
+
+on:
+  push:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/flutter_ci.yml"
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/flutter_ci.yml"
+
+defaults:
+  run:
+    working-directory: apps/mobile
+
+jobs:
+  analyze-test-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Prepare env for CI
+        run: cp .env.example .env
+
+      - run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test
+
+      - name: Build web
+        run: flutter build web --no-tree-shake-icons

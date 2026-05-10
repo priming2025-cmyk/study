@@ -1,0 +1,24 @@
+Study-up 스토어 제출 전 체크리스트 (MVP)
+================================
+
+1) 번들 / 패키지 이름
+   - Android: android/app/build.gradle.kts 의 applicationId (현재 예시 ID면 출시 전 변경)
+   - iOS: Xcode에서 Bundle Identifier 정리
+
+2) 서명
+   - Android: release signingConfig (현재 debug 서명은 출시 불가)
+   - iOS: Distribution 인증서·프로비저닝
+
+3) 권한 문구
+   - iOS Info.plist: 카메라·마이크 사용 목적 문구(한국어·영어)
+   - Android Manifest: INTERNET, CAMERA, RECORD_AUDIO 등 선언 확인
+
+4) 개인정보·약관
+   - 앱 내 /legal/terms, /legal/privacy 문구를 법무 검토 후 확정
+   - 스토어 설명에 데이터 수집 요약 링크
+
+5) 스크린샷·연령 등급
+   - 실제 UI 캡처, 가족/학습 앱에 맞는 등급 설문
+
+6) Supabase
+   - 프로덕션 프로젝트·RLS·OAuth Redirect URL 최종 점검

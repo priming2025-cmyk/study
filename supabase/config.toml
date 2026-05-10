@@ -1,0 +1,6 @@
+[project]
+id = "YOUR_SUPABASE_PROJECT_ID"
+
+# This file is a lightweight template so the repo can be connected to Supabase safely.
+# Do NOT commit any secrets here. Use environment variables or Supabase Dashboard secrets.
+
