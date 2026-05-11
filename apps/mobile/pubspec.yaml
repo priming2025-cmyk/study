@@ -20,6 +20,7 @@ dependencies:
 
   # supabase
   supabase_flutter: ^2.6.0
+  url_launcher: ^6.3.2
 
   # local cache
   drift: ^2.20.0
@@ -31,7 +32,9 @@ dependencies:
   flutter_dotenv: ^5.1.0
 
   # attention signals (on-device)
-  google_mlkit_face_detection: ^0.11.0
+  # face_detection_tflite: iOS·Android·macOS·Win·Linux 지원, ML Kit 대비 ~5.5배 빠름
+  # 웹(Flutter Web)은 TFLite 미지원 → face_attention_sensor_web.dart 가 타이머 스텁으로 대체
+  face_detection_tflite: ^6.2.5
   camera: ^0.11.0+2
 
   # webrtc (study room)

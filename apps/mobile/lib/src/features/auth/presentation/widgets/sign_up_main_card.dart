@@ -45,13 +45,6 @@ class SignUpMainCard extends StatelessWidget {
             enabled: !loading,
             onProviderTap: onSocialOAuth,
           ),
-          const SizedBox(height: 8),
-          Text(
-            '소셜 가입 후 역할(학생/부모)은 설정에서 바꿀 수 있어요.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-          ),
           const SizedBox(height: 6),
           Center(
             child: TextButton(

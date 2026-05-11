@@ -10,6 +10,7 @@ import '../infra/auth_oauth_launch.dart';
 import '../infra/auth_sign_up_error_message.dart';
 import 'auth_field_utils.dart';
 import 'widgets/auth_brand_header.dart';
+import 'widgets/login_legal_footer.dart';
 import 'widgets/sign_up_email_pending_card.dart';
 import 'widgets/sign_up_main_card.dart';
 
@@ -80,32 +81,36 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+    const subtitle = AuthFeatureFlags.socialLoginUiEnabled
+        ? '소셜 또는 아이디로 빠르게 시작할 수 있어요.'
+        : '역할을 고르고 아이디만으로 시작해요.';
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('회원가입'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/login');
-            }
-          },
-          tooltip: '로그인으로',
-        ),
-      ),
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: '로그인으로',
+                  onPressed: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/login');
+                    }
+                  },
+                ),
+              ),
               const AuthBrandHeader(
                 emphasis: 'Study-up',
                 trailing: ' 회원가입',
-                subtitle: '카카오·네이버·구글 또는 아이디로 빠르게 시작할 수 있어요.',
+                subtitle: subtitle,
               ),
               const SizedBox(height: 24),
               if (_awaitingEmailVerification)
@@ -132,28 +137,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     }
                   },
                 ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.legalNoticeShort,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                children: [
-                  TextButton(
-                    onPressed: () => context.push('/legal/terms'),
-                    child: Text(l10n.termsOfService),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push('/legal/privacy'),
-                    child: Text(l10n.privacyPolicy),
-                  ),
-                ],
-              ),
+              const SizedBox(height: 24),
+              LoginLegalFooter(l10n: l10n),
             ],
           ),
         ),

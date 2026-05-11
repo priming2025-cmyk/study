@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/routing/go_router_refresh_stream.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_lab_screen.dart';
+import 'features/auth/auth_feature_flags.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/sign_up_screen.dart';
 import 'features/coins/presentation/coin_history_screen.dart';
@@ -30,13 +31,24 @@ final _routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
-      final onAuthScreen =
-          state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+      final onLogin = state.matchedLocation == '/login';
+      final onSignUp = state.matchedLocation == '/signup';
+      final onAuthScreen = onLogin || onSignUp;
       final authed = session != null;
       final themeLab = kDebugMode && state.matchedLocation == '/dev/theme';
       final legal = state.matchedLocation.startsWith('/legal/');
 
-      if (!authed && !onAuthScreen && !themeLab && !legal) return '/login';
+      if (!AuthFeatureFlags.signUpFlowEnabled && onSignUp) return '/';
+
+      const skipLoginGate =
+          kDebugMode && AuthFeatureFlags.devBypassAuthGate;
+      if (!authed &&
+          !skipLoginGate &&
+          !onAuthScreen &&
+          !themeLab &&
+          !legal) {
+        return '/login';
+      }
       if (authed && onAuthScreen) return '/';
       return null;
     },

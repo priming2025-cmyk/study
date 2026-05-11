@@ -18,24 +18,24 @@ class SignUpEmailPendingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '가입은 되었는데 바로 들어가지 않는 상태예요.',
+              '가입은 완료됐어요',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Study-up MVP는 편하게 쓰려면 Supabase에서 이메일 확인을 끄는 것을 권장합니다.\n'
-              'Authentication → Providers → Email → 「Confirm email」 OFF → 저장 후, '
-              '다시 가입하거나 로그인해 보세요.',
+              '보안 설정에 따라 인증 메일의 링크를 누른 뒤에만 로그인할 수 있어요. '
+              '메일함과 스팸함을 확인해 주세요.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    height: 1.4,
                   ),
             ),
             const SizedBox(height: 8),
             Text(
-              '인증 메일 플로우를 켜 둔 경우에만: 메일의 링크를 누른 뒤 로그인하면 됩니다. '
-              '(메일이 없으면 스팸함을 확인해 주세요.)',
+              '메일이 오지 않거나 계속 막히면 잠시 뒤 다시 시도하거나, '
+              '앱을 만드는 쪽 설정(이메일 인증)을 확인해야 할 수 있어요.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

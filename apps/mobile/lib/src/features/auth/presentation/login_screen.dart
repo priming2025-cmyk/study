@@ -157,12 +157,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20)
               else
                 const SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: _loading ? null : () => context.push('/signup'),
-                  child: const Text('처음이신가요? 회원가입'),
+              if (AuthFeatureFlags.signUpFlowEnabled)
+                Center(
+                  child: TextButton(
+                    onPressed: _loading ? null : () => context.push('/signup'),
+                    child: const Text('처음이신가요? 회원가입'),
+                  ),
                 ),
-              ),
               Center(
                 child: TextButton(
                   onPressed: _accountHelp,

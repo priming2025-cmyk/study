@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "bash tool/vercel_build.sh"
+  }
+}

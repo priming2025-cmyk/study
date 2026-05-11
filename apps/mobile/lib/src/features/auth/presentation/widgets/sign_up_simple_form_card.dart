@@ -48,8 +48,8 @@ class SignUpSimpleFormCard extends StatelessWidget {
               labelText: '아이디',
               hintText: '예: hello_12',
               border: OutlineInputBorder(),
-              helperText: '영문 소문자·숫자·_ 만 가능. 안 써지면 키보드를 영문(한영)으로 바꿔 주세요.',
-              helperMaxLines: 2,
+              helperText: '영문 소문자·숫자·_ (3~24자). 한영 전환 후 입력해 주세요.',
+              helperMaxLines: 1,
             ),
             textInputAction: TextInputAction.next,
             autocorrect: false,
@@ -58,13 +58,6 @@ class SignUpSimpleFormCard extends StatelessWidget {
               LengthLimitingTextInputFormatter(24),
             ],
             autofillHints: const [AutofillHints.username],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '이메일 없이 아이디만으로 가입됩니다.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
           ),
           const SizedBox(height: 12),
           TextField(

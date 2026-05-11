@@ -1,3 +1,6 @@
+# Local secrets (Vercel에서는 Environment Variables 사용)
+.env
+
 # Miscellaneous
 *.class
 *.log
@@ -31,6 +34,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/.flutter_sdk/
 /coverage/
 
 # Symbolication related
