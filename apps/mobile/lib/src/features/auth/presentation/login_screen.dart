@@ -7,10 +7,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../auth_feature_flags.dart';
-import 'auth_field_utils.dart';
 import '../infra/auth_login_error_message.dart';
 import '../infra/auth_oauth_launch.dart';
-import 'widgets/social_login_section.dart';
+import 'auth_field_utils.dart';
+import 'widgets/auth_brand_header.dart';
+import 'widgets/login_identity_form_section.dart';
+import 'widgets/login_legal_footer.dart';
+import 'widgets/reference_social_auth_strip.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,22 +23,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController();
+  final _identity = TextEditingController();
   final _password = TextEditingController();
   bool _loading = false;
+  bool _showEmailLogin = !AuthFeatureFlags.socialLoginUiEnabled;
 
   @override
   void dispose() {
-    _email.dispose();
+    _identity.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  Future<void> _oauth(OAuthProvider p) async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      await AuthOAuthLaunch.signInWithProvider(context, p);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _signIn() async {
     await AuthFieldUtils.commitAutofill();
     if (!mounted) return;
     final validation = AuthFieldUtils.validateLogin(
-      _email.text,
+      _identity.text,
       _password.text,
     );
     if (validation != null) {
@@ -45,7 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await supabase.auth.signInWithPassword(
-        email: AuthFieldUtils.toAuthEmail(_email.text),
+        email: AuthFieldUtils.toAuthEmail(_identity.text),
         password: _password.text.trim(),
       );
       if (!mounted) return;
@@ -58,155 +72,121 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _accountHelp() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('계정·비밀번호 안내'),
+        content: const Text(
+          '• 아이디로 가입하셨다면 로그인란에는 가입 때 쓴 아이디만 입력하면 됩니다.\n\n'
+          '• 이메일로 가입하셨다면 전체 이메일 주소를 입력하세요.\n\n'
+          '• 비밀번호 재설정은 Supabase에서 이메일 발송 설정이 되어 있을 때만 가능합니다.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+    final showForm = _showEmailLogin || !AuthFeatureFlags.socialLoginUiEnabled;
+
     return Scaffold(
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 24),
-              Text(
-                'Study-up',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+              const AuthBrandHeader(
+                emphasis: 'Study-up',
+                trailing: ' 계정 하나로',
+                subtitle: '계획·집중·기록·통계를 한곳에서 시작해요.',
               ),
-              const SizedBox(height: 8),
-              Text(
-                '계획 → 집중 → 기록 → 분석',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (AuthFeatureFlags.socialLoginUiEnabled) ...[
-                        SocialLoginSection(
-                          enabled: !_loading,
-                          onProviderTap: (p) async {
-                            if (_loading) return;
-                            setState(() => _loading = true);
-                            try {
-                              await AuthOAuthLaunch.signInWithProvider(context, p);
-                            } finally {
-                              if (mounted) setState(() => _loading = false);
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            const Expanded(child: Divider()),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(
-                                '아이디·이메일 로그인',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ),
-                            const Expanded(child: Divider()),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                      ] else ...[
+              if (AuthFeatureFlags.socialLoginUiEnabled)
+                const SizedBox(height: 28)
+              else
+                const SizedBox(height: 20),
+              if (AuthFeatureFlags.socialLoginUiEnabled) ...[
+                ReferenceSocialAuthStrip(
+                  enabled: !_loading,
+                  onProviderTap: _oauth,
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton(
+                    onPressed: _loading
+                        ? null
+                        : () => setState(() => _showEmailLogin = !_showEmailLogin),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          '로그인',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                          _showEmailLogin ? '이메일·아이디 접기' : '이메일 또는 아이디로 시작하기',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: cs.primary,
+                          ),
                         ),
-                        const SizedBox(height: 16),
+                        Icon(
+                          _showEmailLogin ? Icons.expand_less : Icons.chevron_right,
+                          size: 20,
+                          color: cs.primary,
+                        ),
                       ],
-                      AutofillGroup(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                        TextField(
-                          controller: _email,
-                          decoration: const InputDecoration(
-                            labelText: '아이디 또는 이메일',
-                            helperText: '아이디만 입력해도 됩니다.',
-                            hintText: '예: study01',
-                          ),
-                          keyboardType: TextInputType.visiblePassword,
-                          autocorrect: false,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [
-                            AutofillHints.username,
-                            AutofillHints.email,
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _password,
-                          decoration: const InputDecoration(labelText: '비밀번호'),
-                          obscureText: true,
-                          textInputAction: TextInputAction.done,
-                          autofillHints: const [AutofillHints.password],
-                          onSubmitted: (_) {
-                            if (!_loading) _signIn();
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: _loading ? null : _signIn,
-                          child: Text(_loading ? '처리 중…' : '로그인'),
-                        ),
-                        const SizedBox(height: 12),
-                        Center(
-                          child: TextButton(
-                            onPressed: _loading ? null : () => context.push('/signup'),
-                            child: const Text('계정이 없으신가요? 회원가입'),
-                          ),
-                        ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
+                  ),
+                ),
+              ],
+              if (showForm) ...[
+                const SizedBox(height: 8),
+                LoginIdentityFormSection(
+                  identityController: _identity,
+                  passwordController: _password,
+                  loading: _loading,
+                  onSubmit: _signIn,
+                ),
+              ],
+              if (AuthFeatureFlags.socialLoginUiEnabled)
+                const SizedBox(height: 20)
+              else
+                const SizedBox(height: 12),
+              Center(
+                child: TextButton(
+                  onPressed: _loading ? null : () => context.push('/signup'),
+                  child: const Text('처음이신가요? 회원가입'),
+                ),
+              ),
+              Center(
+                child: TextButton(
+                  onPressed: _accountHelp,
+                  child: const Text(
+                    '계정·비밀번호 도움말',
+                    style: TextStyle(decoration: TextDecoration.underline),
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
+              LoginLegalFooter(l10n: l10n),
               const SizedBox(height: 16),
               Text(
-                '얼굴/영상은 서버로 보내지 않아요. 학습 기록은 요약값만 저장합니다.',
+                '얼굴/영상은 서버로 보내지 않아요.',
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: cs.outline,
                     ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.legalNoticeShort,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                children: [
-                  TextButton(
-                    onPressed: () => context.push('/legal/terms'),
-                    child: Text(l10n.termsOfService),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push('/legal/privacy'),
-                    child: Text(l10n.privacyPolicy),
-                  ),
-                ],
               ),
               if (kDebugMode) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => context.push('/dev/theme'),
-                  child: const Text('테마·컬러 미리보기 (개발 전용)'),
+                  child: const Text('테마 미리보기 (개발)'),
                 ),
               ],
             ],

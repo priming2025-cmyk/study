@@ -1,6 +1,6 @@
 /// 인증 UI·기능 토글 (소셜은 Supabase Providers 설정 후 켜기).
 abstract final class AuthFeatureFlags {
-  /// `false`: 로그인·회원가입은 이메일+비밀번호만 표시 (Supabase 이메일 테스트용).
-  /// 카카오/네이버/구글을 켤 때 `true`로 바꾸고 대시보드에 Client ID/Secret을 넣습니다.
-  static const bool socialLoginUiEnabled = false;
+  /// `false`: 카카오·네이버·구글 줄을 숨기고 아이디/이메일 폼만 즉시 표시.
+  /// `true`(기본): 참고 UI처럼 소셜 버튼 노출 (대시보드에 Provider·Redirect URL 필요).
+  static const bool socialLoginUiEnabled = true;
 }

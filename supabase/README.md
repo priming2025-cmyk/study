@@ -8,6 +8,13 @@
 2. SQL Editor에서 `migrations/0001_init.sql` 실행
 3. Auth 설정에서 Email/Password 또는 Phone 로그인 방식을 선택
 
+### 「email rate limit exceeded」 가입 오류
+
+짧은 시간에 가입 시도가 많거나, **확인용 이메일**을 자주 보내면 Supabase 무료 플랜의 **발송 한도**에 걸릴 수 있습니다.
+
+- **대기** 후 재시도 (보통 시간이 지나면 풀립니다).
+- 근본적으로 줄이려면 아래처럼 **Confirm email OFF** 로 인증 메일 자체를 끕니다.
+
 ### 편한 가입: 이메일 인증(Confirm email) 끄기 (MVP 권장)
 
 가입 직후 비밀번호 로그인까지 막히지 않게 하려면 대시보드에서 **이메일 확인 절차를 끕니다.**

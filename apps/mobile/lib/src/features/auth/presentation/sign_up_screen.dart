@@ -5,8 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../auth_feature_flags.dart';
 import '../infra/auth_oauth_launch.dart';
+import '../infra/auth_sign_up_error_message.dart';
 import 'auth_field_utils.dart';
+import 'widgets/auth_brand_header.dart';
 import 'widgets/sign_up_email_pending_card.dart';
 import 'widgets/sign_up_main_card.dart';
 
@@ -25,6 +28,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _loading = false;
   String _role = 'student';
   bool _awaitingEmailVerification = false;
+
+  /// 소셜이 보일 때는 아이디 가입 폼을 접었다가 펼칩니다.
+  bool _showLocalSignUp = !AuthFeatureFlags.socialLoginUiEnabled;
 
   @override
   void dispose() {
@@ -65,7 +71,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       setState(() => _awaitingEmailVerification = true);
     } on AuthException catch (e) {
       if (!mounted) return;
-      AppSnacks.show(context, e.message);
+      AppSnacks.show(context, AuthSignUpErrorMessage.forSignUp(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -75,6 +81,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('회원가입'),
         leading: IconButton(
@@ -91,20 +98,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Study-up',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '계획 → 집중 → 기록 → 분석',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+              const AuthBrandHeader(
+                emphasis: 'Study-up',
+                trailing: ' 회원가입',
+                subtitle: '카카오·네이버·구글 또는 아이디로 빠르게 시작할 수 있어요.',
               ),
               const SizedBox(height: 24),
               if (_awaitingEmailVerification)
@@ -118,6 +119,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   passwordController: _password,
                   passwordConfirmController: _passwordConfirm,
                   onSignUp: _signUp,
+                  showLocalSignUp: _showLocalSignUp,
+                  onToggleLocalSignUp: () =>
+                      setState(() => _showLocalSignUp = !_showLocalSignUp),
                   onSocialOAuth: (p) async {
                     if (_loading) return;
                     setState(() => _loading = true);
