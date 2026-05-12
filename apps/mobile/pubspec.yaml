@@ -33,12 +33,16 @@ dependencies:
 
   # attention signals (on-device)
   # face_detection_tflite: iOS·Android·macOS·Win·Linux 지원, ML Kit 대비 ~5.5배 빠름
-  # 웹(Flutter Web)은 TFLite 미지원 → face_attention_sensor_web.dart 가 타이머 스텁으로 대체
+  # 웹: face_attention_sensor_web.dart 가 takePicture JPEG + detectFaces 로 집중 신호 생성
   face_detection_tflite: ^6.2.5
   camera: ^0.11.0+2
 
-  # webrtc (study room)
-  flutter_webrtc: ^0.11.7
+  # 로컬 알림(계획 시작 시각)
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  flutter_timezone: ^3.0.1
+  shared_preferences: ^2.3.3
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -52,4 +56,5 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/audio/
 

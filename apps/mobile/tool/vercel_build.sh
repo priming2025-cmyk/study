@@ -34,6 +34,6 @@ TURN_CREDENTIAL=${TURN_CREDENTIAL:-}
 EOF
 
 flutter pub get
-flutter build web --release --no-tree-shake-icons
+flutter build web --release --no-tree-shake-icons --no-web-resources-cdn
 
 echo "Output: ${ROOT}/build/web"

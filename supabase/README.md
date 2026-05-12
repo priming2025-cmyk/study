@@ -94,6 +94,21 @@ Study-up 앱은 사용자에게 이메일 대신 **아이디**만 받고, 내부
 4. 앱에서 계획·세션 등을 한 번 저장한 뒤, 해당 테이블(`plans`, `session_summaries` 등)에 행이 쌓이는지 확인합니다.
 5. **SQL Editor** 예시: `select id, role, created_at from public.profiles order by created_at desc limit 10;`
 
+### 과목 추가가 계속 실패할 때 (필수)
+
+Supabase 대시보드에 제3자가 대신 로그인해 줄 수는 없습니다. SQL은 **아래 순서**로 실행하세요.
+
+1. **기본 스키마가 없다면** (`relation "public.profiles" does not exist` 등):  
+   - [`migrations/0001_init.sql`](./migrations/0001_init.sql) **전체**를 SQL Editor에 붙여넣고 **Run**  
+   - 이어서 [`migrations/0002_auth_profile_trigger.sql`](./migrations/0002_auth_profile_trigger.sql) 실행 (가입 시 `profiles` 자동 생성)
+2. **그다음** [`sql/과목추가_필수수정.sql`](./sql/과목추가_필수수정.sql) 실행  
+   - `profiles` INSERT RLS + `plan_items` 보강 컬럼을 넣습니다.  
+   - `profiles`가 없을 때 이 파일만 실행하면, 스크립트 상단에서 **한국어 안내와 함께** 중단되도록 되어 있습니다.
+
+실행 위치: **Supabase Dashboard → SQL → New query** → 복사 → **Run**.
+
+적용 후 앱에서 **새로고침(웹) 또는 재실행**하고, 가능하면 **로그아웃 후 다시 로그인**까지 해 주세요.
+
 ### 원격 DB에 마이그레이션 반영
 - SQL Editor에서 `migrations/*.sql` 을 **순서대로** 실행하거나,
 - Supabase CLI로 프로젝트를 링크한 뒤 `supabase db push` 등 팀에서 쓰는 방식으로 맞춥니다.

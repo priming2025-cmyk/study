@@ -5,7 +5,12 @@ import 'package:study_up/l10n/app_localizations.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/supabase/supabase_client.dart';
+import '../../motivation/domain/motivation_models.dart';
+import '../../motivation/presentation/title_equip_sheet.dart';
 import '../../plan/data/plan_models.dart';
+import 'widgets/dashboard_hero_streak.dart';
+import 'widgets/dashboard_quick_card.dart';
+import 'widgets/dashboard_today_section.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -16,6 +21,7 @@ class DashboardScreen extends ConsumerWidget {
     final email = supabase.auth.currentUser?.email;
     final planRepo = ref.watch(planRepositoryProvider);
     final sessionRepo = ref.watch(sessionRepositoryProvider);
+    final motivationRepo = ref.watch(motivationRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -34,15 +40,14 @@ class DashboardScreen extends ConsumerWidget {
         future: Future.wait([
           sessionRepo.fetchTodayFocusedSeconds(),
           planRepo.fetchTodayPlan(),
-          sessionRepo.fetchCoinBalance(),
+          motivationRepo.fetchMyProfileRpg(),
         ]),
         builder: (context, snapshot) {
           final focusedSeconds =
               snapshot.data == null ? 0 : snapshot.data![0] as int;
           final todayPlan =
               snapshot.data == null ? null : snapshot.data![1] as TodayPlan?;
-          final coinBalance =
-              snapshot.data == null ? 0 : snapshot.data![2] as int;
+          final rpg = snapshot.data == null ? null : snapshot.data![2] as ProfileRpgSummary?;
 
           final planTarget = todayPlan?.totalTargetSeconds ?? 0;
           final planActual = todayPlan?.totalActualSeconds ?? 0;
@@ -53,9 +58,16 @@ class DashboardScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _HeroCard(email: email, coinBalance: coinBalance),
+              DashboardHeroCard(
+                email: email,
+                rpg: rpg,
+                onChangeTitle: () => showTitleEquipBottomSheet(
+                  context,
+                  motivationRepo,
+                ),
+              ),
               const SizedBox(height: 12),
-              _TodayMetricsCard(
+              DashboardTodayMetricsCard(
                 focusedSeconds: focusedSeconds,
                 planTargetSeconds: planTarget,
                 planActualSeconds: planActual,
@@ -66,7 +78,7 @@ class DashboardScreen extends ConsumerWidget {
               Row(
                 children: [
                   Expanded(
-                    child: _QuickCard(
+                    child: DashboardQuickCard(
                       title: '오늘 계획',
                       subtitle: '템플릿/최근 과목',
                       icon: Icons.edit_calendar_outlined,
@@ -75,7 +87,7 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _QuickCard(
+                    child: DashboardQuickCard(
                       title: '기록',
                       subtitle: '최근 7일 집중',
                       icon: Icons.insights_outlined,
@@ -85,7 +97,7 @@ class DashboardScreen extends ConsumerWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              _QuickCard(
+              DashboardQuickCard(
                 title: '가족 연결',
                 subtitle: '부모·자녀 집중 기록 공유',
                 icon: Icons.family_restroom_outlined,
@@ -126,6 +138,55 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              Text(
+                '동기·보상',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '꾸준함은 기록 탭에서 확인해요',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '최근 7일 집중 그래프, 코인 내역, 친구 랭킹을 한 번에 볼 수 있어요.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/social'),
+                      icon: const Icon(Icons.groups_2_outlined),
+                      label: const Text('함께하기'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/gacha'),
+                      icon: const Icon(Icons.card_giftcard_outlined),
+                      label: const Text('뽑기'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Center(
                 child: Wrap(
                   spacing: 8,
@@ -149,241 +210,3 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 }
-
-class _HeroCard extends StatelessWidget {
-  final String? email;
-  final int coinBalance;
-  const _HeroCard({required this.email, required this.coinBalance});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '오늘도 꾸준히',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '계획 → 집중 → 기록 → 분석',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: () => context.push('/coins'),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.toll_outlined, size: 18),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '코인 $coinBalance · 내역 보기',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (email != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.verified_user_outlined, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      email!,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _QuickCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon),
-              const SizedBox(height: 10),
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TodayMetricsCard extends StatelessWidget {
-  final int focusedSeconds;
-  final int planTargetSeconds;
-  final int planActualSeconds;
-  final double completionRate;
-  final bool loading;
-
-  const _TodayMetricsCard({
-    required this.focusedSeconds,
-    required this.planTargetSeconds,
-    required this.planActualSeconds,
-    required this.completionRate,
-    required this.loading,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final focusedText = _formatSeconds(focusedSeconds);
-    final planText = planTargetSeconds <= 0
-        ? '아직 계획이 없어요'
-        : '${_formatSeconds(planActualSeconds)} / ${_formatSeconds(planTargetSeconds)}';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('오늘',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _MetricTile(
-                    label: '집중시간',
-                    value: loading ? '불러오는 중…' : focusedText,
-                    icon: Icons.timer_outlined,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _MetricTile(
-                    label: '계획 달성률',
-                    value: loading
-                        ? '불러오는 중…'
-                        : '${(completionRate * 100).round()}%',
-                    icon: Icons.check_circle_outline,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(planText,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    )),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(value: completionRate),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _formatSeconds(int seconds) {
-    final h = seconds ~/ 3600;
-    final m = (seconds % 3600) ~/ 60;
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m';
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _MetricTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 6),
-              Text(label,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      )),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-}
-

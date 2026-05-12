@@ -44,11 +44,10 @@ class AppShell extends StatelessWidget {
             icon: Icon(Icons.insights_outlined),
             selectedIcon: Icon(Icons.insights),
             label: '기록',
-            tooltip: '집중 기록 통계',
+            tooltip: '집중 기록·미션·랭킹',
           ),
         ],
       ),
     );
   }
 }
-

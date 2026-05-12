@@ -29,6 +29,7 @@ class FaceAttentionSensor {
   Future<void> start({
     CameraDescription? camera,
     required bool Function() appInForeground,
+    bool skipCameraEnumeration = false,
   }) async {
     if (_running) return;
     final cam = camera;

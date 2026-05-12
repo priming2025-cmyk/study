@@ -28,6 +28,9 @@ class PlanItem {
   final int targetSeconds;
   final int actualSeconds;
   final bool isDone;
+  /// 사용자가 정한 시작 시각(서버 timestamptz, UTC 저장 → 앱에서 toLocal 표시)
+  final DateTime? scheduledStartAt;
+  final bool reminderEnabled;
 
   const PlanItem({
     required this.id,
@@ -35,6 +38,8 @@ class PlanItem {
     required this.targetSeconds,
     required this.actualSeconds,
     required this.isDone,
+    this.scheduledStartAt,
+    this.reminderEnabled = false,
   });
 
   double get completionRate {
@@ -43,6 +48,26 @@ class PlanItem {
     if (r < 0) return 0;
     if (r > 1) return 1;
     return r;
+  }
+
+  PlanItem copyWith({
+    String? id,
+    String? subject,
+    int? targetSeconds,
+    int? actualSeconds,
+    bool? isDone,
+    DateTime? scheduledStartAt,
+    bool? reminderEnabled,
+  }) {
+    return PlanItem(
+      id: id ?? this.id,
+      subject: subject ?? this.subject,
+      targetSeconds: targetSeconds ?? this.targetSeconds,
+      actualSeconds: actualSeconds ?? this.actualSeconds,
+      isDone: isDone ?? this.isDone,
+      scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
+      reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+    );
   }
 }
 
@@ -71,4 +96,3 @@ class TodayPlan {
     return r;
   }
 }
-

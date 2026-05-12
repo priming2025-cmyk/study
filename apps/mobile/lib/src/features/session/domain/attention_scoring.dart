@@ -3,11 +3,11 @@ import 'session_summary.dart';
 
 /// 집중 상태 5단계.
 enum FocusStatus {
-  focused,    // 집중 중 (점수 80~100)
-  normal,     // 보통 (점수 50~79)
-  distracted, // 시선 이탈 (점수 20~49)
-  drowsy,     // 졸음 (점수 0~19)
-  away,       // 자리 이탈 (얼굴 없음)
+  focused, // 집중 (민감도·점수에 따라 하한 가변)
+  normal, // 보통
+  distracted, // 시선 이탈
+  drowsy, // 졸음·저점수
+  away, // 자리 이탈 (얼굴 없음)
 }
 
 extension FocusStatusLabel on FocusStatus {
@@ -43,6 +43,11 @@ class AttentionScoringState {
   final int _drowsyStreak;    // 연속 눈감김 초
   final int _distractedStreak; // 연속 이탈 초
 
+  /// 집중 초 누적용 히스테리시스(순간 점수와 UI 스무딩 분리).
+  final bool _focusedLatch;
+  final int _preFocusStreak;
+  final int _preUnfocusStreak;
+
   const AttentionScoringState({
     required this.startedAt,
     required this.lastTickAt,
@@ -61,8 +66,14 @@ class AttentionScoringState {
     this.lastStatus = FocusStatus.focused,
     int drowsyStreak = 0,
     int distractedStreak = 0,
+    bool focusedLatch = false,
+    int preFocusStreak = 0,
+    int preUnfocusStreak = 0,
   })  : _drowsyStreak = drowsyStreak,
-        _distractedStreak = distractedStreak;
+        _distractedStreak = distractedStreak,
+        _focusedLatch = focusedLatch,
+        _preFocusStreak = preFocusStreak,
+        _preUnfocusStreak = preUnfocusStreak;
 
   factory AttentionScoringState.started(DateTime at) {
     return AttentionScoringState(
@@ -75,6 +86,9 @@ class AttentionScoringState {
       faceMissingEvents: 0,
       multiFaceEvents: 0,
       paused: false,
+      focusedLatch: false,
+      preFocusStreak: 0,
+      preUnfocusStreak: 0,
     );
   }
 
@@ -84,6 +98,12 @@ class AttentionScoringState {
 }
 
 class AttentionScoring {
+  /// 순간 점수가 기준을 만족해도, 이 연속 초를 채운 뒤에만 집중 초를 누적하기 시작합니다.
+  static const int kFocusEnterSeconds = 2;
+
+  /// 기준 미달이 이 초수를 넘기면 집중 초 누적을 멈춥니다(그 전까지는 집중으로 유지).
+  static const int kFocusExitGraceSeconds = 2;
+
   /// 신호 1틱(1초)당 집중도 점수 계산.
   ///
   /// 점수 공식:
@@ -103,11 +123,18 @@ class AttentionScoring {
     return score.clamp(0, 100);
   }
 
-  static FocusStatus _statusFromScore(int score, AttentionSignals s) {
+  /// UI용 단계. [engagedMinScore]를 ‘집중’ 하한에 맞추고, 그 아래는 보통·이탈 구간으로 나눕니다.
+  static FocusStatus _statusFromScore(
+    int score,
+    AttentionSignals s,
+    int engagedMinScore,
+  ) {
     if (!s.facePresent) return FocusStatus.away;
     if (s.eyesClosed) return FocusStatus.drowsy;
-    if (score >= 80) return FocusStatus.focused;
-    if (score >= 50) return FocusStatus.normal;
+    final focusedMin = engagedMinScore.clamp(20, 80);
+    final normalMin = (focusedMin - 30).clamp(21, focusedMin - 1);
+    if (score >= focusedMin) return FocusStatus.focused;
+    if (score >= normalMin) return FocusStatus.normal;
     if (score >= 20) return FocusStatus.distracted;
     return FocusStatus.drowsy;
   }
@@ -116,6 +143,9 @@ class AttentionScoring {
     required AttentionScoringState state,
     required DateTime now,
     required AttentionSignals signals,
+    /// 순간 점수·얼굴·포그라운드가 이 기준을 만족하면 집중 초 누적 후보가 되며,
+    /// [kFocusEnterSeconds]·[kFocusExitGraceSeconds] 히스테리시스가 적용됩니다.
+    int engagedMinScore = 50,
   }) {
     if (state.paused) {
       return AttentionScoringState(
@@ -136,13 +166,52 @@ class AttentionScoring {
         lastStatus: state.lastStatus,
         drowsyStreak: state._drowsyStreak,
         distractedStreak: state._distractedStreak,
+        focusedLatch: state._focusedLatch,
+        preFocusStreak: state._preFocusStreak,
+        preUnfocusStreak: state._preUnfocusStreak,
       );
     }
 
     final delta = now.difference(state.lastTickAt).inSeconds.clamp(0, 5);
     final score = _computeScore(signals);
-    final status = _statusFromScore(score, signals);
-    final isFocused = score >= 50 && signals.facePresent;
+    // 집중 초는 순간 점수로, UI 라벨은 짧은 흔들림에 덜 민감하도록 평균과 혼합.
+    final avg = state.scoreTicks == 0
+        ? score
+        : (state.scoreSum / state.scoreTicks).round().clamp(0, 100);
+    final smoothForStatus =
+        ((score * 55 + avg * 45) / 100).round().clamp(0, 100);
+    final status = _statusFromScore(smoothForStatus, signals, engagedMinScore);
+
+    final rawFocused =
+        score >= engagedMinScore && signals.facePresent && signals.appInForeground;
+    var latch = state._focusedLatch;
+    var pFocus = state._preFocusStreak;
+    var pUnfocus = state._preUnfocusStreak;
+    if (latch) {
+      if (rawFocused) {
+        pUnfocus = 0;
+      } else {
+        pUnfocus = pUnfocus + delta;
+        if (pUnfocus > kFocusExitGraceSeconds) {
+          latch = false;
+          pFocus = 0;
+          pUnfocus = 0;
+        }
+      }
+    } else {
+      if (rawFocused) {
+        pFocus = pFocus + delta;
+        pUnfocus = 0;
+        if (pFocus >= kFocusEnterSeconds) {
+          latch = true;
+          pFocus = 0;
+          pUnfocus = 0;
+        }
+      } else {
+        pFocus = 0;
+      }
+    }
+    final isFocused = latch;
 
     final faceMissing = state.faceMissingEvents + (signals.facePresent ? 0 : 1);
     final multiFace = state.multiFaceEvents + (signals.multiFace ? 1 : 0);
@@ -180,6 +249,9 @@ class AttentionScoring {
       lastStatus: status,
       drowsyStreak: newDrowsyStreak,
       distractedStreak: newDistractedStreak,
+      focusedLatch: latch,
+      preFocusStreak: pFocus,
+      preUnfocusStreak: pUnfocus,
     );
   }
 
@@ -202,6 +274,9 @@ class AttentionScoring {
       lastStatus: state.lastStatus,
       drowsyStreak: state._drowsyStreak,
       distractedStreak: state._distractedStreak,
+      focusedLatch: state._focusedLatch,
+      preFocusStreak: state._preFocusStreak,
+      preUnfocusStreak: state._preUnfocusStreak,
     );
   }
 
@@ -224,6 +299,9 @@ class AttentionScoring {
       lastStatus: state.lastStatus,
       drowsyStreak: 0,
       distractedStreak: 0,
+      focusedLatch: state._focusedLatch,
+      preFocusStreak: 0,
+      preUnfocusStreak: 0,
     );
   }
 

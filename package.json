@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "name": "setudy",
+  "scripts": {
+    "web": "npm run web --prefix apps/mobile",
+    "web:clean": "npm run web:clean --prefix apps/mobile",
+    "db:supabase-login": "npx --yes supabase@latest login",
+    "db:push": "bash tool/supabase-db-push.sh",
+    "db:apply-profiles-rls": "npm run db:push"
+  }
+}

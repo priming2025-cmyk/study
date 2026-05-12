@@ -78,6 +78,42 @@ class SessionRepository {
     return sum;
   }
 
+  /// XP·레벨·스트릭·칭호 해금 (세션당 1회, idempotent).
+  Future<Map<String, dynamic>> applySessionProgress({
+    required String sessionId,
+    required int focusedSeconds,
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw const AuthException('Not authenticated');
+
+    final res = await supabase.rpc(
+      'apply_session_progress',
+      params: {
+        'p_user_id': userId,
+        'p_session_id': sessionId,
+        'p_focused_seconds': focusedSeconds,
+      },
+    );
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  /// 스쿼드 주간 미션에 집중 시간 반영 (세션당 1회).
+  Future<void> applySquadSessionContribution({
+    required String sessionId,
+    required int focusedSeconds,
+  }) async {
+    if (supabase.auth.currentUser?.id == null) {
+      throw const AuthException('Not authenticated');
+    }
+    await supabase.rpc(
+      'apply_squad_session_contribution',
+      params: {
+        'p_session_id': sessionId,
+        'p_focused_seconds': focusedSeconds,
+      },
+    );
+  }
+
   Future<int> awardCoinsForSession({
     required String sessionId,
     required int focusedSeconds,

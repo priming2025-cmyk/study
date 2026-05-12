@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'plan_models.dart';
 
-/// 오늘 계획을 로컬 SQLite 한 행에 넣기 위한 JSON 직렬화.
+/// 로컬 SQLite 한 행에 넣기 위한 JSON 직렬화.
 abstract final class TodayPlanCodec {
   static String toJsonString(TodayPlan plan) {
     return jsonEncode(_toJson(plan));
@@ -29,6 +29,9 @@ abstract final class TodayPlanCodec {
       'targetSeconds': e.targetSeconds,
       'actualSeconds': e.actualSeconds,
       'isDone': e.isDone,
+      if (e.scheduledStartAt != null)
+        'scheduledStartAt': e.scheduledStartAt!.toIso8601String(),
+      'reminderEnabled': e.reminderEnabled,
     };
   }
 
@@ -52,6 +55,10 @@ abstract final class TodayPlanCodec {
       targetSeconds: (e['targetSeconds'] as num).toInt(),
       actualSeconds: ((e['actualSeconds'] ?? 0) as num).toInt(),
       isDone: (e['isDone'] ?? false) as bool,
+      scheduledStartAt: e['scheduledStartAt'] != null
+          ? DateTime.parse(e['scheduledStartAt'] as String)
+          : null,
+      reminderEnabled: (e['reminderEnabled'] ?? false) as bool,
     );
   }
 }

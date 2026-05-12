@@ -1,12 +1,9 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Premium 영상방(WebRTC): `.env`의 `PREMIUM_VIDEO_ENABLED`가 true/1/on 이면 잠금 해제.
+/// 기능 플래그 모음.
 class FeatureFlags {
-  static bool get premiumVideoEnabled {
-    final raw = (dotenv.env['PREMIUM_VIDEO_ENABLED'] ?? '').trim().toLowerCase();
-    return raw == 'true' ||
-        raw == '1' ||
-        raw == 'yes' ||
-        raw == 'on';
+  /// 스터디방 활성 여부: 로그인한 사용자는 항상 접근 가능.
+  static bool get studyRoomEnabled {
+    return Supabase.instance.client.auth.currentSession != null;
   }
 }

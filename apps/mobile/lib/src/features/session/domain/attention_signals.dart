@@ -1,8 +1,8 @@
 /// 카메라 프레임 1장에서 추출한 얼굴 신호 모음.
 ///
-/// - 웹(face_attention_sensor_web.dart): 얼굴 감지 불가 → [facePresent] true 고정,
-///   나머지 값은 모두 정상 기본값.
-/// - 앱(face_attention_sensor_io.dart): face_detection_tflite 실시간 추출.
+/// - 웹: [FaceAttentionSensor] 웹 구현이 `takePicture` JPEG로
+///   [FaceDetector.detectFaces] 로 채움(로컬만, 전송 없음).
+/// - 앱(face_attention_sensor_io.dart): face_detection_tflite 실시간 스트림 추출.
 class AttentionSignals {
   final bool facePresent;
   final bool multiFace;

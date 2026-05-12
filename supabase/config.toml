@@ -1,6 +1,8 @@
-[project]
-id = "YOUR_SUPABASE_PROJECT_ID"
+# Supabase CLI 로컬/연동용 설정.
+# https://supabase.com/docs/guides/local-development/cli/config
+#
+# 원격 프로젝트 ref는 `apps/mobile/.env` 의 SUPABASE_URL (호스트 앞부분) 또는
+# 환경변수 SUPABASE_PROJECT_REF 로 `npm run db:push` 가 읽습니다.
+# 비밀번호·DB URL은 이 파일에 넣지 마세요.
 
-# This file is a lightweight template so the repo can be connected to Supabase safely.
-# Do NOT commit any secrets here. Use environment variables or Supabase Dashboard secrets.
-
+project_id = "setudy"
