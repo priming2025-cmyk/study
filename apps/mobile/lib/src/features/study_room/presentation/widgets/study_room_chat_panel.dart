@@ -185,36 +185,41 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
           ),
           SafeArea(
             top: false,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              color: Theme.of(context).colorScheme.surface,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _textCtrl,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      decoration: const InputDecoration(
-                        hintText: '메시지',
-                        isDense: true,
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: AnimatedPadding(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                color: Theme.of(context).colorScheme.surface,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _textCtrl,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        decoration: const InputDecoration(
+                          hintText: '메시지',
+                          isDense: true,
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                        ),
+                        onSubmitted: (_) => _handleSend(),
+                        minLines: 1,
+                        maxLines: 1,
+                        textInputAction: TextInputAction.send,
                       ),
-                      onSubmitted: (_) => _handleSend(),
-                      minLines: 1,
-                      maxLines: 1,
-                      textInputAction: TextInputAction.send,
                     ),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                    icon: const Icon(Icons.send_rounded, size: 22),
-                    color: Theme.of(context).colorScheme.primary,
-                    onPressed: _handleSend,
-                  ),
-                ],
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      icon: const Icon(Icons.send_rounded, size: 22),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: _handleSend,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

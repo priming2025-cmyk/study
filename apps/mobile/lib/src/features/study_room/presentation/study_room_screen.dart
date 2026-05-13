@@ -179,6 +179,8 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     });
 
     return Scaffold(
+      // 키보드가 올라와도 본문(2×2·카메라) 높이를 줄이지 않음 → 채팅 입력 시 레이아웃이 덜 흔들림
+      resizeToAvoidBottomInset: !inRoom,
       appBar: AppBar(
         title: Text(inRoom ? '스터디방' : '스터디방 참여'),
         actions: [

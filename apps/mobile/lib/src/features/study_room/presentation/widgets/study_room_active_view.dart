@@ -23,7 +23,10 @@ class StudyRoomActiveView extends StatelessWidget {
     final selfId = controller.selfId ?? '';
 
     // 채팅: 메시지 영역은 약 3줄 높이로 고정, 그 이상은 내부 스크롤
-    final chatAreaH = StudyRoomChatPanel.totalOuterHeight(context, visibleMessageLines: 3);
+    final chatBaseH = StudyRoomChatPanel.totalOuterHeight(context, visibleMessageLines: 3);
+    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+    // 키보드가 올라와 입력줄만 위로 밀 때 패널 높이에 여유(클리핑 방지)
+    final chatAreaH = chatBaseH + keyboardBottom;
 
     return Column(
       children: [
@@ -31,30 +34,34 @@ class StudyRoomActiveView extends StatelessWidget {
           child: Column(
             children: [
               Expanded(
-                child: members.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 12),
-                            Text(
-                              '멤버 정보를 불러오는 중…',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
+                child: MediaQuery.removeViewInsets(
+                  removeBottom: true,
+                  context: context,
+                  child: members.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 12),
+                              Text(
+                                '멤버 정보를 불러오는 중…',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                          child: StudyRoomMainStage(
+                            controller: controller,
+                            engagedMinListenable: engagedMinListenable,
+                            studyCameraSlotActive: studyCameraSlotActive,
+                          ),
                         ),
-                      )
-                    : Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                        child: StudyRoomMainStage(
-                          controller: controller,
-                          engagedMinListenable: engagedMinListenable,
-                          studyCameraSlotActive: studyCameraSlotActive,
-                        ),
-                      ),
+                ),
               ),
               SizedBox(
                 height: chatAreaH,

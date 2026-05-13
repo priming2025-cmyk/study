@@ -35,13 +35,15 @@ class StudyRoomMainStage extends StatelessWidget {
         final budgetH = math.max(80.0, rawH - layoutSlack);
 
         const gap = 8.0;
-        // 2행이 들어갈 수 있는 한 칸 최대 높이(그리드 기준)
+        // 타일 세로를 약 1.3배로 키운 뒤, 남는 세로(budget) 안에 맞게 scale로 축소
+        const cellHeightScale = 1.3;
+        // 2행이 들어갈 수 있는 한 칸 최대 높이(그리드 기준) — 스케일 반영
         final rowMaxH = math.max(100.0, (budgetH - gap) / 2);
 
         // 단일 ‘내 기기’ 타일과 비슷한 기준, 단 2×2에 맞게 높이 상한을 먼저 제한
         var cellW = (maxW * 0.42).clamp(200.0, 272.0);
-        var cellH = cellW * 16 / 9;
-        cellH = cellH.clamp(160.0, math.min(rowMaxH, 420.0));
+        var cellH = cellW * 16 / 9 * cellHeightScale;
+        cellH = cellH.clamp(160.0 * cellHeightScale, math.min(rowMaxH, 420.0 * cellHeightScale));
 
         final gridW = 2 * cellW + gap;
         var gridH = 2 * cellH + gap;
