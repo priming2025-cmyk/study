@@ -73,6 +73,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   void _onChanged() {
     if (!mounted) return;
     setState(() {});
+    // 공부 세션 실행 상태를 전역 Provider에 동기화 (AppShell이 탭 전환 시 확인에 사용)
+    ref.read(sessionRunningProvider.notifier).state = _c.running;
   }
 
   void _openSessionAddSheet() {
@@ -222,6 +224,16 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           if (!mounted) return;
           await _c.resumeCameraAfterShellNavigation();
         });
+      }
+    });
+
+    // AppShell이 탭 전환 확인 다이얼로그에서 "자동 저장 후 이동"을 선택하면 트리거 발동
+    ref.listen<bool>(sessionAutoSaveTriggerProvider, (prev, next) {
+      if (!next) return;
+      // 트리거 소비 후 저장 실행
+      ref.read(sessionAutoSaveTriggerProvider.notifier).state = false;
+      if (_c.running && mounted) {
+        unawaited(_stopAndUpload());
       }
     });
 

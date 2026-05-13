@@ -104,13 +104,6 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                 Icon(Icons.chat_bubble_outline, size: 18, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 6),
                 Text('채팅', style: Theme.of(context).textTheme.labelLarge),
-                const Spacer(),
-                Text(
-                  '위로 스크롤하면 이전 대화',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
               ],
             ),
           ),
@@ -182,7 +175,7 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       ),
                       onSubmitted: (_) => _handleSend(),
-                      maxLines: null,
+                      maxLines: 3,
                       textInputAction: TextInputAction.send,
                     ),
                   ),

@@ -71,10 +71,9 @@ class _StudyRoomActiveViewState extends State<StudyRoomActiveView> {
     final selfId = widget.controller.selfId ?? '';
     final roomId = widget.controller.roomId ?? '';
 
-    // 채팅을 본문 아래에 두되, 펼쳤을 때 메인 2×2 그리드 높이가 0으로 눌리지 않도록
-    // 하단 슬롯 높이를 고정한다(기존: Intrinsic 채팅이 먼저 크기를 잡아 Expanded가 붕괴).
+    // 채팅 영역은 화면의 22% (최소 140px, 최대 200px)로 제한해 2×2 그리드가 눌리지 않도록 함
     final mediaH = MediaQuery.sizeOf(context).height;
-    final chatAreaH = math.min(300.0, math.max(200.0, mediaH * 0.34));
+    final chatAreaH = math.min(200.0, math.max(140.0, mediaH * 0.22));
 
     return Column(
       children: [
