@@ -37,7 +37,9 @@ class StudyRoomActiveView extends StatelessWidget {
                 child: MediaQuery.removeViewInsets(
                   removeBottom: true,
                   context: context,
-                  child: members.isEmpty
+                  // joining 완료 후에는 멤버가 없어도 그리드 표시
+                  // (Presence sync 지연으로 members가 빈 상태에서 로딩 화면에 갇히는 문제 방지)
+                  child: controller.joining && members.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
