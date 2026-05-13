@@ -24,7 +24,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Study-up'),
+        title: Text(l10n.appTitle),
         actions: [
           IconButton(
             tooltip: '로그아웃',
@@ -91,12 +91,37 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              DashboardQuickCard(
-                title: '가족 연결',
-                subtitle: '부모·자녀 집중 기록 공유',
-                icon: Icons.family_restroom_outlined,
+              const SizedBox(height: 8),
+              InkWell(
                 onTap: () => context.go('/family'),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.volunteer_activism_outlined,
+                        size: 22,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '서포터 연결 · 요약 공유 · 블럭→코인',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               Card(
@@ -152,7 +177,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '최근 7일 집중 그래프, 코인 내역, 친구 랭킹을 한 번에 볼 수 있어요.',
+                        '최근 7일 집중 그래프, 블럭·코인 내역, 친구 랭킹을 한 번에 볼 수 있어요.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),

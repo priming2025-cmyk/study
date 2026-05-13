@@ -57,14 +57,14 @@ class SessionEndResultSheet extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 child: Column(
                   children: [
-                    _row(context, label: '집중 공부', value: '+${reward.coinsFromFocus}'),
-                    _row(context, label: '계획 달성 보너스', value: reward.planBonus > 0 ? '+${reward.planBonus}' : '0'),
-                    _row(context, label: '연속 달성 보너스', value: reward.streakBonus > 0 ? '+${reward.streakBonus}' : '0'),
+                    _row(context, label: '집중 공부', value: '+${reward.blocksFromFocus} 블럭'),
+                    _row(context, label: '계획 달성 보너스', value: reward.planBonus > 0 ? '+${reward.planBonus} 블럭' : '0'),
+                    _row(context, label: '연속 달성 보너스', value: reward.streakBonus > 0 ? '+${reward.streakBonus} 블럭' : '0'),
                     const Divider(height: 18),
                     _row(
                       context,
-                      label: '총 획득',
-                      value: '+${reward.total}',
+                      label: '총 블럭',
+                      value: '+${reward.totalBlocks} 블럭',
                       strong: true,
                     ),
                   ],

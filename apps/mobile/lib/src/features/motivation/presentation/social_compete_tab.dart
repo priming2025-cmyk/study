@@ -48,7 +48,7 @@ class SocialCompeteTab extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.insights_outlined),
                 title: const Text('집중 그래프·합계는 기록 탭'),
-                subtitle: const Text('일별 막대와 나의 코인·레벨도 함께 확인해요.'),
+                subtitle: const Text('일별 막대와 나의 블럭·레벨도 함께 확인해요.'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.go('/stats'),
               ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../motivation/domain/motivation_models.dart';
+import '../../session/domain/wallet_balances.dart';
 import '../data/daily_focus_stat.dart';
 
 String formatFocusDuration(int seconds) {
@@ -17,7 +18,7 @@ String formatFocusDuration(int seconds) {
 
 class _StatsPayload {
   final List<DailyFocusStat> stats;
-  final int coins;
+  final WalletBalances wallet;
   final ProfileRpgSummary? rpg;
   final List<FriendRankRow> ranks;
   final List<SquadRow> squads;
@@ -25,7 +26,7 @@ class _StatsPayload {
 
   const _StatsPayload({
     required this.stats,
-    required this.coins,
+    required this.wallet,
     required this.rpg,
     required this.ranks,
     required this.squads,
@@ -53,7 +54,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     final sessionRepo = ref.read(sessionRepositoryProvider);
     final motivationRepo = ref.read(motivationRepositoryProvider);
     final stats = await sessionRepo.fetchDailyFocusLastDays(7);
-    final coins = await sessionRepo.fetchCoinBalance();
+    final wallet = await sessionRepo.fetchWalletBalances();
     final rpg = await motivationRepo.fetchMyProfileRpg();
     final ranks = await motivationRepo.friendWeekRankings();
     final squads = await motivationRepo.mySquads();
@@ -63,7 +64,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     }
     return _StatsPayload(
       stats: stats,
-      coins: coins,
+      wallet: wallet,
       rpg: rpg,
       ranks: ranks,
       squads: squads,
@@ -187,7 +188,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Text(
-                                          '모은 코인 ${p.coins} · 내역 보기',
+                                          '블럭 ${p.wallet.blocks} · 코인 ${p.wallet.redeemCoins} · 내역',
                                           style: Theme.of(context).textTheme.titleSmall,
                                         ),
                                       ),

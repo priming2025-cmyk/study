@@ -23,19 +23,7 @@ class DashboardHeroCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '오늘도 꾸준히',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '계획 → 집중 → 기록 → 분석',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
             if (summary != null) ...[
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(

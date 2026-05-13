@@ -7,6 +7,7 @@ import '../../../core/supabase/supabase_client.dart';
 import '../data/family_repository.dart';
 import 'family_child_tile.dart';
 import 'family_format.dart';
+import 'widgets/supporter_student_convert_row.dart';
 
 class FamilyHubScreen extends ConsumerStatefulWidget {
   const FamilyHubScreen({super.key});
@@ -42,7 +43,7 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
     try {
       final repo = ref.read(familyRepositoryProvider);
       _role = await repo.fetchMyRole();
-      if (_role == 'parent') {
+      if (_role == 'parent' || _role == 'teacher') {
         _children = await repo.fetchLinkedStudents();
       }
     } catch (e) {
@@ -58,7 +59,9 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
     await Clipboard.setData(ClipboardData(text: id));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('내 계정 ID를 복사했어요. 부모에게만 알려 주세요.')),
+      const SnackBar(
+        content: Text('내 계정 ID를 복사했어요. 신뢰하는 서포터에게만 알려 주세요.'),
+      ),
     );
   }
 
@@ -66,7 +69,7 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
     final raw = _studentIdCtrl.text.trim();
     if (!looksLikeUuid(raw)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('자녀 계정 ID(UUID) 형식인지 확인해 주세요.')),
+        const SnackBar(content: Text('학생 계정 ID(UUID) 형식인지 확인해 주세요.')),
       );
       return;
     }
@@ -95,16 +98,16 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('가족 연결')),
+        appBar: AppBar(title: const Text('서포터 연결')),
         body: Center(child: Text(_error!)),
       );
     }
 
-    final isParent = _role == 'parent';
+    final isSupporter = _role == 'parent' || _role == 'teacher';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('가족 연결'),
+        title: const Text('서포터 연결'),
         actions: [
           IconButton(onPressed: _reload, icon: const Icon(Icons.refresh_rounded)),
         ],
@@ -113,15 +116,15 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            isParent
-                ? '연결된 자녀의 집중 세션 요약만 볼 수 있어요. (영상·얼굴 데이터는 저장하지 않습니다.)'
-                : '부모님께 아래 ID를 알려 주면, 부모님 앱에서 집중 기록 요약을 볼 수 있어요.',
+            isSupporter
+                ? '서포터로 연결된 학생의 집중 요약만 볼 수 있어요. 아래에서 모은 블럭을 교환 코인으로 바꿔 줄 수 있습니다. (영상·얼굴은 저장하지 않습니다.)'
+                : '서포터에게 아래 ID를 알려 주면, 요약 확인과 블럭→교환 코인 전환을 받을 수 있어요.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 16),
-          if (!isParent) ...[
+          if (!isSupporter) ...[
             Card(
               child: ListTile(
                 title: const Text('내 계정 ID'),
@@ -134,31 +137,46 @@ class _FamilyHubScreenState extends ConsumerState<FamilyHubScreen> {
             ),
             const SizedBox(height: 16),
           ],
-          if (isParent) ...[
+          if (isSupporter) ...[
             TextField(
               controller: _studentIdCtrl,
               decoration: const InputDecoration(
-                labelText: '자녀 계정 ID',
+                labelText: '학생 계정 ID',
                 hintText: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
               ),
             ),
             const SizedBox(height: 8),
             FilledButton(
               onPressed: _link,
-              child: const Text('자녀와 연결하기'),
+              child: const Text('학생과 연결하기'),
             ),
             const SizedBox(height: 20),
-            Text('연결된 자녀', style: Theme.of(context).textTheme.titleMedium),
+            Text('연결된 학생', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             if (_children.isEmpty)
               Text(
-                '아직 연결된 자녀가 없어요. 위에 자녀가 알려준 ID를 붙여 넣어 주세요.',
+                '아직 연결된 학생이 없어요. 위에 학생이 알려준 ID를 붙여 넣어 주세요.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               )
-            else
+            else ...[
               ..._children.map((c) => FamilyChildTile(student: c)),
+              const SizedBox(height: 18),
+              Text(
+                '블럭 → 교환 코인',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '학생 지갑에 들어 있는 블럭을 줄여, 기프티콘 등에 쓸 수 있는 교환 코인으로 돌려줄 수 있어요.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              ..._children.map((c) => SupporterStudentConvertRow(student: c)),
+            ],
           ],
         ],
       ),

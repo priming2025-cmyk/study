@@ -32,10 +32,10 @@ class _GachaShopScreenState extends ConsumerState<GachaShopScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('코인 뽑기', style: Theme.of(context).textTheme.titleMedium),
+                      Text('블럭 뽑기', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       Text(
-                        '50코인으로 테두리·이모티콘을 무작위로 받아요.',
+                        '50블럭으로 테두리·이모티콘을 무작위로 받아요.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
@@ -69,7 +69,7 @@ class _GachaShopScreenState extends ConsumerState<GachaShopScreen> {
                                   if (mounted) setState(() => _busy = false);
                                 }
                               },
-                        child: Text(_busy ? '처리 중…' : '50코인 뽑기'),
+                        child: Text(_busy ? '처리 중…' : '50블럭 뽑기'),
                       ),
                     ],
                   ),

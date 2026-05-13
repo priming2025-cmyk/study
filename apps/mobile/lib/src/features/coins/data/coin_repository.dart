@@ -12,7 +12,7 @@ class CoinRepository {
 
     final rows = await supabase
         .from('coin_events')
-        .select('id, kind, coins, created_at, session_id, plan_date')
+        .select('id, kind, coins, asset, created_at, session_id, plan_date')
         .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(limit);
@@ -25,6 +25,7 @@ class CoinRepository {
       id: e['id'] as String,
       kind: e['kind'] as String,
       coins: ((e['coins'] ?? 0) as num).toInt(),
+      asset: e['asset'] as String? ?? 'block',
       createdAt:
           DateTime.tryParse(e['created_at'] as String? ?? '') ?? DateTime.now(),
       sessionId: e['session_id'] as String?,
@@ -42,8 +43,27 @@ class CoinRepository {
         return '계획 달성 보너스';
       case 'streak_bonus_50':
         return '연속 달성 보너스';
+      case 'gacha_spend':
+        return '뽑기 사용';
+      case 'gacha_refund':
+        return '뽑기 환불';
+      case 'supporter_block_out':
+        return '서포터 교환 (블럭 차감)';
+      case 'supporter_redeem_in':
+        return '서포터 교환 (코인 지급)';
       default:
         return kind;
     }
+  }
+
+  static String assetUnitKo(String asset) =>
+      asset == 'redeem_coin' ? '코인' : '블럭';
+
+  /// ±N 블럭 / ±N 코인
+  static String formatSignedAmount(CoinEventEntry e) {
+    final unit = assetUnitKo(e.asset);
+    final n = e.coins;
+    final sign = n > 0 ? '+' : '';
+    return '$sign$n $unit';
   }
 }

@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import '../../session/domain/wallet_balances.dart';
 
 class LinkedStudent {
   final String id;
@@ -60,6 +61,35 @@ class FamilyRepository {
       ));
     }
     return out;
+  }
+
+  /// 서포터가 연결된 학생의 잔고 조회(RLS: parent_links).
+  Future<WalletBalances> fetchWalletForUser(String userId) async {
+    if (supabase.auth.currentUser?.id == null) {
+      throw const AuthException('Not authenticated');
+    }
+    final row = await supabase
+        .from('coin_balances')
+        .select('block_balance, redeem_coin_balance')
+        .eq('user_id', userId.trim())
+        .maybeSingle();
+    return WalletBalances.fromRow(row);
+  }
+
+  /// 학생의 블럭을 교환 코인으로 전환(MVP: 1블럭=1코인). 서포터(연결된 parent)만 호출.
+  Future<Map<String, dynamic>> supporterExchangeBlocksToRedeemCoins({
+    required String studentId,
+    required int blocks,
+  }) async {
+    if (blocks <= 0) throw StateError('블럭 수는 1 이상이어야 해요.');
+    final res = await supabase.rpc(
+      'supporter_exchange_blocks_to_redeem_coins',
+      params: {
+        'p_student_id': studentId.trim(),
+        'p_blocks': blocks,
+      },
+    );
+    return Map<String, dynamic>.from(res as Map);
   }
 
   Future<void> linkStudent(String studentId) async {

@@ -27,7 +27,7 @@ Future<void> planAlarmInit() async {
       if (html.Notification.supported &&
           html.Notification.permission == 'granted') {
         html.Notification(
-          'Study-up · ${p.subject}',
+          'Setudy · ${p.subject}',
           body: '계획한 시작 시간이에요.',
         );
       }

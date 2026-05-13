@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../../session/domain/attention_scoring.dart';
 import '../../../session/domain/attention_signals.dart';
 import '../../../session/infra/face_attention_sensor.dart';
+import '../../../session/infra/session_camera_cache.dart';
 import '../../../session/infra/session_self_camera.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
@@ -92,10 +93,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     }
 
     try {
-      final cams = await availableCameras();
-      final front =
-          cams.where((c) => c.lensDirection == CameraLensDirection.front).toList();
-      _frontCam = front.isNotEmpty ? front.first : (cams.isNotEmpty ? cams.first : null);
+      _frontCam = await SessionCameraCache.getFrontOrDefault();
     } catch (e) {
       debugPrint('[StudyRoomSelfLivePanel] cameras: $e');
     }

@@ -25,7 +25,7 @@ class _FamilyChildTileState extends ConsumerState<FamilyChildTile> {
         title: Text(
           widget.student.displayName?.trim().isNotEmpty == true
               ? widget.student.displayName!
-              : '자녀',
+              : '학생',
         ),
         subtitle: Text(
           widget.student.id,

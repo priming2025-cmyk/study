@@ -15,6 +15,7 @@ import '../domain/engaged_time_threshold.dart';
 import '../domain/session_summary.dart';
 import '../domain/session_reward_result.dart';
 import '../infra/face_attention_sensor.dart';
+import '../infra/session_camera_cache.dart';
 import '../infra/study_presence.dart';
 
 class SessionController extends ChangeNotifier {
@@ -75,7 +76,6 @@ class SessionController extends ChangeNotifier {
   Future<void> init() async {
     _engagedMinScore = await loadEngagedMinScore();
     notifyListeners();
-    await _initCamera();
     await _loadTodayPlan();
   }
 
@@ -84,15 +84,6 @@ class SessionController extends ChangeNotifier {
     _engagedMinScore = normalizeEngagedMinScore(value);
     await saveEngagedMinScore(_engagedMinScore);
     notifyListeners();
-  }
-
-  Future<void> _initCamera() async {
-    try {
-      final cams = await availableCameras();
-      final front =
-          cams.where((c) => c.lensDirection == CameraLensDirection.front).toList();
-      frontCamera = front.isNotEmpty ? front.first : (cams.isNotEmpty ? cams.first : null);
-    } catch (_) {}
   }
 
   /// 미완(완료 아님 & 목표 미달) 항목 중 첫 번째, 없으면 첫 항목.
@@ -314,10 +305,9 @@ class SessionController extends ChangeNotifier {
     required String subject,
     required DateTime startedAt,
   }) async {
-    await _initCamera();
+    final cam = await SessionCameraCache.getFrontOrDefault();
+    frontCamera = cam;
     if (!running) return;
-
-    final cam = frontCamera;
 
     await _sub?.cancel();
     _sub = null;
@@ -453,7 +443,7 @@ class SessionController extends ChangeNotifier {
         focusedSeconds: summary.focusedSeconds,
       );
     }
-    final coinsFromFocus = await _sessionRepo.awardCoinsForSession(
+    final blocksFromFocus = await _sessionRepo.awardCoinsForSession(
       sessionId: sessionId,
       focusedSeconds: summary.focusedSeconds,
     );
@@ -471,7 +461,7 @@ class SessionController extends ChangeNotifier {
     final streakBonus = await _sessionRepo.awardStreakBonusForToday();
 
     return SessionRewardResult(
-      coinsFromFocus: coinsFromFocus,
+      blocksFromFocus: blocksFromFocus,
       planBonus: planBonus,
       streakBonus: streakBonus,
     );

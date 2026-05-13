@@ -87,7 +87,7 @@ class CoinEarningGuideScreen extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('코인 모으는 방법'),
+        title: const Text('블럭 모으는 방법'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -100,14 +100,21 @@ class CoinEarningGuideScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '코인은 “세션 종료 → 기록 반영” 과정에서 적립돼요.',
+                    '앱 안 보상은 블럭이에요. “세션 종료 → 기록 반영” 과정에서 쌓입니다.',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '세션을 “끝내기”까지 해야 내역에 남습니다. 아래 3가지 이벤트가 코인 내역에 기록돼요.',
+                    '기프티콘 등에 쓰는 코인(교환 코인)은 서포터가 블럭을 바꿔 줄 때 생기고, 유료 충전·스토어는 추후 연동 예정이에요.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '세션을 “끝내기”까지 해야 내역에 남습니다. 아래 3가지가 블럭 내역에 기록돼요.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -122,7 +129,7 @@ class CoinEarningGuideScreen extends StatelessWidget {
           _kindRow(
             context,
             kind: 'focused_time',
-            desc: '집중 세션을 종료하면 “집중 공부”가 기록됩니다. (집중 시간이 0이면 코인이 없을 수 있어요.)',
+            desc: '집중 세션을 종료하면 “집중 공부”가 기록됩니다. (집중 시간이 0이면 블럭이 없을 수 있어요.)',
           ),
           _kindRow(
             context,
@@ -138,7 +145,7 @@ class CoinEarningGuideScreen extends StatelessWidget {
           _tipTile(
             context,
             icon: Icons.flag_outlined,
-            title: '코인이 안 쌓일 때 가장 흔한 이유',
+            title: '블럭이 안 쌓일 때 가장 흔한 이유',
             body: '세션을 “종료”하지 않았거나, 종료 직후 기록 반영(업로드)이 실패한 경우예요. 먼저 세션을 끝낸 뒤, 기록 탭에서 새로고침을 해 보세요.',
           ),
           _tipTile(
@@ -157,7 +164,7 @@ class CoinEarningGuideScreen extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () => context.push('/coins'),
             icon: const Icon(Icons.toll_outlined),
-            label: const Text('코인 내역 보기'),
+            label: const Text('보상 내역 보기'),
           ),
         ],
       ),

@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In ko, this message translates to:
-  /// **'Study-up'**
+  /// **'Setudy'**
   String get appTitle;
 
   /// No description provided for @termsOfService.

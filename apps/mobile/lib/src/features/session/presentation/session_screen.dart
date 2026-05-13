@@ -212,7 +212,53 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final dndOn = focusAsync.value ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('집중 세션')),
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.only(right: 4),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  '집중 세션',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (focusAsync.isLoading)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '방해금지',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            fontSize: 11,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                    const SizedBox(width: 2),
+                    Transform.scale(
+                      scale: 0.72,
+                      alignment: Alignment.centerRight,
+                      child: Switch.adaptive(
+                        value: dndOn,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onChanged: (v) => ref
+                            .read(focusDistractionModeProvider.notifier)
+                            .setEnabled(v),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
       body: LayoutBuilder(
         builder: (context, bodyConstraints) {
           final bodyH = bodyConstraints.maxHeight.isFinite
@@ -239,33 +285,6 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                           padding: EdgeInsets.only(bottom: 12),
                           child: LinearProgressIndicator(minHeight: 3),
                         ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          child: SwitchListTile(
-                            value: dndOn,
-                            onChanged: focusAsync.isLoading
-                                ? null
-                                : (v) => ref
-                                    .read(focusDistractionModeProvider.notifier)
-                                    .setEnabled(v),
-                            secondary: Icon(
-                              Icons.do_not_disturb_on_outlined,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            title: const Text('방해 금지 모드'),
-                            subtitle: Text(
-                              running
-                                  ? '스터디방 채팅과 같은 설정을 공유해요. 다른 앱 차단은 OS 방해금지와 함께 쓰면 좋아요.'
-                                  : '앱 안에서는 채팅 입력을 줄이는 데 도움이 돼요. '
-                                      '다른 앱까지 막으려면 기기 설정의 방해금지·스크린 타임도 함께 켜 보세요.',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ),
-                        ),
-                      ),
                       if (!running)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),

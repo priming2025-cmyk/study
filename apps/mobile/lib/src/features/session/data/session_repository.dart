@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../stats/data/daily_focus_stat.dart';
 import '../domain/session_summary.dart';
+import '../domain/wallet_balances.dart';
 
 class SessionRepository {
   const SessionRepository();
@@ -132,18 +133,18 @@ class SessionRepository {
     return (coins as num).toInt();
   }
 
-  Future<int> fetchCoinBalance() async {
+  /// 블럭 + 교환 코인 잔고.
+  Future<WalletBalances> fetchWalletBalances() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw const AuthException('Not authenticated');
 
-    final rows = await supabase
+    final row = await supabase
         .from('coin_balances')
-        .select('balance')
+        .select('block_balance, redeem_coin_balance')
         .eq('user_id', userId)
-        .limit(1);
+        .maybeSingle();
 
-    if (rows.isEmpty) return 0;
-    return ((rows.first['balance'] ?? 0) as num).toInt();
+    return WalletBalances.fromRow(row);
   }
 
   Future<int> awardPlanBonusForToday() async {

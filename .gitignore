@@ -16,3 +16,5 @@ build/
 apps/mobile/.env
 supabase/.env
 
+.vercel
+.env*.local
