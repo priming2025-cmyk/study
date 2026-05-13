@@ -300,11 +300,9 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  /// [start] 직후 비동기로 실행. 메인 isolate를 길게 막지 않도록 분리합니다.
-  Future<void> _bootstrapCameraAndPresence({
-    required String subject,
-    required DateTime startedAt,
-  }) async {
+  /// 네이티브: 전면 카메라·얼굴 센서만 붙입니다. [running]이 false면 중도 취소합니다.
+  Future<void> _startNativeCameraSensor() async {
+    if (kIsWeb) return;
     final cam = await SessionCameraCache.getFrontOrDefault();
     frontCamera = cam;
     if (!running) return;
@@ -348,6 +346,30 @@ class SessionController extends ChangeNotifier {
       return;
     }
     notifyListeners();
+  }
+
+  /// 스터디 탭 등으로 나갈 때 카메라 단일 점유를 위해 센서만 끕니다. 타이머·[running]·Presence는 유지합니다.
+  Future<void> suspendCameraForShellNavigation() async {
+    if (kIsWeb) return;
+    await _sub?.cancel();
+    _sub = null;
+    await _sensor.stop();
+    notifyListeners();
+  }
+
+  /// 공부 탭으로 돌아온 뒤 [running]이면 카메라를 다시 붙입니다.
+  Future<void> resumeCameraAfterShellNavigation() async {
+    if (kIsWeb || !running) return;
+    await _startNativeCameraSensor();
+  }
+
+  /// [start] 직후 비동기로 실행. 메인 isolate를 길게 막지 않도록 분리합니다.
+  Future<void> _bootstrapCameraAndPresence({
+    required String subject,
+    required DateTime startedAt,
+  }) async {
+    await _startNativeCameraSensor();
+    if (!running) return;
 
     final selfId = supabase.auth.currentUser?.id;
     if (selfId != null && running) {

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
@@ -10,15 +12,15 @@ import 'widgets/study_room_lobby_view.dart';
 import 'widgets/study_room_active_view.dart';
 import 'widgets/study_room_goal_sheet.dart';
 
-class StudyRoomScreen extends StatefulWidget {
+class StudyRoomScreen extends ConsumerStatefulWidget {
   final bool quickJoin;
   const StudyRoomScreen({super.key, this.quickJoin = false});
 
   @override
-  State<StudyRoomScreen> createState() => _StudyRoomScreenState();
+  ConsumerState<StudyRoomScreen> createState() => _StudyRoomScreenState();
 }
 
-class _StudyRoomScreenState extends State<StudyRoomScreen> {
+class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
   final _roomNameCtrl = TextEditingController(text: '우리방');
   final _roomIdCtrl = TextEditingController();
@@ -127,6 +129,8 @@ class _StudyRoomScreenState extends State<StudyRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final inRoom = _controller.roomId != null;
+    final studyCameraSlotActive = ref.watch(shellBranchIndexProvider) == kShellBranchStudy;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(inRoom ? '스터디방' : '스터디방 참여'),
@@ -140,7 +144,10 @@ class _StudyRoomScreenState extends State<StudyRoomScreen> {
         ],
       ),
       body: inRoom
-          ? StudyRoomActiveView(controller: _controller)
+          ? StudyRoomActiveView(
+              controller: _controller,
+              studyCameraSlotActive: studyCameraSlotActive,
+            )
           : FutureBuilder<(String roomId, String goalText)?>(
               future: _recentFuture,
               builder: (context, snap) {

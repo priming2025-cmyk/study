@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
+import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../plan/data/plan_models.dart';
 import '../../plan/presentation/widgets/plan_add_item_sheet.dart';
@@ -206,9 +208,26 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final score = s?.averageScore ?? 100;
     final status = s?.lastStatus ?? FocusStatus.focused;
 
+    ref.listen<int>(shellBranchIndexProvider, (prev, next) {
+      if (prev == null) return;
+      if (prev == kShellBranchSession && next != kShellBranchSession) {
+        unawaited(_c.suspendCameraForShellNavigation());
+      }
+      if (next == kShellBranchSession &&
+          prev != kShellBranchSession &&
+          _c.running &&
+          !kIsWeb) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future<void>.delayed(const Duration(milliseconds: 120));
+          if (!mounted) return;
+          await _c.resumeCameraAfterShellNavigation();
+        });
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('집중 세션'),
+        title: const Text('집중 공부'),
       ),
       body: LayoutBuilder(
         builder: (context, bodyConstraints) {
@@ -220,6 +239,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           final stripW = (maxW * 0.46).clamp(200.0, 272.0);
           var stripH = stripW * 16 / 9;
           stripH = stripH.clamp(260.0, (bodyH * 0.44).clamp(280.0, 440.0));
+          final shellSession = ref.watch(shellBranchIndexProvider) == kShellBranchSession;
 
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -243,7 +263,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                             child: Padding(
                               padding: const EdgeInsets.all(20),
                               child: Text(
-                                '세션을 시작하면 카메라로 집중도를 측정합니다.',
+                                '공부를 시작하면 카메라로 집중도를 측정합니다.',
                                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
@@ -253,35 +273,58 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         ),
                       if (running) ...[
                         const SizedBox(height: 14),
-                        if (!kIsWeb)
+                        if (shellSession) ...[
+                          if (!kIsWeb)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: Center(
+                                child: SizedBox(
+                                  width: stripW,
+                                  height: stripH,
+                                  child: _NativeSessionCameraMirror(
+                                    session: _c,
+                                    stripW: stripW,
+                                    stripH: stripH,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (kIsWeb)
+                            Center(
+                              child: SizedBox(
+                                width: stripW,
+                                height: stripH,
+                                child: SessionSelfCameraSurface(
+                                  width: stripW,
+                                  height: stripH,
+                                  appInForeground: () => _c.appInForeground,
+                                  onAttentionSignals: _c.applyWebAttentionSignals,
+                                ),
+                              ),
+                            ),
+                          if (kIsWeb) const SizedBox(height: 14),
+                        ] else ...[
                           Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: Center(
                               child: SizedBox(
                                 width: stripW,
-                                height: stripH,
-                                child: _NativeSessionCameraMirror(
-                                  session: _c,
-                                  stripW: stripW,
-                                  stripH: stripH,
+                                height: stripH * 0.35,
+                                child: Card(
+                                  child: Center(
+                                    child: Text(
+                                      '다른 탭으로 이동해 카메라를 잠시 껐어요.\n공부 탭으로 돌아오면 다시 켜져요.',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        if (kIsWeb)
-                          Center(
-                            child: SizedBox(
-                              width: stripW,
-                              height: stripH,
-                              child: SessionSelfCameraSurface(
-                                width: stripW,
-                                height: stripH,
-                                appInForeground: () => _c.appInForeground,
-                                onAttentionSignals: _c.applyWebAttentionSignals,
-                              ),
-                            ),
-                          ),
-                        if (kIsWeb) const SizedBox(height: 14),
+                        ],
                         _ConcentrationCard(
                           score: score,
                           status: status,
@@ -331,7 +374,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   }
 }
 
-/// 네이티브 세션: 집중 중 내 화면(카메라) 미리보기.
+/// 네이티브 공부 화면: 집중 중 내 화면(카메라) 미리보기.
 /// [CameraController]가 [Listenable]이므로 초기화 완료 시 자동으로 다시 그립니다.
 class _NativeSessionCameraMirror extends StatelessWidget {
   final SessionController session;
@@ -470,14 +513,16 @@ class _ConcentrationCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _ScoreRing(score: score, color: statusColor),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ScoreRing(score: score, color: statusColor),
+              const SizedBox(width: 14),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -508,8 +553,8 @@ class _ConcentrationCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

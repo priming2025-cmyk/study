@@ -31,7 +31,7 @@ class SocialMissionTab extends StatelessWidget {
                     Text('이번 주 미션이란?', style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 8),
                     Text(
-                      '• 팀마다 정해진 「목표 시간」을 멤버들의 집중 세션 시간으로 채워요.\n'
+                      '• 팀마다 정해진 「목표 시간」을 멤버들의 집중 공부 시간으로 채워요.\n'
                       '• 기간은 보통 월요일~일요일(서버 주차) 기준이에요.\n'
                       '• 목표는 「팀」 탭에서 만들 때 고르거나, 팀장이 정한 값을 따라요.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(

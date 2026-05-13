@@ -146,7 +146,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '얼굴/영상은 서버로 보내지 않아요. 세션 요약만 저장해요.',
+                        '얼굴/영상은 서버로 보내지 않아요. 공부 요약만 저장해요.',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme

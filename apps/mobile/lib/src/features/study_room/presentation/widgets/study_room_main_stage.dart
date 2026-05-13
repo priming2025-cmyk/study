@@ -11,11 +11,13 @@ import 'study_room_self_live_panel.dart';
 class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
+  final bool studyCameraSlotActive;
 
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
+    required this.studyCameraSlotActive,
   });
 
   @override
@@ -92,6 +94,7 @@ class StudyRoomMainStage extends StatelessWidget {
                     StudyRoomSelfLivePanel(
                       width: cellW,
                       height: cellH,
+                      cameraSlotActive: studyCameraSlotActive,
                       engagedMinListenable: engagedMinListenable,
                     ),
                   ),

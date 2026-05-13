@@ -67,7 +67,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>집중 세션에서 학습 집중 상태를 확인하기 위해 카메라를 사용합니다.</string>
+	<string>집중 공부에서 학습 집중 상태를 확인하기 위해 카메라를 사용합니다.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>스터디방에서 음성 대화를 위해 마이크를 사용합니다.</string>
 </dict>

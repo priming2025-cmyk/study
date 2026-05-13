@@ -12,8 +12,13 @@ import 'study_room_main_stage.dart';
 
 class StudyRoomActiveView extends StatefulWidget {
   final StudyRoomController controller;
+  final bool studyCameraSlotActive;
 
-  const StudyRoomActiveView({super.key, required this.controller});
+  const StudyRoomActiveView({
+    super.key,
+    required this.controller,
+    required this.studyCameraSlotActive,
+  });
 
   @override
   State<StudyRoomActiveView> createState() => _StudyRoomActiveViewState();
@@ -137,6 +142,7 @@ class _StudyRoomActiveViewState extends State<StudyRoomActiveView> {
                         child: StudyRoomMainStage(
                           controller: widget.controller,
                           engagedMinListenable: _engagedMinScoreN,
+                          studyCameraSlotActive: widget.studyCameraSlotActive,
                         ),
                       ),
               ),

@@ -101,7 +101,7 @@ class CoinHistoryScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                '세션별',
+                '공부별',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -109,7 +109,7 @@ class CoinHistoryScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    '세션으로 번 블럭만 묶입니다. 보너스·교환 코인은 전체 목록에서 확인해요.',
+                    '공부로 번 블럭만 묶입니다. 보너스·교환 코인은 전체 목록에서 확인해요.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -122,7 +122,7 @@ class CoinHistoryScreen extends StatelessWidget {
                     margin: const EdgeInsets.only(bottom: 10),
                     child: ExpansionTile(
                       title: Text(
-                        '세션 ${en.key.length > 8 ? '${en.key.substring(0, 8)}…' : en.key}',
+                        '공부 ${en.key.length > 8 ? '${en.key.substring(0, 8)}…' : en.key}',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       subtitle: Text(

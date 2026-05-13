@@ -39,7 +39,7 @@ class SessionEndResultSheet extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              '세션 완료',
+              '공부 완료',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -90,7 +90,7 @@ class SessionEndResultSheet extends StatelessWidget {
                       Navigator.of(context).pop();
                       context.go('/session/quick');
                     },
-                    child: const Text('바로 한 번 더'),
+                    child: const Text('다음 공부'),
                   ),
                 ),
               ],
@@ -99,9 +99,9 @@ class SessionEndResultSheet extends StatelessWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                context.go('/stats');
+                context.go('/plan');
               },
-              child: const Text('기록으로 돌아가기'),
+              child: const Text('계획짜기'),
             ),
           ],
         ),

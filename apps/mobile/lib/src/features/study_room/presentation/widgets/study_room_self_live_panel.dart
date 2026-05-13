@@ -12,17 +12,20 @@ import '../../../session/infra/session_self_camera.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
 
-/// 스터디방 전용: 세션과 동일한 카메라·얼굴 신호로 실시간 집중도 표시 (방 안에서만 사용).
+/// 스터디방 전용: 공부(세션)과 동일한 카메라·얼굴 신호로 실시간 집중도 표시 (방 안에서만 사용).
 class StudyRoomSelfLivePanel extends StatefulWidget {
   final double width;
   final double height;
-  /// 세션과 동일 키의 집중민감도; 변경 시 즉시 반영.
+  /// 하단 네비에서 스터디 탭이 선택됐을 때만 true. 공부 탭과 카메라 점유가 겹치지 않게 합니다.
+  final bool cameraSlotActive;
+  /// 공부(세션)과 동일 키의 집중민감도; 변경 시 즉시 반영.
   final ValueListenable<int> engagedMinListenable;
 
   const StudyRoomSelfLivePanel({
     super.key,
     required this.width,
     required this.height,
+    required this.cameraSlotActive,
     required this.engagedMinListenable,
   });
 
@@ -81,10 +84,39 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     super.initState();
     widget.engagedMinListenable.addListener(_onEngagedChanged);
     WidgetsBinding.instance.addObserver(_life);
-    unawaited(_boot());
+    if (widget.cameraSlotActive) {
+      unawaited(_boot());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant StudyRoomSelfLivePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cameraSlotActive != widget.cameraSlotActive) {
+      if (widget.cameraSlotActive) {
+        unawaited(_boot());
+      } else {
+        unawaited(_releaseSlot());
+      }
+    }
+  }
+
+  Future<void> _releaseSlot() async {
+    _tick?.cancel();
+    _tick = null;
+    await _sub?.cancel();
+    _sub = null;
+    await _sensor.stop();
+    if (mounted) setState(() {});
   }
 
   Future<void> _boot() async {
+    if (!widget.cameraSlotActive) return;
+    // 공부 탭에서 카메라를 끄는 것과 같은 프레임에 경합하지 않도록 약간 늦춤
+    if (!kIsWeb) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    if (!mounted || !widget.cameraSlotActive) return;
     if (kIsWeb) {
       _scoreState = AttentionScoringState.started(DateTime.now());
       _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -156,6 +188,28 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   Widget build(BuildContext context) {
     final score = _scoreState?.averageScore ?? 100;
     final status = _scoreState?.lastStatus ?? FocusStatus.focused;
+
+    if (!widget.cameraSlotActive) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: ColoredBox(
+          color: Colors.black,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: Icon(
+                  Icons.videocam_off_outlined,
+                  color: Colors.white.withAlpha(70),
+                  size: 28,
+                ),
+              ),
+              StudyRoomSelfFocusBadge(score: score, status: status),
+            ],
+          ),
+        ),
+      );
+    }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),

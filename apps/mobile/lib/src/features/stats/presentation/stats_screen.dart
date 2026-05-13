@@ -337,7 +337,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   total == 0
-                      ? '세션을 끝내면 여기에 쌓여요.'
+                      ? '공부를 끝내면 여기에 쌓여요.'
                       : '합계 ${formatFocusDuration(total)} · 그래프는 가장 긴 날 기준이에요.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
