@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math' as math;
 
-import '../../../../core/providers/focus_distraction_provider.dart';
+import 'package:flutter/material.dart';
+
 import '../../../session/domain/engaged_time_threshold.dart';
 import '../../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
 import '../../infra/study_room_controller.dart';
@@ -10,16 +10,16 @@ import 'study_room_ambient_sheet.dart';
 import 'study_room_host_sheet.dart';
 import 'study_room_main_stage.dart';
 
-class StudyRoomActiveView extends ConsumerStatefulWidget {
+class StudyRoomActiveView extends StatefulWidget {
   final StudyRoomController controller;
 
   const StudyRoomActiveView({super.key, required this.controller});
 
   @override
-  ConsumerState<StudyRoomActiveView> createState() => _StudyRoomActiveViewState();
+  State<StudyRoomActiveView> createState() => _StudyRoomActiveViewState();
 }
 
-class _StudyRoomActiveViewState extends ConsumerState<StudyRoomActiveView> {
+class _StudyRoomActiveViewState extends State<StudyRoomActiveView> {
   late final ValueNotifier<int> _engagedMinScoreN =
       ValueNotifier(kDefaultEngagedMinScore);
 
@@ -66,8 +66,10 @@ class _StudyRoomActiveViewState extends ConsumerState<StudyRoomActiveView> {
     final selfId = widget.controller.selfId ?? '';
     final roomId = widget.controller.roomId ?? '';
 
-    final focusAsync = ref.watch(focusDistractionModeProvider);
-    final dndOn = focusAsync.value ?? false;
+    // 채팅을 본문 아래에 두되, 펼쳤을 때 메인 2×2 그리드 높이가 0으로 눌리지 않도록
+    // 하단 슬롯 높이를 고정한다(기존: Intrinsic 채팅이 먼저 크기를 잡아 Expanded가 붕괴).
+    final mediaH = MediaQuery.sizeOf(context).height;
+    final chatAreaH = math.min(300.0, math.max(200.0, mediaH * 0.34));
 
     return Column(
       children: [
@@ -106,62 +108,50 @@ class _StudyRoomActiveViewState extends ConsumerState<StudyRoomActiveView> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Tooltip(
-                message: '채팅을 접고 방해 요소를 줄여요. 세션 탭과 같은 설정을 공유합니다.',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '방해금지',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    Switch(
-                      value: dndOn,
-                      onChanged: focusAsync.isLoading
-                          ? null
-                          : (v) => ref.read(focusDistractionModeProvider.notifier).setEnabled(v),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
 
         Expanded(
-          child: members.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(),
-                      const SizedBox(height: 12),
-                      Text(
-                        '멤버 정보를 불러오는 중…',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          child: Column(
+            children: [
+              Expanded(
+                child: members.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 12),
+                            Text(
+                              '멤버 정보를 불러오는 중…',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
                             ),
+                          ],
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                        child: StudyRoomMainStage(
+                          controller: widget.controller,
+                          engagedMinListenable: _engagedMinScoreN,
+                        ),
                       ),
-                    ],
-                  ),
-                )
-              : Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                  child: StudyRoomMainStage(
-                    controller: widget.controller,
-                    engagedMinListenable: _engagedMinScoreN,
-                  ),
+              ),
+              SizedBox(
+                height: chatAreaH,
+                width: double.infinity,
+                child: StudyRoomChatPanel(
+                  messages: widget.controller.messages,
+                  selfId: selfId,
+                  onSendMessage: widget.controller.sendMessage,
+                  isFocusMode: false,
                 ),
-        ),
-
-        StudyRoomChatPanel(
-          messages: widget.controller.messages,
-          selfId: selfId,
-          onSendMessage: widget.controller.sendMessage,
-          isFocusMode: dndOn,
+              ),
+            ],
+          ),
         ),
       ],
     );

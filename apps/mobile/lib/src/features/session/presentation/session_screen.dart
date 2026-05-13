@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
-import '../../../core/providers/focus_distraction_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../plan/data/plan_models.dart';
 import '../../plan/presentation/widgets/plan_add_item_sheet.dart';
@@ -207,56 +206,9 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final score = s?.averageScore ?? 100;
     final status = s?.lastStatus ?? FocusStatus.focused;
 
-    final focusAsync = ref.watch(focusDistractionModeProvider);
-    final dndOn = focusAsync.value ?? false;
-
     return Scaffold(
       appBar: AppBar(
-        titleSpacing: 0,
-        title: Padding(
-          padding: const EdgeInsets.only(right: 4),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  '집중 세션',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (focusAsync.isLoading)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '방해금지',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(width: 2),
-                    Transform.scale(
-                      scale: 0.72,
-                      alignment: Alignment.centerRight,
-                      child: Switch.adaptive(
-                        value: dndOn,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        onChanged: (v) => ref
-                            .read(focusDistractionModeProvider.notifier)
-                            .setEnabled(v),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
+        title: const Text('집중 세션'),
       ),
       body: LayoutBuilder(
         builder: (context, bodyConstraints) {

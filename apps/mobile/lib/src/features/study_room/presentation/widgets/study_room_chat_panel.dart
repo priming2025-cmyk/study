@@ -24,8 +24,6 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
-  static const _listMaxHeight = 128.0;
-
   @override
   void didUpdateWidget(covariant StudyRoomChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -55,22 +53,38 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
   @override
   Widget build(BuildContext context) {
     if (widget.isFocusMode) {
-      return Container(
+      return Material(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        padding: const EdgeInsets.all(16),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.do_not_disturb_on, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            const SizedBox(height: 8),
-            Text(
-              '방해 금지 모드 · 채팅 숨김',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shield_moon_outlined,
+                    size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                const SizedBox(height: 8),
+                Text(
+                  '집중 보조 켜짐',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '다른 앱 전환·알림은 OS 집중 모드·스크린타임으로 줄여 보세요. 채팅은 아래에서 다시 켤 수 있어요.',
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }
@@ -81,7 +95,7 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
       elevation: 2,
       color: Theme.of(context).colorScheme.surface,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
@@ -100,8 +114,7 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
               ],
             ),
           ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: _listMaxHeight),
+          Expanded(
             child: Container(
               width: double.infinity,
               color: Theme.of(context).colorScheme.surfaceContainerLow,
