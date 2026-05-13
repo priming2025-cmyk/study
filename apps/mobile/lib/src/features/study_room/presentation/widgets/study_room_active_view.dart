@@ -24,9 +24,9 @@ class StudyRoomActiveView extends StatelessWidget {
     final members = controller.members;
     final selfId = controller.selfId ?? '';
 
-    // 채팅 영역은 화면의 22% (최소 140px, 최대 200px)로 제한해 2×2 그리드가 눌리지 않도록 함
+    // 입력은 1줄로 얇게 두고, 메시지 리스트에 약 3줄 분량 이상 확보 (전체 높이는 입력 절약분 반영)
     final mediaH = MediaQuery.sizeOf(context).height;
-    final chatAreaH = math.min(200.0, math.max(140.0, mediaH * 0.22));
+    final chatAreaH = math.min(248.0, math.max(176.0, mediaH * 0.30));
 
     return Column(
       children: [

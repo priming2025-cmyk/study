@@ -42,9 +42,12 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: (index) async {
           final currentIndex = widget.navigationShell.currentIndex;
-          // 공부 탭에서 다른 탭으로 이동할 때 세션이 실행 중이면 확인 다이얼로그 표시
-          if (currentIndex == kShellBranchSession &&
-              index != kShellBranchSession &&
+          final leavingSessionTab =
+              currentIndex == kShellBranchSession && index != kShellBranchSession;
+          final leavingStudyTab =
+              currentIndex == kShellBranchStudy && index != kShellBranchStudy;
+          // 공부·스터디 탭에서 다른 탭으로 나갈 때 집중 세션이 켜져 있으면 동일하게 확인
+          if ((leavingSessionTab || leavingStudyTab) &&
               ref.read(sessionRunningProvider)) {
             final choice = await showDialog<_LeaveSessionChoice>(
               context: context,

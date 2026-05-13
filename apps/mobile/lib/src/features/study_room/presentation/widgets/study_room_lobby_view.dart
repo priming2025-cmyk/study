@@ -39,32 +39,6 @@ class StudyRoomLobbyView extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        // 안내 카드
-        Card(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(Icons.group_rounded, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text('같이 공부하기', style: Theme.of(context).textTheme.titleMedium),
-                ]),
-                const SizedBox(height: 8),
-                Text(
-                  '최대 4명이 방에 입장해 서로 공부 중인지 확인할 수 있어요.\n'
-                  '1분마다 스냅샷이 자동으로 공유됩니다. 영상은 전송되지 않습니다.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
 
         // 방 만들기
         Text('새 방 만들기', style: Theme.of(context).textTheme.titleSmall),

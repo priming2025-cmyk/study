@@ -98,12 +98,12 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+            padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
             child: Row(
               children: [
-                Icon(Icons.chat_bubble_outline, size: 18, color: Theme.of(context).colorScheme.primary),
+                Icon(Icons.chat_bubble_outline, size: 16, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 6),
-                Text('채팅', style: Theme.of(context).textTheme.labelLarge),
+                Text('채팅', style: Theme.of(context).textTheme.labelMedium),
               ],
             ),
           ),
@@ -111,6 +111,7 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
             child: Container(
               width: double.infinity,
               color: Theme.of(context).colorScheme.surfaceContainerLow,
+              alignment: Alignment.topCenter,
               child: n == 0
                   ? Center(
                       child: Text(
@@ -123,13 +124,13 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                   : ListView.builder(
                       controller: _scrollCtrl,
                       reverse: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       itemCount: n,
                       itemBuilder: (context, index) {
                         final msg = widget.messages[n - 1 - index];
                         final isMine = msg.userId == widget.selfId;
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.only(bottom: 4),
                           child: Row(
                             mainAxisAlignment:
                                 isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
@@ -138,7 +139,7 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                                 constraints: BoxConstraints(
                                   maxWidth: MediaQuery.of(context).size.width * 0.72,
                                 ),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: isMine
                                       ? Theme.of(context).colorScheme.primaryContainer
@@ -162,25 +163,31 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               color: Theme.of(context).colorScheme.surface,
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _textCtrl,
+                      style: Theme.of(context).textTheme.bodyMedium,
                       decoration: const InputDecoration(
-                        hintText: '응원 메시지를 남겨보세요',
+                        hintText: '메시지',
+                        isDense: true,
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                       ),
                       onSubmitted: (_) => _handleSend(),
-                      maxLines: 3,
+                      minLines: 1,
+                      maxLines: 1,
                       textInputAction: TextInputAction.send,
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.send_rounded),
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                    icon: const Icon(Icons.send_rounded, size: 22),
                     color: Theme.of(context).colorScheme.primary,
                     onPressed: _handleSend,
                   ),

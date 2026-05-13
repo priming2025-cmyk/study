@@ -14,7 +14,6 @@ import '../../plan/presentation/widgets/plan_add_item_sheet.dart';
 import '../../study_room/infra/study_room_ambient_player.dart';
 import '../../study_room/presentation/widgets/study_room_ambient_sheet.dart';
 import '../domain/attention_scoring.dart';
-import '../domain/engaged_time_threshold.dart';
 import '../infra/session_self_camera.dart';
 import 'session_controller.dart';
 import 'widgets/engaged_sensitivity_metro_card.dart';
@@ -289,7 +288,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           // 좁은 세로 스트립 크기
           final stripW = (maxW * 0.46).clamp(200.0, 272.0);
           var stripH = stripW * 16 / 9;
-          stripH = stripH.clamp(260.0, (bodyH * 0.44).clamp(280.0, 440.0));
+          stripH = stripH.clamp(280.0, (bodyH * 0.50).clamp(300.0, 480.0));
           final shellSession = ref.watch(shellBranchIndexProvider) == kShellBranchSession;
 
           return Padding(
@@ -306,21 +305,6 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         const Padding(
                           padding: EdgeInsets.only(bottom: 12),
                           child: LinearProgressIndicator(minHeight: 3),
-                        ),
-                      if (!running)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Text(
-                                '공부를 시작하면 카메라로 집중도를 측정합니다.',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                            ),
-                          ),
                         ),
                       if (running) ...[
                         const SizedBox(height: 14),
