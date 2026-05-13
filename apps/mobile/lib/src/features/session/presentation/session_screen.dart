@@ -11,7 +11,10 @@ import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../plan/data/plan_models.dart';
 import '../../plan/presentation/widgets/plan_add_item_sheet.dart';
+import '../../study_room/infra/study_room_ambient_player.dart';
+import '../../study_room/presentation/widgets/study_room_ambient_sheet.dart';
 import '../domain/attention_scoring.dart';
+import '../domain/engaged_time_threshold.dart';
 import '../infra/session_self_camera.dart';
 import 'session_controller.dart';
 import 'widgets/engaged_sensitivity_metro_card.dart';
@@ -30,6 +33,7 @@ class SessionScreen extends ConsumerStatefulWidget {
 class _SessionScreenState extends ConsumerState<SessionScreen> {
   late final SessionController _c;
   late final _LifecycleObserver _lifecycleObserver;
+  final _ambientPlayer = StudyRoomAmbientPlayer();
   bool _autoStarted = false;
   bool _autoStartOpenedAddSheet = false;
 
@@ -52,8 +56,28 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   @override
   void dispose() {
     _c.dispose();
+    _ambientPlayer.dispose();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
     super.dispose();
+  }
+
+  Future<void> _openSensitivitySheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: EngagedSensitivityMetroCard(
+            engagedMinScore: _c.engagedMinScore,
+            onSelect: (v) async {
+              _c.setEngagedMinScore(v);
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _init() async {
@@ -240,6 +264,21 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('집중 공부'),
+        actions: [
+          IconButton(
+            tooltip: '집중민감도',
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: _openSensitivitySheet,
+          ),
+          IconButton(
+            tooltip: '집중 배경음',
+            icon: const Icon(Icons.graphic_eq_rounded),
+            onPressed: () => showStudyRoomAmbientSheet(
+              context,
+              player: _ambientPlayer,
+            ),
+          ),
+        ],
       ),
       body: LayoutBuilder(
         builder: (context, bodyConstraints) {
@@ -344,13 +383,6 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                           unfocusedSeconds: unfocused,
                         ),
                       ],
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: EngagedSensitivityMetroCard(
-                          engagedMinScore: _c.engagedMinScore,
-                          onSelect: _c.setEngagedMinScore,
-                        ),
-                      ),
                       SubjectPickerCard(
                         todayPlan: _c.todayPlan,
                         selectedPlanItemId: _c.selectedPlanItemId,

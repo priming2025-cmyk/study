@@ -6,11 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../../session/domain/engaged_time_threshold.dart';
+import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
-import 'widgets/study_room_lobby_view.dart';
+import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_active_view.dart';
 import 'widgets/study_room_goal_sheet.dart';
+import 'widgets/study_room_host_sheet.dart';
+import 'widgets/study_room_lobby_view.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
   final bool quickJoin;
@@ -26,17 +30,27 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _roomIdCtrl = TextEditingController();
   late Future<(String roomId, String goalText)?> _recentFuture;
 
+  late final ValueNotifier<int> _engagedMinScoreN =
+      ValueNotifier(kDefaultEngagedMinScore);
+
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onChanged);
     _recentFuture = loadRecentStudyRoom();
+    _loadEngagedScore();
     if (widget.quickJoin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _quickJoinRecent();
       });
     }
+  }
+
+  Future<void> _loadEngagedScore() async {
+    final v = await loadEngagedMinScore();
+    if (!mounted) return;
+    _engagedMinScoreN.value = v;
   }
 
   @override
@@ -46,11 +60,33 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       ..dispose();
     _roomNameCtrl.dispose();
     _roomIdCtrl.dispose();
+    _engagedMinScoreN.dispose();
     super.dispose();
   }
 
   void _onChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _openSensitivitySheet() async {
+    final cur = _engagedMinScoreN.value;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+          child: EngagedSensitivityMetroCard(
+            engagedMinScore: cur,
+            onSelect: (v) async {
+              await saveEngagedMinScore(v);
+              _engagedMinScoreN.value = v;
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _createRoom() async {
@@ -135,18 +171,39 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       appBar: AppBar(
         title: Text(inRoom ? '스터디방' : '스터디방 참여'),
         actions: [
-          if (inRoom)
+          if (inRoom) ...[
             IconButton(
-               tooltip: '방 ID 복사',
+              tooltip: '집중민감도',
+              icon: const Icon(Icons.tune_rounded),
+              onPressed: _openSensitivitySheet,
+            ),
+            IconButton(
+              tooltip: '집중 배경음',
+              icon: const Icon(Icons.graphic_eq_rounded),
+              onPressed: () => showStudyRoomAmbientSheet(
+                context,
+                player: _controller.ambient,
+              ),
+            ),
+            if (_controller.isRoomHost)
+              IconButton(
+                tooltip: '방장 넘기기',
+                icon: const Icon(Icons.swap_horiz_rounded),
+                onPressed: () => showStudyRoomHostActionsSheet(context, _controller),
+              ),
+            IconButton(
+              tooltip: '방 ID 복사',
               icon: const Icon(Icons.copy_rounded),
               onPressed: _copyRoomId,
             ),
+          ],
         ],
       ),
       body: inRoom
           ? StudyRoomActiveView(
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
+              engagedMinListenable: _engagedMinScoreN,
             )
           : FutureBuilder<(String roomId, String goalText)?>(
               future: _recentFuture,
