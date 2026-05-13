@@ -82,7 +82,7 @@ class StudyRoomController extends ChangeNotifier {
         .from('study_rooms')
         .insert({
           'owner_id': userId,
-          'name': name.trim().isEmpty ? '스터디방' : name.trim(),
+          'name': name.trim().isEmpty ? '우리셋' : name.trim(),
           'max_peers': 4,
         })
         .select('id')

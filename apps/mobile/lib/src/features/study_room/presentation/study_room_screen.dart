@@ -26,7 +26,7 @@ class StudyRoomScreen extends ConsumerStatefulWidget {
 
 class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
-  final _roomNameCtrl = TextEditingController(text: '우리방');
+  final _roomNameCtrl = TextEditingController(text: '우리셋');
   final _roomIdCtrl = TextEditingController();
   late Future<(String roomId, String goalText)?> _recentFuture;
 
@@ -182,7 +182,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       // 키보드가 올라와도 본문(2×2·카메라) 높이를 줄이지 않음 → 채팅 입력 시 레이아웃이 덜 흔들림
       resizeToAvoidBottomInset: !inRoom,
       appBar: AppBar(
-        title: Text(inRoom ? '스터디방' : '스터디방 참여'),
+        title: Text(inRoom ? '셋터디방' : '셋터디방 참여'),
         actions: [
           if (inRoom) ...[
             IconButton(
@@ -205,7 +205,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                 onPressed: () => showStudyRoomHostActionsSheet(context, _controller),
               ),
             IconButton(
-              tooltip: '방 ID 복사',
+              tooltip: '셋 ID 복사',
               icon: const Icon(Icons.copy_rounded),
               onPressed: _copyRoomId,
             ),
@@ -243,7 +243,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                 ),
                 onPressed: _leave,
                 icon: const Icon(Icons.exit_to_app_rounded),
-                label: const Text('방 나가기'),
+                label: const Text('셋 나가기'),
               ),
             )
           : null,

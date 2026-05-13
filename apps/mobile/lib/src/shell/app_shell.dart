@@ -81,10 +81,10 @@ class _AppShellState extends ConsumerState<AppShell> {
               context: context,
               barrierDismissible: false,
               builder: (ctx) => AlertDialog(
-                title: const Text('스터디방에 있어요'),
+                title: const Text('셋터디방에 있어요'),
                 content: const Text(
-                  '다른 탭으로 이동하려면 스터디방에서 나가야 해요.\n'
-                  '방을 나가고 이동할까요?',
+                  '다른 탭으로 이동하려면 셋터디방에서 나가야 해요.\n'
+                  '셋을 나가고 이동할까요?',
                 ),
                 actions: [
                   TextButton(
@@ -132,8 +132,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           NavigationDestination(
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups),
-            label: '스터디',
-            tooltip: '스터디방',
+            label: '셋터디',
+            tooltip: '셋터디방',
           ),
           NavigationDestination(
             icon: Icon(Icons.insights_outlined),

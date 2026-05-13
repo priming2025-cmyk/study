@@ -44,11 +44,15 @@ class FaceAttentionSensor {
           : FaceDetectionModel.backCamera,
     );
 
+    // iOS·macOS는 bgra8888만 지원. Android는 yuv420 사용.
+    final isBgraDevice = Platform.isIOS || Platform.isMacOS;
     _controller = CameraController(
       cam,
       ResolutionPreset.low,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      imageFormatGroup: isBgraDevice
+          ? ImageFormatGroup.bgra8888
+          : ImageFormatGroup.yuv420,
     );
     await _controller!.initialize();
 
@@ -60,7 +64,7 @@ class FaceAttentionSensor {
         final faces = await _detector!.detectFacesFromCameraImage(
           image,
           rotation: rotation,
-          isBgra: Platform.isMacOS,
+          isBgra: isBgraDevice, // iOS·macOS: bgra8888 포맷임을 명시
           mode: FaceDetectionMode.full, // mesh + landmarks 포함
           maxDim: 320,
         );
