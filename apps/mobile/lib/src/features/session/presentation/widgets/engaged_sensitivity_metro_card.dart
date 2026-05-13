@@ -26,26 +26,25 @@ class EngagedSensitivityMetroCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '집중민감도',
-              textAlign: TextAlign.center,
-              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
             Row(
               children: [
+                Text(
+                  '집중민감도',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
                 Text(
                   '높음',
                   style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
-                const Spacer(),
+                const SizedBox(width: 10),
                 Text(
                   '낮음',
                   style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             SizedBox(
               height: 36,
               child: Stack(

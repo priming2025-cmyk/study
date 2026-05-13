@@ -14,7 +14,6 @@ import '../domain/attention_scoring.dart';
 import '../infra/session_self_camera.dart';
 import 'session_controller.dart';
 import 'widgets/engaged_sensitivity_metro_card.dart';
-import 'widgets/others_studying_card.dart';
 import 'widgets/session_end_result_sheet.dart';
 import 'widgets/session_bottom_bars.dart';
 import 'widgets/subject_picker_card.dart';
@@ -360,10 +359,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         onEditItem: _openSessionEditSheet,
                         onDeleteItem: _onDeleteSessionPlanItem,
                       ),
-                      if (running) ...[
-                        const SizedBox(height: 12),
-                        OthersStudyingCard(others: _c.others),
-                      ],
+                      // 같이 공부 중(others) 카드 제거: 스터디방에서만 노출
                       const SizedBox(height: 80),
                     ],
                   ),
@@ -522,43 +518,44 @@ class _ConcentrationCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _ScoreRing(score: score, color: statusColor),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: statusColor.withAlpha(30),
-                borderRadius: BorderRadius.circular(20),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withAlpha(30),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      status.label,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _TimeStat(
+                    label: '집중',
+                    seconds: focusedSeconds,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(height: 6),
+                  _TimeStat(
+                    label: '이탈',
+                    seconds: unfocusedSeconds,
+                    color: cs.error,
+                  ),
+                ],
               ),
-              child: Text(
-                status.label,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _TimeStat(
-                  label: '집중',
-                  seconds: focusedSeconds,
-                  color: cs.primary,
-                ),
-                const SizedBox(width: 24),
-                _TimeStat(
-                  label: '이탈',
-                  seconds: unfocusedSeconds,
-                  color: cs.error,
-                ),
-              ],
             ),
           ],
         ),
@@ -666,9 +663,13 @@ class _TimeStat extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: 10),
         Text(
-          '$label  ${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}',
-          style: Theme.of(context).textTheme.bodyMedium,
+          '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
         ),
       ],
     );

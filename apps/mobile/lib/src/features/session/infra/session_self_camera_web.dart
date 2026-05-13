@@ -34,11 +34,15 @@ class SessionSelfCameraSurface extends StatefulWidget {
 }
 
 class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
-  late final String _viewType;
+  static const String _sharedViewType = 'session-self-cam';
+  static bool _sharedRegistered = false;
+  static html.VideoElement? _sharedVideo;
+  static html.MediaStream? _sharedStream;
+  static int _sharedRefCount = 0;
+  static Timer? _sharedDisposeTimer;
+
   html.VideoElement? _video;
-  html.MediaStream? _stream;
   String? _error;
-  bool _registered = false;
 
   FaceDetector? _detector;
   Timer? _analysisTimer;
@@ -47,33 +51,60 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   @override
   void initState() {
     super.initState();
-    _viewType = 'session-self-cam-${DateTime.now().microsecondsSinceEpoch}';
-    _video = html.VideoElement()
+    _sharedRefCount += 1;
+    _sharedDisposeTimer?.cancel();
+    _sharedDisposeTimer = null;
+
+    _sharedVideo ??= html.VideoElement()
       ..autoplay = true
       ..muted = true
       ..setAttribute('playsinline', 'true')
       // 인라인 비디오는 높이 0으로 잡히는 경우가 있어 block + 픽셀 크기를 둡니다.
       ..style.display = 'block'
-      ..style.width = '${widget.width}px'
-      ..style.height = '${widget.height}px'
       ..style.objectFit = 'cover'
       // 셀카처럼 거울 반전(실시간으로 내가 보는 방향과 맞춤)
       ..style.transform = 'scaleX(-1)';
+    _video = _sharedVideo;
 
-    ui_web.platformViewRegistry.registerViewFactory(_viewType, (int _) => _video!);
-    _registered = true;
+    // 최초 1회만 factory 등록 (viewType 재사용)
+    if (!_sharedRegistered) {
+      ui_web.platformViewRegistry.registerViewFactory(
+        _sharedViewType,
+        (int _) => _sharedVideo!,
+      );
+      _sharedRegistered = true;
+    }
+
+    _applySize();
     _openCameraAndStartAnalysis();
   }
 
   @override
   void didUpdateWidget(SessionSelfCameraSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final v = _video;
-    if (v != null &&
-        (oldWidget.width != widget.width || oldWidget.height != widget.height)) {
-      v.style.width = '${widget.width}px';
-      v.style.height = '${widget.height}px';
+    if (oldWidget.width != widget.width || oldWidget.height != widget.height) {
+      _applySize();
     }
+  }
+
+  void _applySize() {
+    final v = _video;
+    if (v == null) return;
+    v.style.width = '${widget.width}px';
+    v.style.height = '${widget.height}px';
+  }
+
+  static Future<html.MediaStream?> _ensureSharedStream() async {
+    if (_sharedStream != null) return _sharedStream;
+    final md = html.window.navigator.mediaDevices;
+    if (md == null) return null;
+    final stream = await md.getUserMedia({'video': true});
+    _sharedStream = stream;
+    _sharedVideo?.srcObject = stream;
+    try {
+      await _sharedVideo?.play();
+    } catch (_) {}
+    return _sharedStream;
   }
 
   Future<void> _openCameraAndStartAnalysis() async {
@@ -83,10 +114,11 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         setState(() => _error = '이 브라우저는 카메라를 지원하지 않아요.');
         return;
       }
-      final stream = await md.getUserMedia({'video': true});
-      _stream = stream;
-      _video!.srcObject = stream;
-      await _video!.play();
+      final stream = await _ensureSharedStream();
+      if (stream == null) {
+        setState(() => _error = '이 브라우저는 카메라를 지원하지 않아요.');
+        return;
+      }
 
       if (mounted) setState(() => _error = null);
 
@@ -187,17 +219,28 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _analysisTimer = null;
     unawaited(_detector?.dispose());
     _detector = null;
-    for (final t in _stream?.getTracks() ?? <html.MediaStreamTrack>[]) {
-      t.stop();
+
+    _sharedRefCount = (_sharedRefCount - 1).clamp(0, 1 << 30);
+    if (_sharedRefCount == 0) {
+      // 리스트 스크롤 등으로 잠깐 위젯이 사라졌다가 다시 생길 수 있어
+      // 즉시 stop 하지 않고 약간의 유예를 둡니다.
+      _sharedDisposeTimer?.cancel();
+      _sharedDisposeTimer = Timer(const Duration(seconds: 8), () {
+        for (final t in _sharedStream?.getTracks() ?? <html.MediaStreamTrack>[]) {
+          t.stop();
+        }
+        _sharedStream = null;
+        try {
+          _sharedVideo?.srcObject = null;
+        } catch (_) {}
+      });
     }
-    _stream = null;
-    _video?.srcObject = null;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_registered || _video == null) {
+    if (_video == null) {
       return SizedBox(
         width: widget.width,
         height: widget.height,
@@ -226,7 +269,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     return SizedBox(
       width: widget.width,
       height: widget.height,
-      child: HtmlElementView(viewType: _viewType),
+      child: const HtmlElementView(viewType: _sharedViewType),
     );
   }
 }

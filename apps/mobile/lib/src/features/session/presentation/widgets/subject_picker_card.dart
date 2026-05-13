@@ -120,12 +120,11 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
                     children: [
                       Text('오늘 집중할 과목', style: tt.titleMedium),
                       const SizedBox(height: 4),
-                      Text(
-                        hasPlan
-                            ? '항목을 탭하면 집중 시간이 그 과목에 쌓여요. 연필·휴지통으로 계획을 바꿀 수 있어요.'
-                            : '아래에서 빠르게 추가하거나, 전체 옵션에서 시작 시각·알림까지 설정할 수 있어요.',
-                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                      ),
+                      if (!hasPlan)
+                        Text(
+                          '아래에서 빠르게 추가하거나, 전체 옵션에서 시작 시각·알림까지 설정할 수 있어요.',
+                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        ),
                     ],
                   ),
                 ),
