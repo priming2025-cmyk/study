@@ -46,9 +46,11 @@ class _AppShellState extends ConsumerState<AppShell> {
               currentIndex == kShellBranchSession && index != kShellBranchSession;
           final leavingStudyTab =
               currentIndex == kShellBranchStudy && index != kShellBranchStudy;
-          // 공부·스터디 탭에서 다른 탭으로 나갈 때 집중 세션이 켜져 있으면 동일하게 확인
-          if ((leavingSessionTab || leavingStudyTab) &&
-              ref.read(sessionRunningProvider)) {
+          final sessionRunning = ref.read(sessionRunningProvider);
+          final studyInRoom = ref.read(studyRoomInRoomProvider);
+
+          // 집중 세션 실행 중: 공부·스터디 탭 → 다른 탭 (동일 다이얼로그 + 저장)
+          if ((leavingSessionTab || leavingStudyTab) && sessionRunning) {
             final choice = await showDialog<_LeaveSessionChoice>(
               context: context,
               barrierDismissible: false,
@@ -71,10 +73,35 @@ class _AppShellState extends ConsumerState<AppShell> {
               ),
             );
             if (choice != _LeaveSessionChoice.saveAndLeave) return;
-            // SessionScreen에서 자동 저장 실행
             ref.read(sessionAutoSaveTriggerProvider.notifier).state = true;
-            // 저장이 처리될 시간을 잠시 대기
-            await Future<void>.delayed(const Duration(milliseconds: 300));
+            await Future<void>.delayed(const Duration(milliseconds: 450));
+          } else if (leavingStudyTab && studyInRoom) {
+            // 방만 참여 중(집중 세션 없음): 나가기 확인 후 방 퇴장
+            final ok = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                title: const Text('스터디방에 있어요'),
+                content: const Text(
+                  '다른 탭으로 이동하려면 스터디방에서 나가야 해요.\n'
+                  '방을 나가고 이동할까요?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('취소'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('나가고 이동'),
+                  ),
+                ],
+              ),
+            );
+            if (ok != true) return;
+            ref.read(studyRoomLeaveForTabSwitchProvider.notifier).state =
+                ref.read(studyRoomLeaveForTabSwitchProvider) + 1;
+            await Future<void>.delayed(const Duration(milliseconds: 450));
           }
           if (!mounted) return;
           ref.read(shellBranchIndexProvider.notifier).state = index;

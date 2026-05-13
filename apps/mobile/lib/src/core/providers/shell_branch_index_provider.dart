@@ -15,3 +15,9 @@ final sessionRunningProvider = StateProvider<bool>((ref) => false);
 
 /// 공부 세션 자동 저장 트리거: AppShell이 true로 설정하면 SessionScreen이 감지해 저장.
 final sessionAutoSaveTriggerProvider = StateProvider<bool>((ref) => false);
+
+/// 스터디방에 입장해 있는지(StudyRoomScreen이 갱신). 하단 탭 이탈 가드에 사용.
+final studyRoomInRoomProvider = StateProvider<bool>((ref) => false);
+
+/// 스터디 탭에서 나갈 때 방만 나가야 하면 증가시키고 StudyRoomScreen이 [leave] 처리.
+final studyRoomLeaveForTabSwitchProvider = StateProvider<int>((ref) => 0);

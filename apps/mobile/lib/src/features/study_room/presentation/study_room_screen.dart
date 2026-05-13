@@ -61,11 +61,15 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     _roomNameCtrl.dispose();
     _roomIdCtrl.dispose();
     _engagedMinScoreN.dispose();
+    ref.read(studyRoomInRoomProvider.notifier).state = false;
     super.dispose();
   }
 
   void _onChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      ref.read(studyRoomInRoomProvider.notifier).state = _controller.roomId != null;
+    }
   }
 
   Future<void> _openSensitivitySheet() async {
@@ -166,6 +170,13 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   Widget build(BuildContext context) {
     final inRoom = _controller.roomId != null;
     final studyCameraSlotActive = ref.watch(shellBranchIndexProvider) == kShellBranchStudy;
+
+    ref.listen<int>(studyRoomLeaveForTabSwitchProvider, (prev, next) {
+      if (prev == null || next <= prev) return;
+      if (_controller.roomId != null) {
+        unawaited(_leave());
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(

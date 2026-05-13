@@ -1,12 +1,33 @@
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
 
-/// 채팅: 최신 메시지가 아래에 보이고, 짧은 높이만 노출 후 위로 스크롤.
+/// 채팅: 최신 메시지가 아래에 보이고, [visibleMessageLines]줄 높이만 노출 후 그 안에서 스크롤.
 class StudyRoomChatPanel extends StatefulWidget {
   final List<StudyRoomMessage> messages;
   final String selfId;
   final Future<void> Function(String content) onSendMessage;
   final bool isFocusMode;
+
+  /// 말풍선 리스트 영역 높이(텍스트 약 [lines]줄 분량 + 여백).
+  static double messageListHeightForLines(BuildContext context, {int lines = 3}) {
+    final mq = MediaQuery.of(context);
+    final t = Theme.of(context).textTheme.bodyMedium!;
+    final fs = t.fontSize ?? 14;
+    final h = t.height ?? 1.25;
+    final line = mq.textScaler.scale(fs) * h;
+    return line * lines + 28;
+  }
+
+  /// 헤더 + 메시지 리스트 + 한 줄 입력 + 하단 세이프 영역 합산.
+  static double totalOuterHeight(BuildContext context, {int visibleMessageLines = 3}) {
+    final mq = MediaQuery.of(context);
+    const header = 22.0;
+    const inputRow = 46.0;
+    return header +
+        messageListHeightForLines(context, lines: visibleMessageLines) +
+        inputRow +
+        mq.padding.bottom;
+  }
 
   const StudyRoomChatPanel({
     super.key,
@@ -90,12 +111,14 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
     }
 
     final n = widget.messages.length;
+    final listH = StudyRoomChatPanel.messageListHeightForLines(context, lines: 3);
 
     return Material(
       elevation: 2,
       color: Theme.of(context).colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
@@ -107,11 +130,11 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
               ],
             ),
           ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
+          SizedBox(
+            height: listH,
+            width: double.infinity,
+            child: ColoredBox(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
-              alignment: Alignment.topCenter,
               child: n == 0
                   ? Center(
                       child: Text(

@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
@@ -24,9 +22,8 @@ class StudyRoomActiveView extends StatelessWidget {
     final members = controller.members;
     final selfId = controller.selfId ?? '';
 
-    // 입력은 1줄로 얇게 두고, 메시지 리스트에 약 3줄 분량 이상 확보 (전체 높이는 입력 절약분 반영)
-    final mediaH = MediaQuery.sizeOf(context).height;
-    final chatAreaH = math.min(248.0, math.max(176.0, mediaH * 0.30));
+    // 채팅: 메시지 영역은 약 3줄 높이로 고정, 그 이상은 내부 스크롤
+    final chatAreaH = StudyRoomChatPanel.totalOuterHeight(context, visibleMessageLines: 3);
 
     return Column(
       children: [

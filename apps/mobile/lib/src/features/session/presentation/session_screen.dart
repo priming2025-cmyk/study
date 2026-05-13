@@ -234,6 +234,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final status = s?.lastStatus ?? FocusStatus.focused;
 
     ref.listen<int>(shellBranchIndexProvider, (prev, next) {
+      // AppShell 탭 전환 가드가 최신 running 값을 읽을 수 있도록 항상 동기화
+      ref.read(sessionRunningProvider.notifier).state = _c.running;
       if (prev == null) return;
       if (prev == kShellBranchSession && next != kShellBranchSession) {
         unawaited(_c.suspendCameraForShellNavigation());
