@@ -6,7 +6,6 @@ import 'package:study_up/l10n/app_localizations.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../motivation/domain/motivation_models.dart';
-import '../../motivation/presentation/title_equip_sheet.dart';
 import '../../plan/data/plan_models.dart';
 import 'widgets/dashboard_hero_streak.dart';
 import 'widgets/dashboard_quick_card.dart';
@@ -61,10 +60,6 @@ class DashboardScreen extends ConsumerWidget {
               DashboardHeroCard(
                 email: email,
                 rpg: rpg,
-                onChangeTitle: () => showTitleEquipBottomSheet(
-                  context,
-                  motivationRepo,
-                ),
               ),
               const SizedBox(height: 12),
               DashboardTodayMetricsCard(
@@ -114,15 +109,15 @@ class DashboardScreen extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 10),
                       FilledButton.icon(
-                        onPressed: () => context.go('/session'),
+                        onPressed: () => context.go('/session/quick'),
                         icon: const Icon(Icons.timer),
-                        label: const Text('집중 세션 시작'),
+                        label: const Text('1초 만에 집중 시작'),
                       ),
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
-                        onPressed: () => context.go('/room'),
+                        onPressed: () => context.go('/room/quick'),
                         icon: const Icon(Icons.groups),
-                        label: const Text('스터디방 들어가기'),
+                        label: const Text('스터디방 빠른 입장'),
                       ),
                       const SizedBox(height: 8),
                       Text(

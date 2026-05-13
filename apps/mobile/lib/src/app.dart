@@ -122,6 +122,10 @@ final _routerProvider = Provider<GoRouter>((ref) {
                 path: '/session',
                 builder: (context, state) => const SessionScreen(),
               ),
+              GoRoute(
+                path: '/session/quick',
+                builder: (context, state) => const SessionScreen(autoStart: true),
+              ),
             ],
           ),
           StatefulShellBranch(
@@ -129,6 +133,10 @@ final _routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/room',
                 builder: (context, state) => const StudyRoomScreen(),
+              ),
+              GoRoute(
+                path: '/room/quick',
+                builder: (context, state) => const StudyRoomScreen(quickJoin: true),
               ),
             ],
           ),

@@ -5,6 +5,9 @@ class ProfileRpgSummary {
   final int streakCurrent;
   final int streakBest;
   final String? equippedTitleKo;
+  final String? currentRankKo;
+  final String? nextRankKo;
+  final int? xpToNextRank;
   final String? equippedBorderKey;
 
   const ProfileRpgSummary({
@@ -13,12 +16,18 @@ class ProfileRpgSummary {
     required this.streakCurrent,
     required this.streakBest,
     this.equippedTitleKo,
+    this.currentRankKo,
+    this.nextRankKo,
+    this.xpToNextRank,
     this.equippedBorderKey,
   });
 
   factory ProfileRpgSummary.fromProfileRow(
     Map<String, dynamic> row, {
     String? titleKo,
+    String? currentRankKo,
+    String? nextRankKo,
+    int? xpToNextRank,
   }) {
     return ProfileRpgSummary(
       xpTotal: ((row['xp_total'] ?? 0) as num).toInt(),
@@ -26,6 +35,9 @@ class ProfileRpgSummary {
       streakCurrent: ((row['streak_current'] ?? 0) as num).toInt(),
       streakBest: ((row['streak_best'] ?? 0) as num).toInt(),
       equippedTitleKo: titleKo,
+      currentRankKo: currentRankKo,
+      nextRankKo: nextRankKo,
+      xpToNextRank: xpToNextRank,
       equippedBorderKey: row['equipped_border_key'] as String?,
     );
   }

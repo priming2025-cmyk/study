@@ -7,13 +7,11 @@ import '../../../stats/data/daily_focus_stat.dart';
 class DashboardHeroCard extends StatelessWidget {
   final String? email;
   final ProfileRpgSummary? rpg;
-  final VoidCallback? onChangeTitle;
 
   const DashboardHeroCard({
     super.key,
     required this.email,
     this.rpg,
-    this.onChangeTitle,
   });
 
   @override
@@ -41,19 +39,28 @@ class DashboardHeroCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      'Lv.${summary.level} · XP ${summary.xpTotal}'
-                      '${summary.equippedTitleKo != null ? ' · ${summary.equippedTitleKo}' : ''}',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          summary.currentRankKo ?? '집중 중',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          summary.nextRankKo == null
+                              ? 'XP ${summary.xpTotal} · 최고 계급 달성'
+                              : '다음: ${summary.nextRankKo} · 남은 XP ${summary.xpToNextRank ?? 0}',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (onChangeTitle != null)
-                    TextButton(
-                      onPressed: onChangeTitle,
-                      child: const Text('칭호'),
-                    ),
                 ],
               ),
             ],

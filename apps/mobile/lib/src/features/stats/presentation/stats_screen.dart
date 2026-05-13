@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../motivation/domain/motivation_models.dart';
-import '../../motivation/presentation/title_equip_sheet.dart';
 import '../data/daily_focus_stat.dart';
 
 String formatFocusDuration(int seconds) {
@@ -91,7 +90,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final email = supabase.auth.currentUser?.email;
-    final motivationRepo = ref.watch(motivationRepositoryProvider);
+    // 계급은 자동으로 올라가며, 기록 화면에서는 별도 "착용" UI를 노출하지 않습니다.
 
     return Scaffold(
       appBar: AppBar(
@@ -155,17 +154,12 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  'Lv.${p.rpg!.level} · XP ${p.rpg!.xpTotal}'
-                                  '${p.rpg!.equippedTitleKo != null ? ' · ${p.rpg!.equippedTitleKo}' : ''}',
+                                  p.rpg!.currentRankKo ?? '집중 중',
                                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                                         color: scheme.primary,
                                         fontWeight: FontWeight.w600,
                                       ),
                                 ),
-                              ),
-                              TextButton(
-                                onPressed: () => showTitleEquipBottomSheet(context, motivationRepo),
-                                child: const Text('칭호'),
                               ),
                             ],
                           ),

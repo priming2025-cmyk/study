@@ -6,7 +6,6 @@ import 'social_challenge_tab.dart';
 import 'social_compete_tab.dart';
 import 'social_mission_tab.dart';
 import 'social_people_tab.dart';
-import 'title_equip_sheet.dart';
 
 /// 사람 · 팀 · 랭킹 · 미션 허브
 class SocialHubScreen extends ConsumerStatefulWidget {
@@ -42,13 +41,6 @@ class _SocialHubScreenState extends ConsumerState<SocialHubScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('함께하기'),
-        actions: [
-          IconButton(
-            tooltip: '칭호 착용',
-            onPressed: () => showTitleEquipBottomSheet(context, repo),
-            icon: const Icon(Icons.military_tech_outlined),
-          ),
-        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,

@@ -6,6 +6,8 @@ class StudyRoomLobbyView extends StatelessWidget {
   final bool joining;
   final VoidCallback onCreate;
   final VoidCallback onJoin;
+  final String? recentRoomId;
+  final VoidCallback? onQuickJoinRecent;
 
   const StudyRoomLobbyView({
     super.key,
@@ -14,13 +16,29 @@ class StudyRoomLobbyView extends StatelessWidget {
     required this.joining,
     required this.onCreate,
     required this.onJoin,
+    this.recentRoomId,
+    this.onQuickJoinRecent,
   });
 
   @override
   Widget build(BuildContext context) {
+    String shortId(String id) =>
+        id.length <= 8 ? id : '${id.substring(0, 8)}…';
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        if (recentRoomId != null && onQuickJoinRecent != null) ...[
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.history_rounded),
+              title: const Text('최근 방으로 빠른 입장'),
+              subtitle: Text('방 ID: ${shortId(recentRoomId!)}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: joining ? null : onQuickJoinRecent,
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         // 안내 카드
         Card(
           color: Theme.of(context).colorScheme.surfaceContainerLow,

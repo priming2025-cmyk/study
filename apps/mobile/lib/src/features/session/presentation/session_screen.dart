@@ -15,11 +15,13 @@ import '../infra/session_self_camera.dart';
 import 'session_controller.dart';
 import 'widgets/engaged_sensitivity_metro_card.dart';
 import 'widgets/others_studying_card.dart';
+import 'widgets/session_end_result_sheet.dart';
 import 'widgets/session_bottom_bars.dart';
 import 'widgets/subject_picker_card.dart';
 
 class SessionScreen extends ConsumerStatefulWidget {
-  const SessionScreen({super.key});
+  final bool autoStart;
+  const SessionScreen({super.key, this.autoStart = false});
 
   @override
   ConsumerState<SessionScreen> createState() => _SessionScreenState();
@@ -28,6 +30,8 @@ class SessionScreen extends ConsumerStatefulWidget {
 class _SessionScreenState extends ConsumerState<SessionScreen> {
   late final SessionController _c;
   late final _LifecycleObserver _lifecycleObserver;
+  bool _autoStarted = false;
+  bool _autoStartOpenedAddSheet = false;
 
   @override
   void initState() {
@@ -55,6 +59,14 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   Future<void> _init() async {
     try {
       await _c.init();
+      if (!mounted) return;
+      if (widget.autoStart && !_autoStarted) {
+        _autoStarted = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _start();
+        });
+      }
     } catch (_) {}
   }
 
@@ -153,6 +165,15 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     try {
       await _c.start();
     } catch (e) {
+      // 퀵스타트(autoStart)에서 과목이 없는 경우: 스낵 대신 바로 추가 시트로 유도.
+      if (widget.autoStart &&
+          !_autoStartOpenedAddSheet &&
+          e is StateError &&
+          (e.message.contains('과목') || e.message.contains('선택') || e.message.contains('추가'))) {
+        _autoStartOpenedAddSheet = true;
+        _openSessionAddSheet();
+        return;
+      }
       AppSnacks.showWithMessenger(messenger, '시작 실패: $e');
     }
   }
@@ -161,8 +182,18 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final summary = await _c.stop();
-      await _c.uploadAndApply(summary);
-      AppSnacks.showWithMessenger(messenger, '종료 완료 · 계획에 자동 반영했어요');
+      final reward = await _c.uploadAndApply(summary);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: false,
+        builder: (_) => SessionEndResultSheet(
+          reward: reward,
+          averageScore: summary.concentrationScore,
+          focusedSeconds: summary.focusedSeconds,
+        ),
+      );
     } catch (e) {
       AppSnacks.showWithMessenger(messenger, '업로드 실패: $e');
     }

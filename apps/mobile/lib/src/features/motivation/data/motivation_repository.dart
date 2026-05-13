@@ -4,6 +4,11 @@ import '../domain/motivation_models.dart';
 class MotivationRepository {
   const MotivationRepository();
 
+  static int _xpRequiredForLevel(int level) {
+    if (level <= 1) return 0;
+    return (level - 1) * 400;
+  }
+
   Future<ProfileRpgSummary?> fetchMyProfileRpg() async {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return null;
@@ -23,7 +28,53 @@ class MotivationRepository {
       final t = await supabase.from('titles').select('name_ko').eq('id', tid).maybeSingle();
       titleKo = t?['name_ko'] as String?;
     }
-    return ProfileRpgSummary.fromProfileRow(row, titleKo: titleKo);
+
+    final level = ((row['level'] ?? 1) as num).toInt();
+    final xpTotal = ((row['xp_total'] ?? 0) as num).toInt();
+
+    // Current rank = highest title whose min_level <= level
+    String? currentRankKo;
+    try {
+      final cur = await supabase
+          .from('titles')
+          .select('name_ko, min_level')
+          .lte('min_level', level)
+          .order('min_level', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      currentRankKo = cur?['name_ko'] as String?;
+    } catch (_) {}
+
+    // Next rank = smallest title whose min_level > level
+    String? nextRankKo;
+    int? xpToNextRank;
+    try {
+      final nxt = await supabase
+          .from('titles')
+          .select('name_ko, min_level')
+          .gt('min_level', level)
+          .order('min_level', ascending: true)
+          .limit(1)
+          .maybeSingle();
+      nextRankKo = nxt?['name_ko'] as String?;
+      final nextMinLevelRaw = nxt?['min_level'];
+      final nextMinLevel = nextMinLevelRaw is int
+          ? nextMinLevelRaw
+          : (nextMinLevelRaw is num ? nextMinLevelRaw.toInt() : null);
+      if (nextMinLevel != null) {
+        final needXp = _xpRequiredForLevel(nextMinLevel);
+        xpToNextRank = (needXp - xpTotal);
+        if (xpToNextRank < 0) xpToNextRank = 0;
+      }
+    } catch (_) {}
+
+    return ProfileRpgSummary.fromProfileRow(
+      row,
+      titleKo: titleKo,
+      currentRankKo: currentRankKo,
+      nextRankKo: nextRankKo,
+      xpToNextRank: xpToNextRank,
+    );
   }
 
   Future<List<FriendRow>> listFriends() async {

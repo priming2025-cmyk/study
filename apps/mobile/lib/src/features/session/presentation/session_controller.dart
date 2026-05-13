@@ -13,6 +13,7 @@ import '../domain/attention_scoring.dart';
 import '../domain/attention_signals.dart';
 import '../domain/engaged_time_threshold.dart';
 import '../domain/session_summary.dart';
+import '../domain/session_reward_result.dart';
 import '../infra/face_attention_sensor.dart';
 import '../infra/study_presence.dart';
 
@@ -444,7 +445,7 @@ class SessionController extends ChangeNotifier {
     return summary;
   }
 
-  Future<void> uploadAndApply(SessionSummary summary) async {
+  Future<SessionRewardResult> uploadAndApply(SessionSummary summary) async {
     final sessionId = await _sessionRepo.uploadSummary(summary);
     if (summary.planItemId != null) {
       await _sessionRepo.applyFocusedToPlanItem(
@@ -452,7 +453,7 @@ class SessionController extends ChangeNotifier {
         focusedSeconds: summary.focusedSeconds,
       );
     }
-    await _sessionRepo.awardCoinsForSession(
+    final coinsFromFocus = await _sessionRepo.awardCoinsForSession(
       sessionId: sessionId,
       focusedSeconds: summary.focusedSeconds,
     );
@@ -465,9 +466,15 @@ class SessionController extends ChangeNotifier {
       focusedSeconds: summary.focusedSeconds,
     );
     // Award daily plan bonus if eligible (>= 80% completion)
-    await _sessionRepo.awardPlanBonusForToday();
+    final planBonus = await _sessionRepo.awardPlanBonusForToday();
     // Award streak bonus (+50) if yesterday+today both achieved plan bonus
-    await _sessionRepo.awardStreakBonusForToday();
+    final streakBonus = await _sessionRepo.awardStreakBonusForToday();
+
+    return SessionRewardResult(
+      coinsFromFocus: coinsFromFocus,
+      planBonus: planBonus,
+      streakBonus: streakBonus,
+    );
   }
 
   @override
