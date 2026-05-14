@@ -61,13 +61,43 @@ class FaceAttentionSensor {
       _busy = true;
       try {
         final rotation = _rotationFor(cam);
-        final faces = await _detector!.detectFacesFromCameraImage(
-          image,
-          rotation: rotation,
-          isBgra: isBgraDevice, // iOS·macOS: bgra8888 포맷임을 명시
-          mode: FaceDetectionMode.full, // mesh + landmarks 포함
-          maxDim: 320,
-        ).timeout(const Duration(milliseconds: 1000)); // 무한 대기 방지
+        
+        List<Face> faces = const [];
+        
+        if (isBgraDevice) {
+          // iOS/macOS bgra8888 포맷의 경우 camera 플러그인이 bytesPerPixel을 null로 반환하는 버그가 있어,
+          // face_detection_tflite 내부에서 pixelStride를 1로 잘못 인식해 프레임이 무시되는 문제를 우회합니다.
+          final frame = prepareCameraFrame(
+            width: image.width,
+            height: image.height,
+            planes: [
+              for (final p in image.planes)
+                (
+                  bytes: p.bytes,
+                  rowStride: p.bytesPerRow,
+                  pixelStride: p.bytesPerPixel ?? 4, // bgra8888은 픽셀당 4바이트
+                )
+            ],
+            rotation: rotation,
+            isBgra: true,
+          );
+          
+          if (frame != null) {
+            faces = await _detector!.detectFacesFromCameraFrame(
+              frame,
+              mode: FaceDetectionMode.full,
+              maxDim: 320,
+            ).timeout(const Duration(milliseconds: 1000));
+          }
+        } else {
+          faces = await _detector!.detectFacesFromCameraImage(
+            image,
+            rotation: rotation,
+            isBgra: false,
+            mode: FaceDetectionMode.full,
+            maxDim: 320,
+          ).timeout(const Duration(milliseconds: 1000));
+        }
         
         _signals?.add(_toSignals(faces, appInForeground()));
       } catch (e) {
