@@ -258,6 +258,19 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _runAttentionTick() {
+    if (!running) return;
+    final s = state;
+    if (s == null) return;
+    state = AttentionScoring.tick(
+      state: s,
+      now: DateTime.now(),
+      signals: signals,
+      engagedMinScore: _engagedMinScore,
+    );
+    notifyListeners();
+  }
+
   Future<void> start() async {
     if (running || starting) return;
     starting = true;
@@ -279,17 +292,10 @@ class SessionController extends ChangeNotifier {
     // 타이머를 먼저 걸어, 카메라 초기화·Presence가 오래 걸려도 초·집중도가 멈추지 않게 합니다.
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!running) return;
-      final s = state;
-      if (s == null) return;
-      state = AttentionScoring.tick(
-        state: s,
-        now: DateTime.now(),
-        signals: signals,
-        engagedMinScore: _engagedMinScore,
-      );
-      notifyListeners();
+      _runAttentionTick();
     });
+    // 첫 1초를 기다리지 않고 바로 한 번 집계(기본값 ‘집중’·만점 노출 방지, iOS 카메라 지연 완화)
+    _runAttentionTick();
 
     // 웹: 카메라·얼굴 분석은 SessionSelfCameraSurface(HtmlElementView)가 담당하므로
     // FaceAttentionSensor를 시작하지 않습니다. Presence만 비동기로 붙입니다.

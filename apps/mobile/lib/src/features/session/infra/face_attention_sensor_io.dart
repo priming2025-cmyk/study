@@ -10,13 +10,11 @@ import '../domain/attention_signals.dart';
 
 /// 앱(iOS·Android·macOS·Windows·Linux)용 얼굴 집중도 센서.
 ///
-/// - **Android**: `yuv420` + `detectFacesFromCameraImage` (기존과 동일).
-/// - **iOS**: `yuv420` 스트림은 NV12 평면/stride 조합에서 가끔 잘못 디코딩되어
-///   mesh 단계가 실패한 채 bbox만 남는 `Face`가 나올 수 있습니다. 이 경우에도
-///   예전 코드는 `facePresent: true`·기본 EAR로 **항상 집중**으로 보였습니다.
-///   → iOS만 `bgra8888` + `prepareCameraFrame` + `detectFacesFromCameraFrame`으로
-///   안정적인 BGR 입력을 쓰고, **468점 mesh가 있을 때만** 얼굴로 인정합니다.
-/// - **macOS**: iOS와 동일한 BGRA 경로(기존 유지).
+/// **라이브 카메라 처리는 `face_detection_tflite` 예제와 동일한 규칙을 따릅니다.**
+/// - iOS·Android: `ImageFormatGroup.yuv420` + `detectFacesFromCameraImage` + `isBgra: false`
+///   + [rotationForFrame] (센서·전후면·기기 방향 반영).  
+///   예전에 iOS만 `bgra8888` + `isBgra: true` 로 가면 공식 예제와 달라져 오검이 쉬웠습니다.
+/// - macOS: `bgra8888` + `prepareCameraFrame` + `detectFacesFromCameraFrame` (YUV 미지원).
 class FaceAttentionSensor {
   FaceDetector? _detector;
   CameraController? _controller;
@@ -48,13 +46,13 @@ class FaceAttentionSensor {
           : FaceDetectionModel.backCamera,
     );
 
-    final useBgraStream = Platform.isIOS || Platform.isMacOS;
+    final isMacOS = Platform.isMacOS;
     _controller = CameraController(
       cam,
       ResolutionPreset.low,
       enableAudio: false,
       imageFormatGroup:
-          useBgraStream ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
+          isMacOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
     );
     await _controller!.initialize();
 
@@ -62,10 +60,14 @@ class FaceAttentionSensor {
       if (!_running || _busy) return;
       _busy = true;
       try {
-        final rotation = _rotationFor(cam, useBgraStream: useBgraStream);
+        final controller = _controller;
+        if (controller == null || !controller.value.isInitialized) {
+          return;
+        }
+
         List<Face> faces;
 
-        if (useBgraStream) {
+        if (isMacOS) {
           final frame = prepareCameraFrame(
             width: image.width,
             height: image.height,
@@ -77,7 +79,7 @@ class FaceAttentionSensor {
                   pixelStride: p.bytesPerPixel ?? 4,
                 )
             ],
-            rotation: rotation,
+            rotation: null,
             isBgra: true,
           );
           faces = frame == null
@@ -90,6 +92,14 @@ class FaceAttentionSensor {
                   )
                   .timeout(const Duration(milliseconds: 1500));
         } else {
+          // iOS·Android: 공식 예제와 동일 (예: example/lib/main.dart `_processCameraImage`)
+          final rotation = rotationForFrame(
+            width: image.width,
+            height: image.height,
+            sensorOrientation: cam.sensorOrientation,
+            isFrontCamera: cam.lensDirection == CameraLensDirection.front,
+            deviceOrientation: controller.value.deviceOrientation,
+          );
           faces = await _detector!
               .detectFacesFromCameraImage(
                 image,
@@ -137,8 +147,7 @@ class FaceAttentionSensor {
     _signals = null;
   }
 
-  /// iOS 전용: mesh가 없거나 너무 작은 박스·낮은 점수면 "얼굴 있음"으로 취급하지 않음.
-  /// (face_detection_tflite 는 mesh 실패 시에도 `Face` 를 남길 수 있음)
+  /// iOS 전용: 오검 1차 차단 (mesh·점수·박스 크기).
   static bool _iosPlausibleFace(Face face) {
     final mesh = face.mesh;
     if (mesh == null || mesh.length < 468) return false;
@@ -149,8 +158,7 @@ class FaceAttentionSensor {
     final bh = bb.height.abs();
     if (bw < 28 || bh < 28) return false;
 
-    final frameArea =
-        face.originalSize.width * face.originalSize.height;
+    final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
     final boxArea = bw * bh;
     if (boxArea / frameArea < 0.008) return false;
@@ -169,20 +177,21 @@ class FaceAttentionSensor {
 
     final face = faces.first;
     final mesh = face.mesh;
-
-    double earL = 0.3, earR = 0.3;
-    double yaw = 0, pitch = 0;
-    var blink = false;
-
-    if (mesh != null && mesh.length >= 468) {
-      earL = _ear(mesh, _eyeL);
-      earR = _ear(mesh, _eyeR);
-      blink = earL < 0.2 && earR < 0.2;
-
-      final pose = _estimateHeadPose(mesh);
-      yaw = pose.$1;
-      pitch = pose.$2;
+    if (mesh == null || mesh.length < 468) {
+      return AttentionSignals(
+        facePresent: false,
+        multiFace: false,
+        appInForeground: inForeground,
+      );
     }
+
+    final earL = _ear(mesh, _eyeL);
+    final earR = _ear(mesh, _eyeR);
+    final blink = earL < 0.2 && earR < 0.2;
+
+    final pose = _estimateHeadPose(mesh);
+    final yaw = pose.$1;
+    final pitch = pose.$2;
 
     return AttentionSignals(
       facePresent: true,
@@ -241,21 +250,5 @@ class FaceAttentionSensor {
     } catch (_) {
       return (0.0, 0.0);
     }
-  }
-
-  /// BGRA(iOS·macOS): 플러그인이 이미 정방향 버퍼를 넘기는 경우가 많아 회전 null.
-  /// Android(YUV): [sensorOrientation] 기준 회전 필요.
-  CameraFrameRotation? _rotationFor(
-    CameraDescription cam, {
-    required bool useBgraStream,
-  }) {
-    if (kIsWeb) return null;
-    if (useBgraStream) return null;
-    return switch (cam.sensorOrientation) {
-      90 => CameraFrameRotation.cw90,
-      180 => CameraFrameRotation.cw180,
-      270 => CameraFrameRotation.cw270,
-      _ => null,
-    };
   }
 }

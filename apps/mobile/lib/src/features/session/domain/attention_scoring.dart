@@ -86,6 +86,8 @@ class AttentionScoringState {
       faceMissingEvents: 0,
       multiFaceEvents: 0,
       paused: false,
+      // 첫 센서 틱 전까지는 ‘집중’으로 두면 오해(특히 iOS 카메라 지연)가 큼 → 측정 전은 보통으로 표시
+      lastStatus: FocusStatus.normal,
       focusedLatch: false,
       preFocusStreak: 0,
       preUnfocusStreak: 0,
@@ -93,8 +95,9 @@ class AttentionScoringState {
   }
 
   /// 0~100 평균 집중도 점수.
+  /// [scoreTicks]==0 이면 아직 한 번도 집계되지 않은 상태 → 100으로 두면 항상 만점처럼 보임.
   int get averageScore =>
-      scoreTicks == 0 ? 100 : (scoreSum / scoreTicks).round().clamp(0, 100);
+      scoreTicks == 0 ? 0 : (scoreSum / scoreTicks).round().clamp(0, 100);
 }
 
 class AttentionScoring {
@@ -137,6 +140,14 @@ class AttentionScoring {
     if (score >= normalMin) return FocusStatus.normal;
     if (score >= 20) return FocusStatus.distracted;
     return FocusStatus.drowsy;
+  }
+
+  /// 카메라·센서 [signals]만으로 즉시 UI 라벨을 계산합니다.
+  /// (1초 [tick]보다 먼저 반영 — iOS에서 얼굴 이탈 후에도 ‘집중’이 남아 보이던 현상 완화)
+  /// 집중 초 누적·평균 점수는 여전히 [tick]만 갱신합니다.
+  static FocusStatus liveStatusFor(AttentionSignals signals, int engagedMinScore) {
+    final score = _computeScore(signals);
+    return _statusFromScore(score, signals, engagedMinScore);
   }
 
   static AttentionScoringState tick({

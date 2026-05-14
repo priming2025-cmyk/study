@@ -230,8 +230,13 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     final running = _c.running;
     final focused = running ? (s?.focusedSeconds ?? 0) : 0;
     final unfocused = running ? (s?.unfocusedSeconds ?? 0) : 0;
-    final score = s?.averageScore ?? 100;
-    final status = s?.lastStatus ?? FocusStatus.focused;
+    final score = s?.averageScore ?? 0;
+    // 배지는 센서 signals 기준으로 즉시 반영(1초 tick만 쓰면 iOS에서 얼굴 이탈 후에도 ‘집중’이 남는 것처럼 보임)
+    final status = !running
+        ? FocusStatus.normal
+        : (s?.paused == true
+            ? (s?.lastStatus ?? FocusStatus.normal)
+            : AttentionScoring.liveStatusFor(_c.signals, _c.engagedMinScore));
 
     ref.listen<int>(shellBranchIndexProvider, (prev, next) {
       // AppShell 탭 전환 가드가 최신 running 값을 읽을 수 있도록 항상 동기화
