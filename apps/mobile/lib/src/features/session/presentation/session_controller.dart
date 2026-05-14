@@ -312,14 +312,21 @@ class SessionController extends ChangeNotifier {
 
     if (cam != null) {
       try {
-        _sub = _sensor.stream.listen((s) {
-          signals = s;
-          notifyListeners();
-        });
+        // start()를 먼저 호출해 _signals 스트림 컨트롤러를 생성한 뒤에 구독합니다.
+        // 반대 순서면 _signals가 null인 상태에서 Stream.empty()를 구독하게 되어
+        // 카메라 신호가 영원히 전달되지 않습니다.
         await _sensor.start(
           camera: cam,
           appInForeground: () => appInForeground,
         );
+        if (!running) {
+          await _sensor.stop();
+          return;
+        }
+        _sub = _sensor.stream.listen((s) {
+          signals = s;
+          notifyListeners();
+        });
       } catch (e, st) {
         debugPrint('SessionController: 센서 시작 실패 → $e\n$st');
         await _sub?.cancel();

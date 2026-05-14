@@ -12,6 +12,10 @@ import '../domain/attention_signals.dart';
 ///
 /// face_detection_tflite 로 카메라 스트림을 처리하며,
 /// EAR·머리 방향·깜빡임을 계산해 [AttentionSignals] 를 내보냅니다.
+///
+/// 플랫폼별 카메라 포맷:
+///   - iOS·Android : yuv420 (NV12/NV21) → bytesPerPixel 버그 없음, Android와 동일 경로
+///   - macOS       : bgra8888 (yuv420 미지원) → prepareCameraFrame으로 직접 조립
 class FaceAttentionSensor {
   FaceDetector? _detector;
   CameraController? _controller;
@@ -35,6 +39,8 @@ class FaceAttentionSensor {
     final cam = camera;
     if (cam == null) throw StateError('카메라가 필요합니다.');
     _running = true;
+
+    // _signals를 먼저 생성해야 start() 호출 직후 stream.listen()이 올바른 스트림을 구독합니다.
     _signals = StreamController<AttentionSignals>.broadcast();
 
     _detector = FaceDetector();
@@ -44,8 +50,8 @@ class FaceAttentionSensor {
           : FaceDetectionModel.backCamera,
     );
 
-    // iOS·macOS는 bgra8888만 지원. Android는 yuv420 사용.
-    final isBgraDevice = Platform.isIOS || Platform.isMacOS;
+    // macOS만 bgra8888. iOS는 yuv420(NV12)을 사용해 bytesPerPixel=null 버그를 우회합니다.
+    final isBgraDevice = Platform.isMacOS;
     _controller = CameraController(
       cam,
       ResolutionPreset.low,
@@ -61,12 +67,11 @@ class FaceAttentionSensor {
       _busy = true;
       try {
         final rotation = _rotationFor(cam);
-        
-        List<Face> faces = const [];
-        
+        List<Face> faces;
+
         if (isBgraDevice) {
-          // iOS/macOS bgra8888 포맷의 경우 camera 플러그인이 bytesPerPixel을 null로 반환하는 버그가 있어,
-          // face_detection_tflite 내부에서 pixelStride를 1로 잘못 인식해 프레임이 무시되는 문제를 우회합니다.
+          // macOS bgra8888: camera 플러그인이 bytesPerPixel=null을 반환하므로
+          // prepareCameraFrame으로 pixelStride=4를 명시해 직접 조립합니다.
           final frame = prepareCameraFrame(
             width: image.width,
             height: image.height,
@@ -75,33 +80,37 @@ class FaceAttentionSensor {
                 (
                   bytes: p.bytes,
                   rowStride: p.bytesPerRow,
-                  pixelStride: p.bytesPerPixel ?? 4, // bgra8888은 픽셀당 4바이트
+                  pixelStride: p.bytesPerPixel ?? 4,
                 )
             ],
             rotation: rotation,
             isBgra: true,
           );
-          
-          if (frame != null) {
-            faces = await _detector!.detectFacesFromCameraFrame(
-              frame,
-              mode: FaceDetectionMode.full,
-              maxDim: 320,
-            ).timeout(const Duration(milliseconds: 1000));
-          }
+          faces = frame == null
+              ? const []
+              : await _detector!
+                  .detectFacesFromCameraFrame(
+                    frame,
+                    mode: FaceDetectionMode.full,
+                    maxDim: 320,
+                  )
+                  .timeout(const Duration(milliseconds: 1500));
         } else {
-          faces = await _detector!.detectFacesFromCameraImage(
-            image,
-            rotation: rotation,
-            isBgra: false,
-            mode: FaceDetectionMode.full,
-            maxDim: 320,
-          ).timeout(const Duration(milliseconds: 1000));
+          // iOS·Android: yuv420(NV12/NV21) → detectFacesFromCameraImage가 자동 처리
+          faces = await _detector!
+              .detectFacesFromCameraImage(
+                image,
+                rotation: rotation,
+                isBgra: false,
+                mode: FaceDetectionMode.full,
+                maxDim: 320,
+              )
+              .timeout(const Duration(milliseconds: 1500));
         }
-        
+
         _signals?.add(_toSignals(faces, appInForeground()));
       } catch (e) {
-        debugPrint('FaceAttentionSensor: detectFacesFromCameraImage error: $e');
+        debugPrint('FaceAttentionSensor: frame 처리 오류 → $e');
         _signals?.add(AttentionSignals(
           facePresent: false,
           multiFace: false,
@@ -204,22 +213,18 @@ class FaceAttentionSensor {
       final eyeR = mesh[446];
       final chin = mesh[152];
 
-      // 눈 중심
       final eyeCx = (eyeL.x + eyeR.x) / 2;
       final eyeCy = (eyeL.y + eyeR.y) / 2;
 
-      // 눈 간격
       final eyeWidth = (eyeR.x - eyeL.x).abs();
       if (eyeWidth < 1e-6) return (0.0, 0.0);
 
-      // yaw: 코끝이 눈 중심 대비 얼마나 좌우로 치우쳤나
       final yawRatio = (nose.x - eyeCx) / eyeWidth;
       final yaw = yawRatio * 90.0;
 
-      // pitch: 코끝이 눈-턱 중간 대비 얼마나 위/아래로 치우쳤나
       final faceHeight = (chin.y - eyeCy).abs().clamp(1.0, double.infinity);
       final pitchRatio = (nose.y - eyeCy) / faceHeight;
-      final pitch = (pitchRatio - 0.35) * 120.0; // 0.35: 정면 기준 오프셋
+      final pitch = (pitchRatio - 0.35) * 120.0;
 
       return (yaw, pitch);
     } catch (_) {
@@ -228,17 +233,15 @@ class FaceAttentionSensor {
   }
 
   // ── 카메라 회전 ──────────────────────────────────────────────
-  // CameraFrameRotation은 cw90/cw180/cw270만 있고 0도는 null로 전달합니다.
+  // iOS·Android 모두 yuv420 포맷은 camera 플러그인이 pre-rotate 하지 않으므로
+  // sensorOrientation 값으로 직접 회전을 지정합니다.
   CameraFrameRotation? _rotationFor(CameraDescription cam) {
     if (kIsWeb) return null;
-    // iOS와 macOS의 camera 플러그인은 이미지를 pre-rotate 해서 제공하므로 회전이 필요 없습니다.
-    if (Platform.isIOS || Platform.isMacOS) return null;
-    
     return switch (cam.sensorOrientation) {
       90 => CameraFrameRotation.cw90,
       180 => CameraFrameRotation.cw180,
       270 => CameraFrameRotation.cw270,
-      _ => null, // 0도 및 기타 → 회전 없음
+      _ => null,
     };
   }
 }
