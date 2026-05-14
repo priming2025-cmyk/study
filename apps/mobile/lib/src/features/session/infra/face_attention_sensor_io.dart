@@ -67,9 +67,11 @@ class FaceAttentionSensor {
           isBgra: isBgraDevice, // iOS·macOS: bgra8888 포맷임을 명시
           mode: FaceDetectionMode.full, // mesh + landmarks 포함
           maxDim: 320,
-        );
+        ).timeout(const Duration(milliseconds: 1000)); // 무한 대기 방지
+        
         _signals?.add(_toSignals(faces, appInForeground()));
-      } catch (_) {
+      } catch (e) {
+        debugPrint('FaceAttentionSensor: detectFacesFromCameraImage error: $e');
         _signals?.add(AttentionSignals(
           facePresent: false,
           multiFace: false,
@@ -199,6 +201,9 @@ class FaceAttentionSensor {
   // CameraFrameRotation은 cw90/cw180/cw270만 있고 0도는 null로 전달합니다.
   CameraFrameRotation? _rotationFor(CameraDescription cam) {
     if (kIsWeb) return null;
+    // iOS와 macOS의 camera 플러그인은 이미지를 pre-rotate 해서 제공하므로 회전이 필요 없습니다.
+    if (Platform.isIOS || Platform.isMacOS) return null;
+    
     return switch (cam.sensorOrientation) {
       90 => CameraFrameRotation.cw90,
       180 => CameraFrameRotation.cw180,

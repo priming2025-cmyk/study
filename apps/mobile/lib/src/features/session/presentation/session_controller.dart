@@ -34,7 +34,7 @@ class SessionController extends ChangeNotifier {
 
   AttentionScoringState? state;
   AttentionSignals signals = const AttentionSignals(
-    facePresent: true,
+    facePresent: false, // 초기값을 false로 두어 센서가 동작하지 않을 때 '자리 이탈'로 표시되게 함
     multiFace: false,
     appInForeground: true,
   );
