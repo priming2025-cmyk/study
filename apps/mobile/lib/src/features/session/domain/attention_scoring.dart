@@ -146,8 +146,27 @@ class AttentionScoring {
   /// (1초 [tick]보다 먼저 반영 — iOS에서 얼굴 이탈 후에도 ‘집중’이 남아 보이던 현상 완화)
   /// 집중 초 누적·평균 점수는 여전히 [tick]만 갱신합니다.
   static FocusStatus liveStatusFor(AttentionSignals signals, int engagedMinScore) {
-    final score = _computeScore(signals);
-    return _statusFromScore(score, signals, engagedMinScore);
+    final s = _effectiveSignals(signals);
+    final score = _computeScore(s);
+    return _statusFromScore(score, s, engagedMinScore);
+  }
+
+  /// mesh 기반 EAR가 비정상이면 ‘얼굴 있음’ 플래그를 무시합니다(오검 mesh 차단).
+  static bool _faceSignalsCredible(AttentionSignals s) {
+    if (s.earLeft < 0.12 || s.earRight < 0.12) return false;
+    if (s.earLeft > 0.48 || s.earRight > 0.48) return false;
+    return true;
+  }
+
+  static AttentionSignals _effectiveSignals(AttentionSignals s) {
+    if (s.facePresent && !_faceSignalsCredible(s)) {
+      return AttentionSignals(
+        facePresent: false,
+        multiFace: false,
+        appInForeground: s.appInForeground,
+      );
+    }
+    return s;
   }
 
   static AttentionScoringState tick({
@@ -158,6 +177,8 @@ class AttentionScoring {
     /// [kFocusEnterSeconds]·[kFocusExitGraceSeconds] 히스테리시스가 적용됩니다.
     int engagedMinScore = 50,
   }) {
+    signals = _effectiveSignals(signals);
+
     if (state.paused) {
       return AttentionScoringState(
         startedAt: state.startedAt,

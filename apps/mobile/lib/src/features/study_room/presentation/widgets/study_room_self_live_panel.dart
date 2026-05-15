@@ -50,7 +50,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   AttentionScoringState? _scoreState;
   AttentionSignals _signals = const AttentionSignals(
-    facePresent: true,
+    facePresent: false,
     multiFace: false,
     appInForeground: true,
   );
