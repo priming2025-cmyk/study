@@ -15,15 +15,16 @@ import '../domain/attention_signals.dart';
 import '../domain/engaged_time_threshold.dart';
 import '../domain/session_summary.dart';
 import '../domain/session_reward_result.dart';
-import '../infra/face_attention_sensor.dart';
+import '../infra/attention_camera_service.dart';
 import '../infra/session_camera_cache.dart';
 import '../infra/study_presence.dart';
 
 class SessionController extends ChangeNotifier {
   final PlanRepository _planRepo;
   final SessionRepository _sessionRepo;
-  final FaceAttentionSensor _sensor;
   final StudyPresence _presence;
+  final AttentionCameraService _camera = AttentionCameraService.instance;
+  bool _cameraAcquired = false;
 
   Timer? _timer;
   StreamSubscription<AttentionSignals>? _sub;
@@ -70,17 +71,15 @@ class SessionController extends ChangeNotifier {
   SessionController({
     PlanRepository? planRepo,
     SessionRepository? sessionRepo,
-    FaceAttentionSensor? sensor,
     StudyPresence? presence,
   })  : _planRepo = planRepo ?? PlanRepository(),
         _sessionRepo = sessionRepo ?? const SessionRepository(),
-        _sensor = sensor ?? FaceAttentionSensor(),
         _presence = presence ?? StudyPresence();
 
-  CameraController? get cameraController => _sensor.controller;
+  CameraController? get cameraController => _camera.controller;
 
   /// [CameraPreview] 위젯을 세션마다 새로 붙이기 위한 키(iOS 2회차 검은 화면 완화).
-  int get cameraPreviewGeneration => _sensor.previewGeneration;
+  int get cameraPreviewGeneration => _camera.previewGeneration;
 
   /// 웹: [SessionSelfCameraSurface] 위젯이 `<video>` 프레임을 분석해 호출합니다.
   /// (웹은 FaceAttentionSensor를 시작하지 않고 이 경로만 씁니다.)
@@ -351,16 +350,17 @@ class SessionController extends ChangeNotifier {
         // start()를 먼저 호출해 _signals 스트림 컨트롤러를 생성한 뒤에 구독합니다.
         // 반대 순서면 _signals가 null인 상태에서 Stream.empty()를 구독하게 되어
         // 카메라 신호가 영원히 전달되지 않습니다.
-        await _sensor.start(
+        await _camera.acquire(
           camera: cam,
           appInForeground: () => appInForeground,
         );
+        _cameraAcquired = true;
         if (!running) {
-          await _sensor.stop();
+          await _releaseCamera();
           return;
         }
         _cameraLiveAt = DateTime.now();
-        _sub = _sensor.stream.listen((s) {
+        _sub = _camera.stream.listen((s) {
           signals = s;
           notifyListeners();
         });
@@ -373,7 +373,7 @@ class SessionController extends ChangeNotifier {
         debugPrint('SessionController: 센서 시작 실패 → $e\n$st');
         await _sub?.cancel();
         _sub = null;
-        await _sensor.stop();
+        await _releaseCamera();
         signals = AttentionSignals(
           facePresent: false,
           multiFace: false,
@@ -391,24 +391,44 @@ class SessionController extends ChangeNotifier {
     if (!running) {
       await _sub?.cancel();
       _sub = null;
-      await _sensor.stop();
+      await _releaseCamera();
       return;
     }
     notifyListeners();
   }
 
-  /// 스터디 탭 등으로 나갈 때 카메라 단일 점유를 위해 센서만 끕니다. 타이머·[running]·Presence는 유지합니다.
+  Future<void> _releaseCamera() async {
+    if (!_cameraAcquired) return;
+    await _camera.release();
+    _cameraAcquired = false;
+    _cameraLiveAt = null;
+  }
+
+  void _attachCameraStream() {
+    _sub?.cancel();
+    _sub = _camera.stream.listen((s) {
+      signals = s;
+      notifyListeners();
+    });
+  }
+
+  /// 스터디 탭 등으로 나갈 때: 카메라는 유지하고 구독만 끊습니다(셋터디방이 같은 카메라 공유).
   Future<void> suspendCameraForShellNavigation() async {
     if (kIsWeb) return;
     await _sub?.cancel();
     _sub = null;
-    await _sensor.stop();
     notifyListeners();
   }
 
-  /// 공부 탭으로 돌아온 뒤 [running]이면 카메라를 다시 붙입니다.
+  /// 공부 탭으로 돌아온 뒤 [running]이면 스트림만 다시 구독합니다.
   Future<void> resumeCameraAfterShellNavigation() async {
     if (kIsWeb || !running) return;
+    if (_camera.hasActiveCamera && _cameraAcquired) {
+      _cameraLiveAt = DateTime.now();
+      _attachCameraStream();
+      notifyListeners();
+      return;
+    }
     await _startNativeCameraSensor();
   }
 
@@ -497,8 +517,7 @@ class SessionController extends ChangeNotifier {
 
     await _sub?.cancel();
     _sub = null;
-    await _sensor.stop();
-    _cameraLiveAt = null;
+    await _releaseCamera();
     signals = AttentionSignals(
       facePresent: false,
       multiFace: false,
@@ -551,7 +570,9 @@ class SessionController extends ChangeNotifier {
     _timer?.cancel();
     _sub?.cancel();
     _presenceSub?.cancel();
-    _sensor.stop();
+    if (_cameraAcquired) {
+      unawaited(_releaseCamera());
+    }
     _presence.dispose();
     super.dispose();
   }

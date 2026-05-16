@@ -8,12 +8,14 @@ import 'study_room_main_stage.dart';
 class StudyRoomActiveView extends StatelessWidget {
   final StudyRoomController controller;
   final bool studyCameraSlotActive;
+  final bool sessionCameraShared;
   final ValueListenable<int> engagedMinListenable;
 
   const StudyRoomActiveView({
     super.key,
     required this.controller,
     required this.studyCameraSlotActive,
+    required this.sessionCameraShared,
     required this.engagedMinListenable,
   });
 
@@ -61,6 +63,7 @@ class StudyRoomActiveView extends StatelessWidget {
                             controller: controller,
                             engagedMinListenable: engagedMinListenable,
                             studyCameraSlotActive: studyCameraSlotActive,
+                            sessionCameraShared: sessionCameraShared,
                           ),
                         ),
                 ),

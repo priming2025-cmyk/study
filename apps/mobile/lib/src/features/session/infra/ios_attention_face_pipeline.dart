@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-
 import 'package:camera/camera.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 
@@ -11,8 +10,8 @@ import 'package:face_detection_tflite/face_detection_tflite.dart';
 class IosAttentionFacePipeline {
   IosAttentionFacePipeline._();
 
-  static const _minDetectionScore = 0.85;
-  static const _minFastGateScore = 0.86;
+  static const _minDetectionScore = 0.88;
+  static const _minFastGateScore = 0.88;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
@@ -52,8 +51,48 @@ class IosAttentionFacePipeline {
     return (bw * bh) / frameArea >= 0.02;
   }
 
-  static List<Face> filterTrustworthy(List<Face> faces) {
-    return faces.where(isTrustworthyFace).toList();
+  static List<Face> filterTrustworthy(
+    List<Face> faces, {
+    List<Face>? requireFastOverlap,
+  }) {
+    final trusted = faces.where(isTrustworthyFace).toList();
+    if (requireFastOverlap == null || requireFastOverlap.isEmpty) {
+      return trusted;
+    }
+    return trusted
+        .where((f) => _overlapsAnyFastGate(f, requireFastOverlap))
+        .toList();
+  }
+
+  static bool _overlapsAnyFastGate(Face full, List<Face> fastGates) {
+    for (final fast in fastGates) {
+      if (_boxOverlapRatio(full.boundingBox, fast.boundingBox) >= 0.35) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static double _boxOverlapRatio(BoundingBox a, BoundingBox b) {
+    final ax1 = a.left;
+    final ay1 = a.top;
+    final ax2 = a.right;
+    final ay2 = a.bottom;
+    final bx1 = b.left;
+    final by1 = b.top;
+    final bx2 = b.right;
+    final by2 = b.bottom;
+
+    final ix1 = math.max(ax1, bx1);
+    final iy1 = math.max(ay1, by1);
+    final ix2 = math.min(ax2, bx2);
+    final iy2 = math.min(ay2, by2);
+    if (ix2 <= ix1 || iy2 <= iy1) return 0;
+
+    final interArea = (ix2 - ix1) * (iy2 - iy1);
+    final union = a.width * a.height + b.width * b.height - interArea;
+    if (union <= 0) return 0;
+    return interArea / union;
   }
 
   static bool isTrustworthyFace(Face face) {

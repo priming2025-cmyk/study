@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../../session/domain/attention_scoring.dart';
 import '../../../session/domain/attention_signals.dart';
-import '../../../session/infra/face_attention_sensor.dart';
+import '../../../session/infra/attention_camera_service.dart';
 import '../../../session/infra/session_camera_cache.dart';
 import '../../../session/infra/session_self_camera.dart';
 import 'study_room_self_camera_preview_box.dart';
@@ -18,6 +18,8 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final double width;
   final double height;
   final bool cameraSlotActive;
+  /// 공부 세션이 켜져 있으면 [AttentionCameraService] 카메라를 공유합니다(이중 start 방지).
+  final bool sessionCameraShared;
   final ValueListenable<int> engagedMinListenable;
 
   const StudyRoomSelfLivePanel({
@@ -25,6 +27,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.width,
     required this.height,
     required this.cameraSlotActive,
+    required this.sessionCameraShared,
     required this.engagedMinListenable,
   });
 
@@ -43,7 +46,7 @@ class _StudyRoomSelfLifecycle extends WidgetsBindingObserver {
 }
 
 class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
-  final FaceAttentionSensor _sensor = FaceAttentionSensor();
+  final AttentionCameraService _camera = AttentionCameraService.instance;
   StreamSubscription<AttentionSignals>? _sub;
   Timer? _tick;
 
@@ -55,6 +58,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   );
   bool _appInForeground = true;
   DateTime? _cameraLiveAt;
+  bool _ownsCamera = false;
 
   late final _StudyRoomSelfLifecycle _life = _StudyRoomSelfLifecycle(
     onForeground: (v) {
@@ -102,7 +106,8 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   @override
   void didUpdateWidget(covariant StudyRoomSelfLivePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.cameraSlotActive != widget.cameraSlotActive) {
+    if (oldWidget.cameraSlotActive != widget.cameraSlotActive ||
+        oldWidget.sessionCameraShared != widget.sessionCameraShared) {
       if (widget.cameraSlotActive) {
         unawaited(_boot());
       } else {
@@ -117,15 +122,44 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     await _sub?.cancel();
     _sub = null;
     _cameraLiveAt = null;
-    await _sensor.stop();
+    if (_ownsCamera) {
+      await _camera.release();
+      _ownsCamera = false;
+    }
     if (mounted) setState(() {});
+  }
+
+  void _subscribeCameraStream() {
+    _sub?.cancel();
+    _sub = _camera.stream.listen((s) {
+      _signals = s;
+      if (mounted) setState(() {});
+    });
+  }
+
+  Future<void> _attachSharedCamera() async {
+    for (var i = 0; i < 30; i++) {
+      if (!mounted || !widget.cameraSlotActive) return;
+      if (_camera.hasActiveCamera) {
+        _cameraLiveAt = DateTime.now();
+        _subscribeCameraStream();
+        _signals = const AttentionSignals(
+          facePresent: false,
+          multiFace: false,
+          appInForeground: true,
+        );
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    debugPrint('[StudyRoomSelfLivePanel] 세션 카메라 대기 시간 초과');
   }
 
   Future<void> _boot() async {
     if (!widget.cameraSlotActive) return;
     await _releaseSlot();
     if (!kIsWeb) {
-      await Future<void>.delayed(const Duration(milliseconds: 150));
+      await Future<void>.delayed(const Duration(milliseconds: 120));
     }
     if (!mounted || !widget.cameraSlotActive) return;
 
@@ -133,6 +167,15 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
       _scoreState = AttentionScoringState.started(DateTime.now());
       _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
       if (mounted) setState(() {});
+      return;
+    }
+
+    if (widget.sessionCameraShared) {
+      await _attachSharedCamera();
+      if (!mounted || !widget.cameraSlotActive) return;
+      _scoreState = AttentionScoringState.started(DateTime.now());
+      _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
+      setState(() {});
       return;
     }
 
@@ -145,19 +188,18 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
     if (_frontCam != null) {
       try {
-        await _sensor.start(
-          camera: _frontCam,
+        await _camera.acquire(
+          camera: _frontCam!,
           appInForeground: () => _appInForeground,
         );
+        _ownsCamera = true;
         if (!mounted || !widget.cameraSlotActive) {
-          await _sensor.stop();
+          await _camera.release();
+          _ownsCamera = false;
           return;
         }
         _cameraLiveAt = DateTime.now();
-        _sub = _sensor.stream.listen((s) {
-          _signals = s;
-          if (mounted) setState(() {});
-        });
+        _subscribeCameraStream();
         _signals = const AttentionSignals(
           facePresent: false,
           multiFace: false,
@@ -167,7 +209,10 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
         debugPrint('[StudyRoomSelfLivePanel] sensor: $e\n$st');
         await _sub?.cancel();
         _sub = null;
-        await _sensor.stop();
+        if (_ownsCamera) {
+          await _camera.release();
+          _ownsCamera = false;
+        }
         _cameraLiveAt = null;
       }
     }
@@ -258,8 +303,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
               )
             else
               StudyRoomSelfCameraPreviewBox(
-                key: ValueKey<int>(_sensor.previewGeneration),
-                sensor: _sensor,
+                key: ValueKey<int>(_camera.previewGeneration),
                 width: widget.width,
                 height: widget.height,
               ),

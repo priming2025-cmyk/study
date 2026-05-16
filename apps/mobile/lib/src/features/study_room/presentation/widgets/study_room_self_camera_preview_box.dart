@@ -1,24 +1,22 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../session/infra/face_attention_sensor.dart';
+import '../../../session/infra/attention_camera_service.dart';
 
 /// 스터디방 본인 실시간 프리뷰용 [CameraPreview] 박스.
 class StudyRoomSelfCameraPreviewBox extends StatelessWidget {
-  final FaceAttentionSensor sensor;
   final double width;
   final double height;
 
   const StudyRoomSelfCameraPreviewBox({
     super.key,
-    required this.sensor,
     required this.width,
     required this.height,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cam = sensor.controller;
+    final cam = AttentionCameraService.instance.controller;
     if (cam == null) {
       return const Center(
         child: CircularProgressIndicator(color: Colors.white54),

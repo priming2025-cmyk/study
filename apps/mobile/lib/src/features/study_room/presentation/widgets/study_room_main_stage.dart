@@ -11,12 +11,14 @@ class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
   final bool studyCameraSlotActive;
+  final bool sessionCameraShared;
 
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
     required this.studyCameraSlotActive,
+    required this.sessionCameraShared,
   });
 
   @override
@@ -73,6 +75,7 @@ class StudyRoomMainStage extends StatelessWidget {
                       width: cellW,
                       height: cellH,
                       cameraSlotActive: studyCameraSlotActive,
+                      sessionCameraShared: sessionCameraShared,
                       engagedMinListenable: engagedMinListenable,
                     ),
                   ),
