@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb, debugPrint;
@@ -16,9 +17,7 @@ import 'study_room_self_focus_badge.dart';
 class StudyRoomSelfLivePanel extends StatefulWidget {
   final double width;
   final double height;
-  /// 하단 네비에서 스터디 탭이 선택됐을 때만 true. 공부 탭과 카메라 점유가 겹치지 않게 합니다.
   final bool cameraSlotActive;
-  /// 공부(세션)과 동일 키의 집중민감도; 변경 시 즉시 반영.
   final ValueListenable<int> engagedMinListenable;
 
   const StudyRoomSelfLivePanel({
@@ -55,6 +54,8 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     appInForeground: true,
   );
   bool _appInForeground = true;
+  DateTime? _cameraLiveAt;
+
   late final _StudyRoomSelfLifecycle _life = _StudyRoomSelfLifecycle(
     onForeground: (v) {
       _appInForeground = v;
@@ -74,6 +75,15 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   CameraDescription? _frontCam;
 
   int _engagedMinScoreForTick() => widget.engagedMinListenable.value;
+
+  bool get _isIOS => !kIsWeb && Platform.isIOS;
+
+  bool get _sensorReadyForUi {
+    if (kIsWeb || !_isIOS) return true;
+    final t = _cameraLiveAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) >= const Duration(seconds: 2);
+  }
 
   void _onEngagedChanged() {
     if (mounted) setState(() {});
@@ -106,17 +116,19 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     _tick = null;
     await _sub?.cancel();
     _sub = null;
+    _cameraLiveAt = null;
     await _sensor.stop();
     if (mounted) setState(() {});
   }
 
   Future<void> _boot() async {
     if (!widget.cameraSlotActive) return;
-    // 공부 탭에서 카메라를 끄는 것과 같은 프레임에 경합하지 않도록 약간 늦춤
+    await _releaseSlot();
     if (!kIsWeb) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 150));
     }
     if (!mounted || !widget.cameraSlotActive) return;
+
     if (kIsWeb) {
       _scoreState = AttentionScoringState.started(DateTime.now());
       _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
@@ -129,24 +141,34 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     } catch (e) {
       debugPrint('[StudyRoomSelfLivePanel] cameras: $e');
     }
-    if (!mounted) return;
+    if (!mounted || !widget.cameraSlotActive) return;
 
     if (_frontCam != null) {
       try {
-        await _sub?.cancel();
+        await _sensor.start(
+          camera: _frontCam,
+          appInForeground: () => _appInForeground,
+        );
+        if (!mounted || !widget.cameraSlotActive) {
+          await _sensor.stop();
+          return;
+        }
+        _cameraLiveAt = DateTime.now();
         _sub = _sensor.stream.listen((s) {
           _signals = s;
           if (mounted) setState(() {});
         });
-        await _sensor.start(
-          camera: _frontCam,
-          appInForeground: () => _appInForeground,
+        _signals = const AttentionSignals(
+          facePresent: false,
+          multiFace: false,
+          appInForeground: true,
         );
       } catch (e, st) {
         debugPrint('[StudyRoomSelfLivePanel] sensor: $e\n$st');
         await _sub?.cancel();
         _sub = null;
         await _sensor.stop();
+        _cameraLiveAt = null;
       }
     }
 
@@ -159,10 +181,17 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   void _onTick() {
     final st = _scoreState;
     if (st == null) return;
+    final tickSignals = _sensorReadyForUi
+        ? _signals
+        : const AttentionSignals(
+            facePresent: false,
+            multiFace: false,
+            appInForeground: true,
+          );
     _scoreState = AttentionScoring.tick(
       state: st,
       now: DateTime.now(),
-      signals: _signals,
+      signals: tickSignals,
       engagedMinScore: _engagedMinScoreForTick(),
     );
     if (mounted) setState(() {});
@@ -178,16 +207,18 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     widget.engagedMinListenable.removeListener(_onEngagedChanged);
     WidgetsBinding.instance.removeObserver(_life);
     _tick?.cancel();
-    unawaited(_sub?.cancel());
-    _sub = null;
-    unawaited(_sensor.stop());
+    unawaited(_releaseSlot());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final score = _scoreState?.averageScore ?? 100;
-    final status = _scoreState?.lastStatus ?? FocusStatus.focused;
+    final score = _scoreState?.averageScore ?? 0;
+    final status = AttentionScoring.liveStatusFor(
+      _signals,
+      _engagedMinScoreForTick(),
+      sensorReady: _sensorReadyForUi,
+    );
 
     if (!widget.cameraSlotActive) {
       return ClipRRect(
@@ -227,6 +258,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
               )
             else
               StudyRoomSelfCameraPreviewBox(
+                key: ValueKey<int>(_sensor.previewGeneration),
                 sensor: _sensor,
                 width: widget.width,
                 height: widget.height,

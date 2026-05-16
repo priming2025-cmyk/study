@@ -11,7 +11,7 @@ import 'package:face_detection_tflite/face_detection_tflite.dart';
 class IosAttentionFacePipeline {
   IosAttentionFacePipeline._();
 
-  static const _minDetectionScore = 0.82;
+  static const _minDetectionScore = 0.85;
   static const _minFastGateScore = 0.86;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];

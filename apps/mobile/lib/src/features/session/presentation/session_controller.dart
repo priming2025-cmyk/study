@@ -50,16 +50,17 @@ class SessionController extends ChangeNotifier {
   CameraDescription? frontCamera;
   bool appInForeground = true;
 
-  /// 카메라 스트림에서 받은 프레임 수(iOS 집중 UI·집계 준비 여부).
-  int _sensorFrameCount = 0;
-
-  static const int _iosSensorWarmupFrames = 6;
+  DateTime? _cameraLiveAt;
 
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
-  /// false이면 배지·집중 초에 ‘집중’이 나오지 않음(카메라 준비 전·iOS 오검 방지).
-  bool get attentionSensorReady =>
-      kIsWeb || !_isIOS || _sensorFrameCount >= _iosSensorWarmupFrames;
+  /// iOS: 카메라가 붙은 뒤 2초 전에는 ‘집중’ 표시·집중 초 누적 안 함.
+  bool get attentionSensorReady {
+    if (kIsWeb || !_isIOS) return true;
+    final t = _cameraLiveAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) >= const Duration(seconds: 2);
+  }
 
   /// 집중 초 누적 기준: 즉시 점수 ≥ 이 값 (80·65·50·35·20 중 선택, 기본 50).
   int _engagedMinScore = kDefaultEngagedMinScore;
@@ -310,7 +311,7 @@ class SessionController extends ChangeNotifier {
     running = true;
     starting = false;
     // 카메라 붙기 전·재시작 직후 이전 세션 signals가 남으면 ‘집중’으로 보이는 문제 방지
-    _sensorFrameCount = 0;
+    _cameraLiveAt = null;
     signals = const AttentionSignals(
       facePresent: false,
       multiFace: false,
@@ -358,8 +359,8 @@ class SessionController extends ChangeNotifier {
           await _sensor.stop();
           return;
         }
+        _cameraLiveAt = DateTime.now();
         _sub = _sensor.stream.listen((s) {
-          _sensorFrameCount++;
           signals = s;
           notifyListeners();
         });
@@ -497,7 +498,7 @@ class SessionController extends ChangeNotifier {
     await _sub?.cancel();
     _sub = null;
     await _sensor.stop();
-    _sensorFrameCount = 0;
+    _cameraLiveAt = null;
     signals = AttentionSignals(
       facePresent: false,
       multiFace: false,
