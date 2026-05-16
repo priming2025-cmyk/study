@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
@@ -49,6 +50,17 @@ class SessionController extends ChangeNotifier {
   CameraDescription? frontCamera;
   bool appInForeground = true;
 
+  /// 카메라 스트림에서 받은 프레임 수(iOS 집중 UI·집계 준비 여부).
+  int _sensorFrameCount = 0;
+
+  static const int _iosSensorWarmupFrames = 6;
+
+  bool get _isIOS => !kIsWeb && Platform.isIOS;
+
+  /// false이면 배지·집중 초에 ‘집중’이 나오지 않음(카메라 준비 전·iOS 오검 방지).
+  bool get attentionSensorReady =>
+      kIsWeb || !_isIOS || _sensorFrameCount >= _iosSensorWarmupFrames;
+
   /// 집중 초 누적 기준: 즉시 점수 ≥ 이 값 (80·65·50·35·20 중 선택, 기본 50).
   int _engagedMinScore = kDefaultEngagedMinScore;
 
@@ -65,6 +77,9 @@ class SessionController extends ChangeNotifier {
         _presence = presence ?? StudyPresence();
 
   CameraController? get cameraController => _sensor.controller;
+
+  /// [CameraPreview] 위젯을 세션마다 새로 붙이기 위한 키(iOS 2회차 검은 화면 완화).
+  int get cameraPreviewGeneration => _sensor.previewGeneration;
 
   /// 웹: [SessionSelfCameraSurface] 위젯이 `<video>` 프레임을 분석해 호출합니다.
   /// (웹은 FaceAttentionSensor를 시작하지 않고 이 경로만 씁니다.)
@@ -262,10 +277,17 @@ class SessionController extends ChangeNotifier {
     if (!running) return;
     final s = state;
     if (s == null) return;
+    final tickSignals = attentionSensorReady
+        ? signals
+        : AttentionSignals(
+            facePresent: false,
+            multiFace: false,
+            appInForeground: signals.appInForeground,
+          );
     state = AttentionScoring.tick(
       state: s,
       now: DateTime.now(),
-      signals: signals,
+      signals: tickSignals,
       engagedMinScore: _engagedMinScore,
     );
     notifyListeners();
@@ -287,6 +309,13 @@ class SessionController extends ChangeNotifier {
     state = AttentionScoringState.started(now);
     running = true;
     starting = false;
+    // 카메라 붙기 전·재시작 직후 이전 세션 signals가 남으면 ‘집중’으로 보이는 문제 방지
+    _sensorFrameCount = 0;
+    signals = const AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: true,
+    );
     notifyListeners();
 
     // 타이머를 먼저 걸어, 카메라 초기화·Presence가 오래 걸려도 초·집중도가 멈추지 않게 합니다.
@@ -330,9 +359,15 @@ class SessionController extends ChangeNotifier {
           return;
         }
         _sub = _sensor.stream.listen((s) {
+          _sensorFrameCount++;
           signals = s;
           notifyListeners();
         });
+        signals = AttentionSignals(
+          facePresent: false,
+          multiFace: false,
+          appInForeground: appInForeground,
+        );
       } catch (e, st) {
         debugPrint('SessionController: 센서 시작 실패 → $e\n$st');
         await _sub?.cancel();
@@ -462,6 +497,14 @@ class SessionController extends ChangeNotifier {
     await _sub?.cancel();
     _sub = null;
     await _sensor.stop();
+    _sensorFrameCount = 0;
+    signals = AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: appInForeground,
+    );
+    state = null;
+    frontCamera = null;
 
     await _presenceSub?.cancel();
     _presenceSub = null;

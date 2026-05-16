@@ -1,93 +1,61 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart';
-import 'package:flutter/services.dart' show DeviceOrientation;
 
-/// iOS 집중 세션용 얼굴 검출 (공식 예제와 동일한 회전·BGRA 경로 + 오검 차단).
+/// iOS 전용: full mesh 결과가 **진짜 얼굴**인지 검증합니다.
 ///
-/// 빈 화면에서도 ‘집중’이 뜨는 현상은 대개 **잘못된 픽셀 회전/YUV 해석**으로
-/// mesh까지 나오는 오검에서 옵니다. Android식 회전을 iOS에 쓰지 않고
-/// [rotationForFrame] + BGRA 프레임 변환을 사용합니다.
+/// 잘못된 회전/빈 프레임에서도 mesh가 나오면 `facePresent`가 true가 되어
+/// 배지가 ‘집중’으로 고정되는 문제를 막습니다.
 class IosAttentionFacePipeline {
-  IosAttentionFacePipeline(this._detector);
+  IosAttentionFacePipeline._();
 
-  final FaceDetector _detector;
-
-  static const _minDetectionScore = 0.72;
-  static const _ambigAltScore = 0.65;
+  static const _minDetectionScore = 0.82;
+  static const _minFastGateScore = 0.86;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  /// 한 프레임에서 집중 신호에 쓸 얼굴 목록(0 또는 1명).
-  Future<List<Face>> detect({
-    required CameraImage image,
-    required CameraDescription camera,
-    required DeviceOrientation deviceOrientation,
-  }) async {
-    final rotation = rotationForFrame(
-      width: image.width,
-      height: image.height,
-      sensorOrientation: camera.sensorOrientation,
-      isFrontCamera: camera.lensDirection == CameraLensDirection.front,
-      deviceOrientation: deviceOrientation,
-    );
+  /// 검은 화면·초기 빈 프레임(분산 거의 없음)은 검출하지 않습니다.
+  static bool frameLooksLikeLiveCamera(CameraImage image) {
+    if (image.planes.isEmpty) return false;
+    final Uint8List bytes = image.planes.first.bytes;
+    if (bytes.length < 256) return false;
 
-    final primary = await _detectStrict(image, rotation);
-    if (primary.isEmpty) return const [];
-
-  // 빈 장면 오검: 서로 다른 회전에서도 얼굴이 잡히면 신뢰하지 않음.
-    final altRotation = _alternateRotation(rotation);
-    if (altRotation != rotation) {
-      final alt = await _detectStrict(image, altRotation);
-      if (alt.isNotEmpty &&
-          alt.first.detectionData.score >= _ambigAltScore &&
-          primary.first.detectionData.score >= _ambigAltScore) {
-        return const [];
-      }
+    final step = math.max(1, bytes.length ~/ 400);
+    var sum = 0.0;
+    var sumSq = 0.0;
+    var n = 0;
+    for (var i = 0; i < bytes.length; i += step) {
+      final v = bytes[i].toDouble();
+      sum += v;
+      sumSq += v * v;
+      n++;
     }
-
-    return primary;
+    if (n < 8) return false;
+    final mean = sum / n;
+    final variance = sumSq / n - mean * mean;
+    // 완전 검은 화면·고정 노이즈는 분산이 매우 낮음.
+    return variance > 90;
   }
 
-  CameraFrameRotation? _alternateRotation(CameraFrameRotation? primary) {
-    if (primary == null) return CameraFrameRotation.cw90;
-    return null;
+  /// fast 검출(박스만)로 1차 게이트 — mesh 오검 전에 걸러냅니다.
+  static bool passesFastGate(Face face) {
+    if (face.detectionData.score < _minFastGateScore) return false;
+    final bb = face.boundingBox;
+    final bw = bb.width.abs();
+    final bh = bb.height.abs();
+    if (bw < 40 || bh < 40) return false;
+    final frameArea = face.originalSize.width * face.originalSize.height;
+    if (frameArea < 1) return false;
+    return (bw * bh) / frameArea >= 0.02;
   }
 
-  Future<List<Face>> _detectStrict(
-    CameraImage image,
-    CameraFrameRotation? rotation,
-  ) async {
-    final frame = prepareCameraFrame(
-      width: image.width,
-      height: image.height,
-      planes: [
-        for (final p in image.planes)
-          (
-            bytes: p.bytes,
-            rowStride: p.bytesPerRow,
-            pixelStride: p.bytesPerPixel ?? 4,
-          ),
-      ],
-      rotation: rotation,
-      isBgra: true,
-    );
-    if (frame == null) return const [];
-
-    final faces = await _detector
-        .detectFacesFromCameraFrame(
-          frame,
-          mode: FaceDetectionMode.full,
-          maxDim: 320,
-        )
-        .timeout(const Duration(milliseconds: 1500));
-
+  static List<Face> filterTrustworthy(List<Face> faces) {
     return faces.where(isTrustworthyFace).toList();
   }
 
-  /// mesh·점수·박스·EAR로 ‘진짜 얼굴’만 통과.
   static bool isTrustworthyFace(Face face) {
     final mesh = face.mesh;
     if (mesh == null || mesh.length < 468) return false;
@@ -96,11 +64,11 @@ class IosAttentionFacePipeline {
     final bb = face.boundingBox;
     final bw = bb.width.abs();
     final bh = bb.height.abs();
-    if (bw < 36 || bh < 36) return false;
+    if (bw < 40 || bh < 40) return false;
 
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
-    if ((bw * bh) / frameArea < 0.015) return false;
+    if ((bw * bh) / frameArea < 0.02) return false;
 
     if (!_meshGeometryOk(mesh)) return false;
 
@@ -111,7 +79,7 @@ class IosAttentionFacePipeline {
     return true;
   }
 
-  static bool _earPlausible(double ear) => ear >= 0.12 && ear <= 0.48;
+  static bool _earPlausible(double ear) => ear >= 0.14 && ear <= 0.45;
 
   static bool _meshGeometryOk(FaceMesh mesh) {
     try {
@@ -123,17 +91,17 @@ class IosAttentionFacePipeline {
       final interEye = math.sqrt(
         math.pow(rOut.x - lOut.x, 2) + math.pow(rOut.y - lOut.y, 2),
       );
-      if (interEye < 42 || interEye > 220) return false;
+      if (interEye < 48 || interEye > 200) return false;
 
       final eyeMidX = (rOut.x + lOut.x) / 2;
-      if ((nose.x - eyeMidX).abs() > interEye * 0.48) return false;
+      if ((nose.x - eyeMidX).abs() > interEye * 0.45) return false;
 
       final eyeMidY = (rOut.y + lOut.y) / 2;
       final faceH = (chin.y - eyeMidY).abs();
-      if (faceH < 52 || faceH > 480) return false;
+      if (faceH < 56 || faceH > 420) return false;
 
       final ratio = interEye / faceH;
-      if (ratio < 0.18 || ratio > 0.55) return false;
+      if (ratio < 0.2 || ratio > 0.52) return false;
 
       return true;
     } catch (_) {

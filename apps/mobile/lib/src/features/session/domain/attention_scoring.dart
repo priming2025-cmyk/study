@@ -145,16 +145,27 @@ class AttentionScoring {
   /// 카메라·센서 [signals]만으로 즉시 UI 라벨을 계산합니다.
   /// (1초 [tick]보다 먼저 반영 — iOS에서 얼굴 이탈 후에도 ‘집중’이 남아 보이던 현상 완화)
   /// 집중 초 누적·평균 점수는 여전히 [tick]만 갱신합니다.
-  static FocusStatus liveStatusFor(AttentionSignals signals, int engagedMinScore) {
+  static FocusStatus liveStatusFor(
+    AttentionSignals signals,
+    int engagedMinScore, {
+    /// iOS: 카메라 스트림이 몇 프레임 돌기 전에는 ‘집중’을 표시하지 않음.
+    bool sensorReady = true,
+  }) {
+    if (!sensorReady) return FocusStatus.away;
     final s = _effectiveSignals(signals);
+    if (!s.facePresent) return FocusStatus.away;
     final score = _computeScore(s);
-    return _statusFromScore(score, s, engagedMinScore);
+    final status = _statusFromScore(score, s, engagedMinScore);
+    if (status == FocusStatus.focused && !s.facePresent) {
+      return FocusStatus.away;
+    }
+    return status;
   }
 
   /// mesh 기반 EAR가 비정상이면 ‘얼굴 있음’ 플래그를 무시합니다(오검 mesh 차단).
   static bool _faceSignalsCredible(AttentionSignals s) {
-    if (s.earLeft < 0.12 || s.earRight < 0.12) return false;
-    if (s.earLeft > 0.48 || s.earRight > 0.48) return false;
+    if (s.earLeft < 0.14 || s.earRight < 0.14) return false;
+    if (s.earLeft > 0.45 || s.earRight > 0.45) return false;
     return true;
   }
 

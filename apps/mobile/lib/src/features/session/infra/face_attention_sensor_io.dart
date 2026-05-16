@@ -5,22 +5,23 @@ import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show DeviceOrientation;
 
 import '../domain/attention_signals.dart';
 import 'ios_attention_face_pipeline.dart';
 
 /// 앱(iOS·Android·macOS)용 얼굴 집중도 센서.
 ///
-/// - **Android**: YUV420 + [rotationForFrame] + `detectFacesFromCameraImage`.
-/// - **iOS**: BGRA + [rotationForFrame] + [IosAttentionFacePipeline] (공식 예제와 동일 축).
+/// - **Android / iOS**: YUV420 + [rotationForFrame] + `detectFacesFromCameraImage`
+///   (공식 예제와 동일). iOS만 fast→full 2단계 + [IosAttentionFacePipeline] 검증.
 /// - **macOS**: BGRA + `prepareCameraFrame`.
 class FaceAttentionSensor {
   FaceDetector? _detector;
-  IosAttentionFacePipeline? _iosPipeline;
   CameraController? _controller;
   StreamController<AttentionSignals>? _signals;
   bool _running = false;
   bool _busy = false;
+  int _streamGeneration = 0;
 
   int _iosRawFaceStreak = 0;
   int _iosRawNoFaceStreak = 0;
@@ -29,8 +30,7 @@ class FaceAttentionSensor {
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  /// iOS: 연속 N프레임에서만 ‘얼굴 있음’ 고정(오검 1~2프레임 차단).
-  static const int _iosFaceLatchFrames = 3;
+  static const int _iosFaceLatchFrames = 4;
 
   FaceAttentionSensor();
 
@@ -39,12 +39,21 @@ class FaceAttentionSensor {
     required bool Function() appInForeground,
     bool skipCameraEnumeration = false,
   }) async {
-    if (_running) return;
     final cam = camera;
     if (cam == null) throw StateError('카메라가 필요합니다.');
+
+    // 이전 세션 카메라·스트림이 남으면 iOS에서 2회차 검은 화면·오검이 잦음.
+    await stop();
+
+    if (Platform.isIOS) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+
     _running = true;
+    final gen = ++_streamGeneration;
 
     _signals = StreamController<AttentionSignals>.broadcast();
+    _emitNoFace(appInForeground());
 
     if (Platform.isIOS) {
       _iosRawFaceStreak = 0;
@@ -58,24 +67,26 @@ class FaceAttentionSensor {
           ? FaceDetectionModel.frontCamera
           : FaceDetectionModel.backCamera,
     );
-    if (Platform.isIOS) {
-      _iosPipeline = IosAttentionFacePipeline(_detector!);
-    }
 
     final isMacOS = Platform.isMacOS;
     final isIOS = Platform.isIOS;
+
     _controller = CameraController(
       cam,
       ResolutionPreset.low,
       enableAudio: false,
-      imageFormatGroup: (isMacOS || isIOS)
-          ? ImageFormatGroup.bgra8888
-          : ImageFormatGroup.yuv420,
+      imageFormatGroup:
+          isMacOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
     );
     await _controller!.initialize();
 
+    if (!_running || gen != _streamGeneration) {
+      await _tearDownCameraOnly();
+      return;
+    }
+
     await _controller!.startImageStream((image) async {
-      if (!_running || _busy) return;
+      if (!_running || _busy || gen != _streamGeneration) return;
       _busy = true;
       try {
         final controller = _controller;
@@ -86,75 +97,143 @@ class FaceAttentionSensor {
         List<Face> faces;
 
         if (isMacOS) {
-          final frame = prepareCameraFrame(
-            width: image.width,
-            height: image.height,
-            planes: [
-              for (final p in image.planes)
-                (
-                  bytes: p.bytes,
-                  rowStride: p.bytesPerRow,
-                  pixelStride: p.bytesPerPixel ?? 4,
-                )
-            ],
-            rotation: null,
-            isBgra: true,
-          );
-          faces = frame == null
-              ? const []
-              : await _detector!
-                  .detectFacesFromCameraFrame(
-                    frame,
-                    mode: FaceDetectionMode.full,
-                    maxDim: 320,
-                  )
-                  .timeout(const Duration(milliseconds: 1500));
+          faces = await _detectMacOS(image);
         } else if (isIOS) {
-          final pipeline = _iosPipeline;
-          if (pipeline == null) {
-            faces = const [];
-          } else {
-            faces = await pipeline.detect(
-              image: image,
-              camera: cam,
-              deviceOrientation: controller.value.deviceOrientation,
-            );
-          }
+          faces = await _detectIOS(image: image, cam: cam);
         } else {
-          final rotation = rotationForFrame(
-            width: image.width,
-            height: image.height,
-            sensorOrientation: cam.sensorOrientation,
-            isFrontCamera: cam.lensDirection == CameraLensDirection.front,
+          faces = await _detectAndroid(
+            image: image,
+            cam: cam,
             deviceOrientation: controller.value.deviceOrientation,
           );
-          faces = await _detector!
-              .detectFacesFromCameraImage(
-                image,
-                rotation: rotation,
-                isBgra: false,
-                mode: FaceDetectionMode.full,
-                maxDim: 320,
-              )
-              .timeout(const Duration(milliseconds: 1500));
         }
 
-        var sig = _toSignals(faces, appInForeground());
+        var sig = _toSignals(faces, appInForeground(), strictIos: isIOS);
         if (isIOS) {
           sig = _iosStabilizeFacePresent(sig);
         }
         _signals?.add(sig);
       } catch (e) {
         debugPrint('FaceAttentionSensor: 감지 오류 → $e');
-        _signals?.add(AttentionSignals(
-          facePresent: false,
-          multiFace: false,
-          appInForeground: appInForeground(),
-        ));
+        _emitNoFace(appInForeground());
       } finally {
         _busy = false;
       }
     });
+  }
+
+  void _emitNoFace(bool inForeground) {
+    _signals?.add(AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: inForeground,
+    ));
+  }
+
+  Future<List<Face>> _detectMacOS(CameraImage image) async {
+    final frame = prepareCameraFrame(
+      width: image.width,
+      height: image.height,
+      planes: [
+        for (final p in image.planes)
+          (
+            bytes: p.bytes,
+            rowStride: p.bytesPerRow,
+            pixelStride: p.bytesPerPixel ?? 4,
+          ),
+      ],
+      rotation: null,
+      isBgra: true,
+    );
+    if (frame == null) return const [];
+    return _detector!
+        .detectFacesFromCameraFrame(
+          frame,
+          mode: FaceDetectionMode.full,
+          maxDim: 320,
+        )
+        .timeout(const Duration(milliseconds: 1500));
+  }
+
+  Future<List<Face>> _detectAndroid({
+    required CameraImage image,
+    required CameraDescription cam,
+    required DeviceOrientation deviceOrientation,
+  }) async {
+    final rotation = rotationForFrame(
+      width: image.width,
+      height: image.height,
+      sensorOrientation: cam.sensorOrientation,
+      isFrontCamera: cam.lensDirection == CameraLensDirection.front,
+      deviceOrientation: deviceOrientation,
+    );
+    return _detector!
+        .detectFacesFromCameraImage(
+          image,
+          rotation: rotation,
+          isBgra: false,
+          mode: FaceDetectionMode.full,
+          maxDim: 320,
+        )
+        .timeout(const Duration(milliseconds: 1500));
+  }
+
+  /// iOS: YUV + [rotationForFrame]. 집중 앱은 세로 고정 → portraitUp으로 회전 안정화.
+  /// fast 1차 통과 시 다른 회전에서도 얼굴이 잡히면 빈 장면 오검으로 보고 무시.
+  Future<List<Face>> _detectIOS({
+    required CameraImage image,
+    required CameraDescription cam,
+  }) async {
+    if (!IosAttentionFacePipeline.frameLooksLikeLiveCamera(image)) {
+      return const [];
+    }
+
+    // iOS 스트림 초기에 deviceOrientation이 어긋나 회전이 틀어지는 경우가 많음.
+    const orient = DeviceOrientation.portraitUp;
+    final rotation = rotationForFrame(
+      width: image.width,
+      height: image.height,
+      sensorOrientation: cam.sensorOrientation,
+      isFrontCamera: cam.lensDirection == CameraLensDirection.front,
+      deviceOrientation: orient,
+    );
+
+    Future<List<Face>> fastAt(CameraFrameRotation? r) => _detector!
+        .detectFacesFromCameraImage(
+          image,
+          rotation: r,
+          isBgra: false,
+          mode: FaceDetectionMode.fast,
+          maxDim: 320,
+        )
+        .timeout(const Duration(milliseconds: 1200));
+
+    final primaryFast =
+        (await fastAt(rotation)).where(IosAttentionFacePipeline.passesFastGate);
+    if (primaryFast.isEmpty) return const [];
+
+    for (final alt in <CameraFrameRotation?>[
+      null,
+      CameraFrameRotation.cw90,
+      CameraFrameRotation.cw270,
+    ]) {
+      if (alt == rotation) continue;
+      final altHits =
+          (await fastAt(alt)).where(IosAttentionFacePipeline.passesFastGate);
+      if (altHits.isNotEmpty) return const [];
+    }
+
+    final full = await _detector!
+        .detectFacesFromCameraImage(
+          image,
+          rotation: rotation,
+          isBgra: false,
+          mode: FaceDetectionMode.full,
+          maxDim: 320,
+        )
+        .timeout(const Duration(milliseconds: 1500));
+
+    return IosAttentionFacePipeline.filterTrustworthy(full);
   }
 
   AttentionSignals _iosStabilizeFacePresent(AttentionSignals raw) {
@@ -188,26 +267,47 @@ class FaceAttentionSensor {
 
   CameraController? get controller => _controller;
 
+  int get previewGeneration => _streamGeneration;
+
   Future<void> stop() async {
     _running = false;
+    _streamGeneration++;
     if (Platform.isIOS) {
       _iosRawFaceStreak = 0;
       _iosRawNoFaceStreak = 0;
       _iosLatchedFacePresent = false;
     }
-    try {
-      await _controller?.stopImageStream();
-    } catch (_) {}
-    await _controller?.dispose();
-    _controller = null;
-    _iosPipeline = null;
+    await _tearDownCameraOnly();
     await _detector?.dispose();
     _detector = null;
-    await _signals?.close();
+    final sc = _signals;
     _signals = null;
+    await sc?.close();
   }
 
-  AttentionSignals _toSignals(List<Face> faces, bool inForeground) {
+  Future<void> _tearDownCameraOnly() async {
+    final c = _controller;
+    _controller = null;
+    if (c == null) return;
+    try {
+      if (c.value.isStreamingImages) {
+        await c.stopImageStream();
+      }
+    } catch (e) {
+      debugPrint('FaceAttentionSensor: stopImageStream → $e');
+    }
+    try {
+      await c.dispose();
+    } catch (e) {
+      debugPrint('FaceAttentionSensor: dispose → $e');
+    }
+  }
+
+  AttentionSignals _toSignals(
+    List<Face> faces,
+    bool inForeground, {
+    bool strictIos = false,
+  }) {
     if (faces.isEmpty) {
       return AttentionSignals(
         facePresent: false,
@@ -228,8 +328,12 @@ class FaceAttentionSensor {
 
     final earL = _ear(mesh, _eyeL);
     final earR = _ear(mesh, _eyeR);
-    if (Platform.isIOS) {
-      if (earL < 0.12 || earR < 0.12 || earL > 0.48 || earR > 0.48) {
+    if (strictIos || Platform.isIOS) {
+      if (earL < 0.14 ||
+          earR < 0.14 ||
+          earL > 0.45 ||
+          earR > 0.45 ||
+          face.detectionData.score < 0.82) {
         return AttentionSignals(
           facePresent: false,
           multiFace: false,
@@ -240,8 +344,6 @@ class FaceAttentionSensor {
 
     final blink = earL < 0.2 && earR < 0.2;
     final pose = _estimateHeadPose(mesh);
-    final yaw = pose.$1;
-    final pitch = pose.$2;
 
     return AttentionSignals(
       facePresent: true,
@@ -249,8 +351,8 @@ class FaceAttentionSensor {
       appInForeground: inForeground,
       earLeft: earL,
       earRight: earR,
-      headYaw: yaw,
-      headPitch: pitch,
+      headYaw: pose.$1,
+      headPitch: pose.$2,
       blinkFrame: blink,
     );
   }
@@ -266,7 +368,7 @@ class FaceAttentionSensor {
     final v1 = _dist(p1, p5);
     final v2 = _dist(p2, p4);
     final h = _dist(p0, p3);
-    if (h < 1e-6) return 0.3;
+    if (h < 1e-6) return 0.0;
     return (v1 + v2) / (2.0 * h);
   }
 

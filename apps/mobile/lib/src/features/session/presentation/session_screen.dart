@@ -236,7 +236,11 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         ? FocusStatus.normal
         : (s?.paused == true
             ? (s?.lastStatus ?? FocusStatus.normal)
-            : AttentionScoring.liveStatusFor(_c.signals, _c.engagedMinScore));
+            : AttentionScoring.liveStatusFor(
+                _c.signals,
+                _c.engagedMinScore,
+                sensorReady: _c.attentionSensorReady,
+              ));
 
     ref.listen<int>(shellBranchIndexProvider, (prev, next) {
       // AppShell 탭 전환 가드가 최신 running 값을 읽을 수 있도록 항상 동기화
@@ -479,6 +483,7 @@ class _NativeSessionCameraMirror extends StatelessWidget {
                 return const Center(child: CircularProgressIndicator());
               }
               return _SessionCameraPreviewBox(
+                key: ValueKey<int>(session.cameraPreviewGeneration),
                 controller: cam,
                 width: stripW,
                 height: stripH,
@@ -498,6 +503,7 @@ class _SessionCameraPreviewBox extends StatelessWidget {
   final double height;
 
   const _SessionCameraPreviewBox({
+    super.key,
     required this.controller,
     required this.width,
     required this.height,
