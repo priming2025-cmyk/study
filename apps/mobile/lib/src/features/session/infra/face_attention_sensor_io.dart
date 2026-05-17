@@ -14,6 +14,15 @@ import 'ios_attention_face_pipeline.dart';
 /// - **Android / macOS**: YUV(BGRA) + [startImageStream] + [rotationForFrame].
 /// - **iOS**: **프리뷰만** + 주기 [takePicture] JPEG 검출.
 ///   (스트림+프리뷰 동시 사용 시 검은 화면·2회차 실패·빈 화면 오검이 잦음)
+///
+/// ### iOS 오검 방어 레이어 (4단계)
+///
+/// 1. [IosAttentionFacePipeline.jpegLooksLikePhoto] — 어두운/단색 JPEG 사전 차단
+/// 2. [IosAttentionFacePipeline.passesFastGate] / [filterTrustworthy]
+///    — 낮은 점수·작은 얼굴 차단
+/// 3. [_iosStabilizeFacePresent] — 짧은 오검은 무시, 연속 N프레임만 라치
+/// 4. **생물학적 EAR 변화 요건** — 라치 전 EAR 범위 ≥ 0.020 (진짜 얼굴만 통과)
+///    포스터·모니터·환각은 EAR이 거의 고정이므로 이 조건을 충족하지 못합니다.
 class FaceAttentionSensor {
   FaceDetector? _detector;
   CameraController? _controller;
@@ -24,11 +33,14 @@ class FaceAttentionSensor {
   bool _busy = false;
   int _streamGeneration = 0;
 
-  // iOS 시간 축 환각 차단
-  final IosTemporalCoherence _iosCoherence = IosTemporalCoherence();
+  // ── iOS 라치 관련 상태 ───────────────────────────────────────────────
   int _iosRawFaceStreak = 0;
   int _iosRawNoFaceStreak = 0;
   bool _iosLatchedFacePresent = false;
+
+  /// 라치 윈도우 안의 EAR 샘플 (생물학적 변화 검사용).
+  final List<double> _iosEarLHistory = [];
+  final List<double> _iosEarRHistory = [];
 
   DateTime? _lastValidSampleAt;
   DateTime? _lastEmitAt;
@@ -36,13 +48,25 @@ class FaceAttentionSensor {
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  /// 얼굴 OK가 연속으로 4번 (≈ 4.8초) 지속되어야만 facePresent latch ON.
-  static const int _iosFaceLatchFrames = 4;
+  /// 연속 N프레임 얼굴 감지 후 라치 ON.
+  /// N × _iosSampleInterval ≈ 6 × 1200ms = 7.2초.
+  static const int _iosFaceLatchFrames = 6;
+
+  /// 1 프레임만 얼굴 없으면 즉시 라치 OFF.
   static const int _iosFaceUnlatchFrames = 1;
 
+  /// 라치 전 최소 EAR 변화 범위.
+  /// - 진짜 사람: 호흡·미세 근육으로 0.03~0.10 변화 → 통과
+  /// - 포스터·모니터·환각: 모델 노이즈 수준 0.001~0.008 → 차단
+  static const double _iosEarVarianceMin = 0.020;
+
   static const Duration _iosSampleInterval = Duration(milliseconds: 1200);
-  static const Duration _heartbeatInterval = Duration(milliseconds: 1500);
-  static const Duration _iosPostStopDelay = Duration(milliseconds: 1200);
+  static const Duration _heartbeatInterval = Duration(milliseconds: 2000);
+
+  /// [stop] 후 iOS AVCaptureSession이 완전히 해제되기까지 충분한 대기.
+  static const Duration _iosPostStopDelay = Duration(milliseconds: 1500);
+
+  /// 새 세션 시작 전 추가 안전 대기.
   static const Duration _iosPreStartDelay = Duration(milliseconds: 1000);
 
   FaceAttentionSensor();
@@ -68,7 +92,6 @@ class FaceAttentionSensor {
 
     await stop();
     if (Platform.isIOS) {
-      // 이전 AVCaptureSession이 완전히 닫힐 시간을 충분히 줍니다.
       await Future<void>.delayed(_iosPreStartDelay);
     }
 
@@ -76,10 +99,7 @@ class FaceAttentionSensor {
     final gen = ++_streamGeneration;
     _lastValidSampleAt = null;
     _lastEmitAt = null;
-    _iosRawFaceStreak = 0;
-    _iosRawNoFaceStreak = 0;
-    _iosLatchedFacePresent = false;
-    _iosCoherence.reset();
+    _resetIosState();
 
     _signals = StreamController<AttentionSignals>.broadcast();
 
@@ -116,33 +136,25 @@ class FaceAttentionSensor {
 
     if (isIOS) {
       _iosSampleTimer?.cancel();
-      _iosSampleTimer = Timer.periodic(
-        _iosSampleInterval,
-        (_) => unawaited(_iosSampleOnce(cam, appInForeground, gen)),
-      );
-      unawaited(_iosSampleOnce(cam, appInForeground, gen));
+      // periodic 대신 "끝나면 다음 예약" 방식으로 busy 충돌을 방지합니다.
+      unawaited(_iosScheduleNext(cam, appInForeground, gen));
       return;
     }
 
     await _controller!.startImageStream((image) async {
       if (!_running || _busy || gen != _streamGeneration) return;
-
       _busy = true;
       try {
         final controller = _controller;
         if (controller == null || !controller.value.isInitialized) return;
-
         final faces = await _detectFrame(
           image: image,
           cam: cam,
           deviceOrientation: controller.value.deviceOrientation,
           isMacOS: isMacOS,
         );
-
         final sig = _toSignals(faces, appInForeground());
-        if (sig.facePresent) {
-          _lastValidSampleAt = DateTime.now();
-        }
+        if (sig.facePresent) _lastValidSampleAt = DateTime.now();
         _emitSignal(sig);
       } catch (e) {
         debugPrint('FaceAttentionSensor: 감지 오류 → $e');
@@ -153,17 +165,19 @@ class FaceAttentionSensor {
     });
   }
 
-  void _startHeartbeat(bool Function() appInForeground) {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
-      if (!_running) return;
-      final last = _lastEmitAt;
-      if (last == null ||
-          DateTime.now().difference(last) > _heartbeatInterval) {
-        // 검출이 멈춘 채로 시간이 흐르면 ‘얼굴 없음’으로 흘려서 점수가 굳지 않게.
-        _emitNoFace(appInForeground());
+  /// iOS 샘플을 직렬(순서대로) 처리합니다.
+  /// Timer.periodic과 달리 이전 샘플이 끝나야 다음이 시작되므로 _busy 경합이 없습니다.
+  Future<void> _iosScheduleNext(
+    CameraDescription cam,
+    bool Function() appInForeground,
+    int gen,
+  ) async {
+    while (_running && gen == _streamGeneration) {
+      await _iosSampleOnce(cam, appInForeground, gen);
+      if (_running && gen == _streamGeneration) {
+        await Future<void>.delayed(_iosSampleInterval);
       }
-    });
+    }
   }
 
   Future<void> _iosSampleOnce(
@@ -171,11 +185,10 @@ class FaceAttentionSensor {
     bool Function() appInForeground,
     int gen,
   ) async {
-    if (!_running || _busy || gen != _streamGeneration) return;
+    if (!_running || gen != _streamGeneration) return;
     final c = _controller;
     if (c == null || !c.value.isInitialized) return;
 
-    _busy = true;
     try {
       final file = await c.takePicture();
       final bytes = await File(file.path).readAsBytes();
@@ -187,7 +200,6 @@ class FaceAttentionSensor {
 
       final faces = await _detectIOSFromJpeg(bytes);
       var sig = _toSignals(faces, appInForeground());
-      sig = _iosApplyTemporalCoherence(sig, faces);
       sig = _iosStabilizeFacePresent(sig);
       if (sig.facePresent) {
         _lastValidSampleAt = DateTime.now();
@@ -196,15 +208,12 @@ class FaceAttentionSensor {
     } catch (e) {
       debugPrint('FaceAttentionSensor[iOS]: 샘플 실패 → $e');
       _emitIosStabilizedNoFace(appInForeground());
-    } finally {
-      _busy = false;
     }
   }
 
   Future<List<Face>> _detectIOSFromJpeg(List<int> bytes) async {
-    final data = bytes is Uint8List
-        ? bytes
-        : Uint8List.fromList(bytes);
+    final data =
+        bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     if (!IosAttentionFacePipeline.jpegLooksLikePhoto(data)) {
       return const [];
     }
@@ -212,7 +221,8 @@ class FaceAttentionSensor {
     final fast = await _detector!
         .detectFaces(data, mode: FaceDetectionMode.fast)
         .timeout(const Duration(milliseconds: 1500));
-    final fastOk = fast.where(IosAttentionFacePipeline.passesFastGate).toList();
+    final fastOk =
+        fast.where(IosAttentionFacePipeline.passesFastGate).toList();
     if (fastOk.isEmpty) return const [];
 
     final full = await _detector!
@@ -231,9 +241,7 @@ class FaceAttentionSensor {
     required DeviceOrientation deviceOrientation,
     required bool isMacOS,
   }) async {
-    if (isMacOS) {
-      return _detectMacOS(image);
-    }
+    if (isMacOS) return _detectMacOS(image);
 
     final rotation = rotationForFrame(
       width: image.width,
@@ -279,6 +287,19 @@ class FaceAttentionSensor {
         .timeout(const Duration(milliseconds: 1500));
   }
 
+  void _startHeartbeat(bool Function() appInForeground) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      if (!_running) return;
+      final last = _lastEmitAt;
+      if (last == null ||
+          DateTime.now().difference(last) > _heartbeatInterval) {
+        // 감지가 멈추면 '얼굴 없음'을 흘려 라치가 굳지 않게 합니다.
+        _emitNoFace(appInForeground());
+      }
+    });
+  }
+
   void _emitSignal(AttentionSignals s) {
     _lastEmitAt = DateTime.now();
     _signals?.add(s);
@@ -292,39 +313,6 @@ class FaceAttentionSensor {
     ));
   }
 
-  /// iOS: 시간 축 무결성 검사. bbox 동결·튐·EAR 동결 모두 환각으로 간주.
-  AttentionSignals _iosApplyTemporalCoherence(
-    AttentionSignals raw,
-    List<Face> faces,
-  ) {
-    if (!raw.facePresent || faces.isEmpty) {
-      _iosCoherence.reset();
-      return raw;
-    }
-    final face = faces.first;
-    final bb = face.boundingBox;
-    final fw = face.originalSize.width.toDouble();
-    final fh = face.originalSize.height.toDouble();
-    final ok = _iosCoherence.consumeAndIsPlausible(
-      bboxLeft: bb.left,
-      bboxTop: bb.top,
-      bboxRight: bb.right,
-      bboxBottom: bb.bottom,
-      earL: raw.earLeft,
-      earR: raw.earRight,
-      frameWidth: fw,
-      frameHeight: fh,
-    );
-    if (!ok) {
-      return AttentionSignals(
-        facePresent: false,
-        multiFace: false,
-        appInForeground: raw.appInForeground,
-      );
-    }
-    return raw;
-  }
-
   void _emitIosStabilizedNoFace(bool inForeground) {
     final sig = _iosStabilizeFacePresent(
       AttentionSignals(
@@ -336,16 +324,35 @@ class FaceAttentionSensor {
     _emitSignal(sig);
   }
 
+  // ── iOS 라치 + 생물학적 EAR 변화 검사 ────────────────────────────────
+
   AttentionSignals _iosStabilizeFacePresent(AttentionSignals raw) {
     if (raw.facePresent) {
       _iosRawFaceStreak++;
       _iosRawNoFaceStreak = 0;
+
+      // 라치 윈도우 안의 EAR 이력 누적
+      _iosEarLHistory.add(raw.earLeft);
+      _iosEarRHistory.add(raw.earRight);
+      if (_iosEarLHistory.length > _iosFaceLatchFrames) {
+        _iosEarLHistory.removeAt(0);
+        _iosEarRHistory.removeAt(0);
+      }
+
       if (_iosRawFaceStreak >= _iosFaceLatchFrames) {
-        _iosLatchedFacePresent = true;
+        // ★ 생물학적 EAR 변화 검사 ★
+        // 진짜 사람: 호흡·미세 근육으로 EAR 범위 0.03+ → 통과
+        // 포스터·화면·환각: 모델 노이즈 0.001~0.008 → 차단
+        if (_iosEarHasSufficientVariance()) {
+          _iosLatchedFacePresent = true;
+        }
+        // 변화 부족하면 streak은 계속 세지만 라치는 하지 않음
       }
     } else {
       _iosRawNoFaceStreak++;
       _iosRawFaceStreak = 0;
+      _iosEarLHistory.clear();
+      _iosEarRHistory.clear();
       if (_iosRawNoFaceStreak >= _iosFaceUnlatchFrames) {
         _iosLatchedFacePresent = false;
       }
@@ -359,6 +366,36 @@ class FaceAttentionSensor {
       );
     }
     return raw;
+  }
+
+  /// 라치 윈도우 안에서 EAR이 충분히 변화했는지 검사합니다.
+  ///
+  /// 진짜 사람은 약 4~7초 안에 호흡·미세 근육으로 반드시 0.020 이상 변화합니다.
+  /// 포스터·모니터·환각은 모델 노이즈 수준(0.001~0.008)만 변하므로 차단됩니다.
+  bool _iosEarHasSufficientVariance() {
+    if (_iosEarLHistory.length < _iosFaceLatchFrames) return false;
+    var minL = _iosEarLHistory[0];
+    var maxL = _iosEarLHistory[0];
+    var minR = _iosEarRHistory[0];
+    var maxR = _iosEarRHistory[0];
+    for (final v in _iosEarLHistory) {
+      if (v < minL) minL = v;
+      if (v > maxL) maxL = v;
+    }
+    for (final v in _iosEarRHistory) {
+      if (v < minR) minR = v;
+      if (v > maxR) maxR = v;
+    }
+    return (maxL - minL) >= _iosEarVarianceMin ||
+        (maxR - minR) >= _iosEarVarianceMin;
+  }
+
+  void _resetIosState() {
+    _iosRawFaceStreak = 0;
+    _iosRawNoFaceStreak = 0;
+    _iosLatchedFacePresent = false;
+    _iosEarLHistory.clear();
+    _iosEarRHistory.clear();
   }
 
   Stream<AttentionSignals> get stream =>
@@ -381,10 +418,7 @@ class FaceAttentionSensor {
     _heartbeatTimer = null;
     _lastValidSampleAt = null;
     _lastEmitAt = null;
-    _iosRawFaceStreak = 0;
-    _iosRawNoFaceStreak = 0;
-    _iosLatchedFacePresent = false;
-    _iosCoherence.reset();
+    _resetIosState();
 
     await _tearDownCameraOnly();
     await _detector?.dispose();
@@ -446,14 +480,12 @@ class FaceAttentionSensor {
     final earL = _ear(mesh, _eyeL);
     final earR = _ear(mesh, _eyeR);
 
-    if (Platform.isIOS) {
-      if (!IosAttentionFacePipeline.earsPlausible(earL, earR)) {
-        return AttentionSignals(
-          facePresent: false,
-          multiFace: false,
-          appInForeground: inForeground,
-        );
-      }
+    if (Platform.isIOS && !IosAttentionFacePipeline.earsPlausible(earL, earR)) {
+      return AttentionSignals(
+        facePresent: false,
+        multiFace: false,
+        appInForeground: inForeground,
+      );
     }
 
     final blink = earL < 0.2 && earR < 0.2;
@@ -508,7 +540,8 @@ class FaceAttentionSensor {
       final yawRatio = (nose.x - eyeCx) / eyeWidth;
       final yaw = yawRatio * 90.0;
 
-      final faceHeight = (chin.y - eyeCy).abs().clamp(1.0, double.infinity);
+      final faceHeight =
+          (chin.y - eyeCy).abs().clamp(1.0, double.infinity);
       final pitchRatio = (nose.y - eyeCy) / faceHeight;
       final pitch = (pitchRatio - 0.35) * 120.0;
 

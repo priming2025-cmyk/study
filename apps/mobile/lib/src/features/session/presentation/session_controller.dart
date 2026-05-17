@@ -61,7 +61,10 @@ class SessionController extends ChangeNotifier {
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
   /// 카메라가 실제로 준비됐는지 (프리뷰·검출 가능).
-  bool get cameraActive => !kIsWeb && _camera.hasActiveCamera;
+  /// 웹(Vercel·Safari): 최근 3초 안에 분석 신호가 왔으면 활성으로 봅니다.
+  bool get cameraActive => kIsWeb
+      ? hasRecentSignal
+      : _camera.hasActiveCamera;
 
   /// iOS: 카메라가 붙은 뒤 2초 전에는 ‘집중’ 표시·집중 초 누적 안 함.
   bool get attentionSensorReady {
@@ -104,6 +107,7 @@ class SessionController extends ChangeNotifier {
   /// (웹은 FaceAttentionSensor를 시작하지 않고 이 경로만 씁니다.)
   void applyWebAttentionSignals(AttentionSignals s) {
     signals = s;
+    _lastSignalAt = DateTime.now();
     notifyListeners();
   }
 
@@ -303,9 +307,9 @@ class SessionController extends ChangeNotifier {
     );
     // 카메라가 죽었거나(2회차 실패), 신호가 3초 이상 끊겼거나, 워밍업 전이면
     // 어떤 경우에도 ‘얼굴 있음’이 점수에 흘러들어가지 않도록 막습니다.
-    final ok = !kIsWeb
-        ? (cameraActive && attentionSensorReady && hasRecentSignal)
-        : true;
+    final ok = kIsWeb
+        ? hasRecentSignal
+        : (cameraActive && attentionSensorReady && hasRecentSignal);
     final tickSignals = ok ? signals : noFace;
     state = AttentionScoring.tick(
       state: s,

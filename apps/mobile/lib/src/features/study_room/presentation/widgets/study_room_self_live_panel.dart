@@ -78,7 +78,8 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
-  bool get _cameraActive => !kIsWeb && _camera.hasActiveCamera;
+  bool get _cameraActive =>
+      kIsWeb ? _hasRecentSignal : _camera.hasActiveCamera;
 
   bool get _sensorReadyForUi {
     if (kIsWeb || !_isIOS) return _cameraActive;
@@ -203,9 +204,9 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     final st = _scoreState;
     if (st == null) return;
     // 카메라 미준비 또는 신호가 끊긴 경우 점수 누적이 ‘얼굴 있음’으로 흐르지 않게 강제 차단.
-    final ok = !kIsWeb
-        ? (_sensorReadyForUi && _hasRecentSignal)
-        : true;
+    final ok = kIsWeb
+        ? _hasRecentSignal
+        : (_sensorReadyForUi && _hasRecentSignal);
     final tickSignals = ok
         ? _signals
         : const AttentionSignals(
@@ -224,6 +225,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   void _applyWebSignals(AttentionSignals s) {
     _signals = s;
+    _lastSignalAt = DateTime.now();
     if (mounted) setState(() {});
   }
 

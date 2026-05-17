@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert' show base64Decode;
 
 import 'dart:html' as html;
+import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:face_detection_tflite/face_detection_tflite.dart';
@@ -47,6 +48,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   FaceDetector? _detector;
   Timer? _analysisTimer;
   bool _busy = false;
+  final WebAttentionFacePipeline _pipeline = WebAttentionFacePipeline();
 
   @override
   void initState() {
@@ -59,14 +61,11 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       ..autoplay = true
       ..muted = true
       ..setAttribute('playsinline', 'true')
-      // 인라인 비디오는 높이 0으로 잡히는 경우가 있어 block + 픽셀 크기를 둡니다.
       ..style.display = 'block'
       ..style.objectFit = 'cover'
-      // 셀카처럼 거울 반전(실시간으로 내가 보는 방향과 맞춤)
       ..style.transform = 'scaleX(-1)';
     _video = _sharedVideo;
 
-    // 최초 1회만 factory 등록 (viewType 재사용)
     if (!_sharedRegistered) {
       ui_web.platformViewRegistry.registerViewFactory(
         _sharedViewType,
@@ -112,11 +111,13 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       final md = html.window.navigator.mediaDevices;
       if (md == null) {
         setState(() => _error = '이 브라우저는 카메라를 지원하지 않아요.');
+        _emitNoFace();
         return;
       }
       final stream = await _ensureSharedStream();
       if (stream == null) {
         setState(() => _error = '이 브라우저는 카메라를 지원하지 않아요.');
+        _emitNoFace();
         return;
       }
 
@@ -127,34 +128,31 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         await _detector!.initialize(model: FaceDetectionModel.frontCamera);
 
         _analysisTimer?.cancel();
-        _analysisTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
-          _sampleFrame();
-        });
+        _analysisTimer = Timer.periodic(
+          const Duration(milliseconds: 900),
+          (_) => _sampleFrame(),
+        );
+        // 첫 샘플은 즉시
+        unawaited(_sampleFrame());
       } catch (e) {
-        // 웹 등에서 FaceDetector 초기화가 실패하더라도 카메라는 계속 보여야 합니다.
-        debugPrint('FaceDetector init failed: $e. Falling back to mock signals.');
-        _analysisTimer?.cancel();
-        _analysisTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-          if (!mounted) return;
-          widget.onAttentionSignals(
-            AttentionSignals(
-              facePresent: true,
-              multiFace: false,
-              appInForeground: widget.appInForeground(),
-              earLeft: 0.3,
-              earRight: 0.3,
-              headYaw: 0,
-              headPitch: 0,
-              blinkFrame: false,
-            ),
-          );
-        });
+        debugPrint('FaceDetector init failed: $e');
+        setState(() => _error = '얼굴 분석을 시작하지 못했어요. 페이지를 새로고침해 주세요.');
+        _emitNoFace();
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _error = '카메라를 열 수 없어요. 주소창에서 카메라를 허용했는지 확인해 주세요. ($e)');
+        setState(() => _error =
+            '카메라를 열 수 없어요. 주소창에서 카메라를 허용했는지 확인해 주세요.');
       }
+      _emitNoFace();
     }
+  }
+
+  void _emitNoFace() {
+    if (!mounted) return;
+    widget.onAttentionSignals(
+      _pipeline.noFace(widget.appInForeground()),
+    );
   }
 
   Future<void> _sampleFrame() async {
@@ -178,7 +176,8 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         outW = w * (outH / h);
       }
 
-      final canvas = html.CanvasElement(width: outW.round(), height: outH.round());
+      final canvas =
+          html.CanvasElement(width: outW.round(), height: outH.round());
       final ctx = canvas.context2D;
       ctx
         ..save()
@@ -188,26 +187,46 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       final dataUrl = canvas.toDataUrl('image/jpeg', 0.88);
       final comma = dataUrl.indexOf(',');
-      if (comma < 0 || comma >= dataUrl.length - 1) return;
-      final bytes = base64Decode(dataUrl.substring(comma + 1));
+      if (comma < 0 || comma >= dataUrl.length - 1) {
+        _emitNoFace();
+        return;
+      }
+      final bytes = Uint8List.fromList(
+        base64Decode(dataUrl.substring(comma + 1)),
+      );
 
-      final faces = await _detector!.detectFaces(
+      if (!WebAttentionFacePipeline.jpegLooksLikePhoto(bytes)) {
+        _emitNoFace();
+        return;
+      }
+
+      final fast = await _detector!.detectFaces(
+        bytes,
+        mode: FaceDetectionMode.fast,
+      );
+      final fastOk =
+          fast.where(WebAttentionFacePipeline.passesFastGate).toList();
+      if (fastOk.isEmpty) {
+        _emitNoFace();
+        return;
+      }
+
+      final full = await _detector!.detectFaces(
         bytes,
         mode: FaceDetectionMode.full,
       );
+      final trusted = WebAttentionFacePipeline.filterTrustworthy(
+        full,
+        requireFastOverlap: fastOk,
+      );
+
       if (!mounted) return;
       widget.onAttentionSignals(
-        attentionSignalsFromFaces(faces, widget.appInForeground()),
+        _pipeline.processFaces(trusted, widget.appInForeground()),
       );
     } catch (e) {
-      if (!mounted) return;
-      widget.onAttentionSignals(
-        AttentionSignals(
-          facePresent: false,
-          multiFace: false,
-          appInForeground: widget.appInForeground(),
-        ),
-      );
+      debugPrint('[SessionSelfCamera-Web] sample: $e');
+      _emitNoFace();
     } finally {
       _busy = false;
     }
@@ -217,13 +236,12 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void dispose() {
     _analysisTimer?.cancel();
     _analysisTimer = null;
+    _pipeline.reset();
     unawaited(_detector?.dispose());
     _detector = null;
 
     _sharedRefCount = (_sharedRefCount - 1).clamp(0, 1 << 30);
     if (_sharedRefCount == 0) {
-      // 리스트 스크롤 등으로 잠깐 위젯이 사라졌다가 다시 생길 수 있어
-      // 즉시 stop 하지 않고 약간의 유예를 둡니다.
       _sharedDisposeTimer?.cancel();
       _sharedDisposeTimer = Timer(const Duration(seconds: 8), () {
         for (final t in _sharedStream?.getTracks() ?? <html.MediaStreamTrack>[]) {
@@ -265,7 +283,6 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         ),
       );
     }
-    // HtmlElementView는 부모가 명시 크기를 줄 때 웹에서 안정적으로 보입니다.
     return SizedBox(
       width: widget.width,
       height: widget.height,
