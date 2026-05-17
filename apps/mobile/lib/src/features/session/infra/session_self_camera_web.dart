@@ -2,7 +2,6 @@
 
 import 'dart:async';
 import 'dart:html' as html;
-import 'dart:typed_data';
 
 import 'dart:ui_web' as ui_web;
 
@@ -11,10 +10,13 @@ import 'package:flutter/material.dart';
 
 import '../domain/attention_signals.dart';
 import 'web_attention_face_codec.dart';
-import 'web_shared_camera.dart';
 import 'web_face_detector_holder.dart';
+import 'web_shared_camera.dart';
 
 /// 브라우저 공유 카메라 + [FaceDetector] 분석 → [onAttentionSignals].
+///
+/// [detectFacesFromVideo] 대신 JPEG 캡처 → [FaceDetector.detectFaces] 경로를
+/// 사용합니다. dart:html ↔ package:web 타입 불일치를 피하고 Safari 호환성을 높입니다.
 class SessionSelfCameraSurface extends StatefulWidget {
   final double width;
   final double height;
@@ -57,11 +59,11 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   @override
   void initState() {
     super.initState();
-    _registerViewHost();
+    _registerHost();
     unawaited(_boot());
   }
 
-  void _registerViewHost() {
+  void _registerHost() {
     if (_viewRegistered) return;
     ui_web.platformViewRegistry.registerViewFactory(
       _viewType,
@@ -74,25 +76,23 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void didUpdateWidget(SessionSelfCameraSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
     _applySize();
-    _attachVideoIfNeeded();
   }
 
   void _applySize() {
     _host.style.width = '${widget.width}px';
     _host.style.height = '${widget.height}px';
     final v = WebSharedCamera.instance.video;
-    if (v != null) {
-      v.style.width = '${widget.width}px';
-      v.style.height = '${widget.height}px';
-    }
+    if (v == null) return;
+    v.style.width = '100%';
+    v.style.height = '100%';
   }
 
-  void _attachVideoIfNeeded() {
+  void _attachVideo() {
     final video = WebSharedCamera.instance.video;
     if (video == null) return;
-    if (_host.children.contains(video)) return;
-    _host.children.clear();
-    _host.append(video);
+    if (_host.contains(video)) return;
+    _host.nodes.clear();
+    _host.nodes.add(video);
   }
 
   Future<void> _boot() async {
@@ -103,7 +103,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         if (mounted) {
           setState(() {
             _cameraError = err != null
-                ? '카메라를 열 수 없어요. Safari 설정에서 카메라를 허용해 주세요.'
+                ? 'Safari 설정에서 카메라를 허용해 주세요. (${err.split('(').first.trim()})'
                 : '이 브라우저는 카메라를 지원하지 않아요.';
           });
         }
@@ -111,7 +111,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         return;
       }
 
-      _attachVideoIfNeeded();
+      _attachVideo();
       _applySize();
 
       if (mounted) {
@@ -126,7 +126,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 650),
+        const Duration(milliseconds: 800),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -163,7 +163,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   }
 
   void _scheduleDetectorRetry() {
-    if (_retryCount >= 8) {
+    if (_retryCount >= 6) {
       if (mounted) {
         setState(() => _analysisStatus =
             '분석 엔진 로딩이 느립니다. Wi‑Fi 확인 후 새로고침해 주세요.');
@@ -172,7 +172,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     }
     _retryCount++;
     _detectorRetryTimer?.cancel();
-    _detectorRetryTimer = Timer(Duration(seconds: 2 + _retryCount), () {
+    _detectorRetryTimer = Timer(Duration(seconds: 3 + _retryCount * 2), () {
       if (!mounted) return;
       WebFaceDetectorHolder.instance.scheduleRetry();
       unawaited(_ensureDetector());
@@ -186,40 +186,14 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     );
   }
 
-  Future<List<Face>> _detectFast(FaceDetector det, Object video) async {
-    try {
-      return await det.detectFacesFromVideo(
-        video,
-        mode: FaceDetectionMode.fast,
-      );
-    } catch (e) {
-      debugPrint('[SessionSelfCamera-Web] fast video: $e');
-      return const [];
-    }
-  }
-
-  Future<List<Face>> _detectFastFromBytes(FaceDetector det, Uint8List jpeg) async {
-    try {
-      return await det.detectFaces(jpeg, mode: FaceDetectionMode.fast);
-    } catch (e) {
-      debugPrint('[SessionSelfCamera-Web] fast jpeg: $e');
-      return const [];
-    }
-  }
-
   Future<void> _sampleFrame() async {
     if (!mounted || _busy) return;
-
     if (!WebSharedCamera.instance.isStreamReady) {
+      _attachVideo();
       return;
     }
 
-    _attachVideoIfNeeded();
-
-    final video = WebSharedCamera.instance.video;
-    if (video == null) return;
-
-    var det = WebFaceDetectorHolder.instance.detector;
+    final det = WebFaceDetectorHolder.instance.detector;
     if (det == null) {
       unawaited(_ensureDetector());
       _emitNoFace();
@@ -228,34 +202,30 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
     _busy = true;
     try {
-      var fast = await _detectFast(det, video);
-      var full = const <Face>[];
+      final jpeg = await WebSharedCamera.instance.captureJpeg(
+        maxDim: 480,
+        quality: 0.82,
+      );
+
+      if (jpeg == null || !WebAttentionFacePipeline.jpegLooksLikePhoto(jpeg)) {
+        _emitNoFace();
+        return;
+      }
+
+      List<Face> fast = const [];
+      List<Face> full = const [];
+
+      try {
+        fast = await det.detectFaces(jpeg, mode: FaceDetectionMode.fast);
+      } catch (e) {
+        debugPrint('[SessionSelfCamera-Web] fast: $e');
+      }
 
       if (fast.isNotEmpty) {
         try {
-          full = await det.detectFacesFromVideo(
-            video,
-            mode: FaceDetectionMode.full,
-          );
+          full = await det.detectFaces(jpeg, mode: FaceDetectionMode.full);
         } catch (e) {
-          debugPrint('[SessionSelfCamera-Web] full video: $e');
-        }
-      }
-
-      if (fast.isEmpty) {
-        final jpeg = await WebSharedCamera.instance.captureJpeg(
-          maxDim: 480,
-          quality: 0.82,
-        );
-        if (jpeg != null && WebAttentionFacePipeline.jpegLooksLikePhoto(jpeg)) {
-          fast = await _detectFastFromBytes(det, jpeg);
-          if (fast.isNotEmpty) {
-            try {
-              full = await det.detectFaces(jpeg, mode: FaceDetectionMode.full);
-            } catch (e) {
-              debugPrint('[SessionSelfCamera-Web] full jpeg: $e');
-            }
-          }
+          debugPrint('[SessionSelfCamera-Web] full: $e');
         }
       }
 
@@ -285,7 +255,6 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _analysisTimer?.cancel();
     _detectorRetryTimer?.cancel();
     _pipeline.reset();
-    // 탭 전환 시 release 하지 않음 — Safari는 재허용 제스처가 필요합니다.
     super.dispose();
   }
 
@@ -308,7 +277,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       );
     }
 
-    if (!_streamReady && !WebSharedCamera.instance.isStreamReady) {
+    if (!_streamReady) {
       return SizedBox(
         width: widget.width,
         height: widget.height,

@@ -17,6 +17,27 @@
   <title>study_up</title>
   <link rel="manifest" href="manifest.json">
 
+  <!--
+    LiteRT.js: 얼굴 분석 WASM 엔진.
+    Flutter 앱 시작 전에 미리 로드해 Safari에서 "준비 중" 지연을 최소화합니다.
+  -->
+  <script type="module">
+    (async () => {
+      const CDN = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0';
+      try {
+        const mod = await import(CDN + '/+esm');
+        await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
+        window.LiteRt = mod;
+        window.LiteRtReady = true;
+      } catch (e) {
+        console.warn('[setudy] LiteRT preload failed:', e && e.message ? e.message : e);
+        window.LiteRtReady = false;
+        window.LiteRtLoadError = e && e.message ? e.message : String(e);
+      } finally {
+        window.dispatchEvent(new Event('litert-ready'));
+      }
+    })();
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

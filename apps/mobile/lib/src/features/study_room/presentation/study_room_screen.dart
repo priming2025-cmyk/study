@@ -9,7 +9,7 @@ import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
-import '../../session/infra/web_camera.dart';
+import '../../session/infra/web_shared_camera.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/study_room_ambient_sheet.dart';
