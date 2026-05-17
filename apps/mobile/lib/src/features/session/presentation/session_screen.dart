@@ -240,6 +240,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                 _c.signals,
                 _c.engagedMinScore,
                 sensorReady: _c.attentionSensorReady,
+                cameraActive: _c.cameraActive,
               ));
 
     ref.listen<int>(shellBranchIndexProvider, (prev, next) {

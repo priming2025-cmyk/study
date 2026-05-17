@@ -170,7 +170,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   Widget build(BuildContext context) {
     final inRoom = _controller.roomId != null;
     final studyCameraSlotActive = ref.watch(shellBranchIndexProvider) == kShellBranchStudy;
-    final sessionCameraShared = ref.watch(sessionRunningProvider);
 
     ref.listen<int>(studyRoomLeaveForTabSwitchProvider, (prev, next) {
       if (prev == null || next <= prev) return;
@@ -217,7 +216,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
           ? StudyRoomActiveView(
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
-              sessionCameraShared: sessionCameraShared,
               engagedMinListenable: _engagedMinScoreN,
             )
           : FutureBuilder<(String roomId, String goalText)?>(

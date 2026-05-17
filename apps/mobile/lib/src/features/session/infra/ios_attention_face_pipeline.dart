@@ -10,8 +10,9 @@ import 'package:face_detection_tflite/face_detection_tflite.dart';
 class IosAttentionFacePipeline {
   IosAttentionFacePipeline._();
 
-  static const _minDetectionScore = 0.88;
-  static const _minFastGateScore = 0.88;
+  static const _minDetectionScore = 0.90;
+  static const _minFastGateScore = 0.90;
+  static const _minFaceAreaRatio = 0.04;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
@@ -48,8 +49,25 @@ class IosAttentionFacePipeline {
     if (bw < 40 || bh < 40) return false;
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
-    return (bw * bh) / frameArea >= 0.02;
+    return (bw * bh) / frameArea >= _minFaceAreaRatio;
   }
+
+  /// JPEG가 너무 작거나 단색에 가까우면 검출하지 않습니다.
+  static bool jpegLooksLikePhoto(Uint8List bytes) {
+    if (bytes.length < 12000) return false;
+    final step = math.max(1, bytes.length ~/ 500);
+    var minV = 255;
+    var maxV = 0;
+    for (var i = 0; i < bytes.length; i += step) {
+      final v = bytes[i];
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+    }
+    return (maxV - minV) >= 24;
+  }
+
+  static bool earsPlausible(double earL, double earR) =>
+      _earPlausible(earL) && _earPlausible(earR);
 
   static List<Face> filterTrustworthy(
     List<Face> faces, {
@@ -107,7 +125,7 @@ class IosAttentionFacePipeline {
 
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
-    if ((bw * bh) / frameArea < 0.02) return false;
+    if ((bw * bh) / frameArea < _minFaceAreaRatio) return false;
 
     if (!_meshGeometryOk(mesh)) return false;
 

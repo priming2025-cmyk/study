@@ -150,8 +150,10 @@ class AttentionScoring {
     int engagedMinScore, {
     /// iOS: 카메라 스트림이 몇 프레임 돌기 전에는 ‘집중’을 표시하지 않음.
     bool sensorReady = true,
+    /// 카메라가 실제로 켜져 있지 않으면 ‘집중’ 표시 금지.
+    bool cameraActive = true,
   }) {
-    if (!sensorReady) return FocusStatus.away;
+    if (!cameraActive || !sensorReady) return FocusStatus.away;
     final s = _effectiveSignals(signals);
     if (!s.facePresent) return FocusStatus.away;
     final score = _computeScore(s);

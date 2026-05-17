@@ -14,9 +14,12 @@ final class AttentionCameraService {
   FaceAttentionSensor get sensor => _sensor;
 
   bool get hasActiveCamera =>
-      _holders > 0 &&
+      _sensor.isCameraReady &&
       _sensor.controller != null &&
       (_sensor.controller?.value.isInitialized ?? false);
+
+  /// 최근 프레임에서 유효한 얼굴 검출이 있었는지 (iOS 오검·카메라 미준비 시 집중 집계 차단).
+  bool get hasRecentValidSample => _sensor.hasRecentValidSample;
 
   Stream<AttentionSignals> get stream => _sensor.stream;
 
@@ -24,27 +27,28 @@ final class AttentionCameraService {
 
   int get previewGeneration => _sensor.previewGeneration;
 
-  /// 카메라를 켭니다. 이미 다른 홀더가 켜 둔 경우 스트림만 공유합니다.
   Future<void> acquire({
     required CameraDescription camera,
     required bool Function() appInForeground,
   }) async {
-    if (_holders == 0) {
+    if (!hasActiveCamera) {
+      if (_holders > 0) {
+        await forceStop();
+      }
       await _sensor.start(camera: camera, appInForeground: appInForeground);
     }
     _holders++;
   }
 
-  /// 홀더를 하나 줄입니다. 마지막 홀더면 카메라를 완전히 끕니다.
   Future<void> release() async {
     if (_holders <= 0) return;
     _holders--;
-    if (_holders == 0) {
+    if (_holders <= 0) {
+      _holders = 0;
       await _sensor.stop();
     }
   }
 
-  /// 세션 탭 이탈 시: 카메라는 유지하고 구독만 끊을 때 사용 ([release] 호출 금지).
   Future<void> forceStop() async {
     _holders = 0;
     await _sensor.stop();

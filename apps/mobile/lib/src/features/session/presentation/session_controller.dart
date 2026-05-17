@@ -55,9 +55,14 @@ class SessionController extends ChangeNotifier {
 
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
+  /// 카메라가 실제로 준비됐는지 (프리뷰·검출 가능).
+  bool get cameraActive => !kIsWeb && _camera.hasActiveCamera;
+
   /// iOS: 카메라가 붙은 뒤 2초 전에는 ‘집중’ 표시·집중 초 누적 안 함.
   bool get attentionSensorReady {
-    if (kIsWeb || !_isIOS) return true;
+    if (kIsWeb) return true;
+    if (!_camera.hasActiveCamera) return false;
+    if (!_isIOS) return true;
     final t = _cameraLiveAt;
     if (t == null) return false;
     return DateTime.now().difference(t) >= const Duration(seconds: 2);
@@ -277,13 +282,12 @@ class SessionController extends ChangeNotifier {
     if (!running) return;
     final s = state;
     if (s == null) return;
-    final tickSignals = attentionSensorReady
-        ? signals
-        : AttentionSignals(
-            facePresent: false,
-            multiFace: false,
-            appInForeground: signals.appInForeground,
-          );
+    final noFace = AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: signals.appInForeground,
+    );
+    final tickSignals = (cameraActive && attentionSensorReady) ? signals : noFace;
     state = AttentionScoring.tick(
       state: s,
       now: DateTime.now(),
@@ -347,9 +351,9 @@ class SessionController extends ChangeNotifier {
 
     if (cam != null) {
       try {
+        await _camera.forceStop();
+        _cameraAcquired = false;
         // start()를 먼저 호출해 _signals 스트림 컨트롤러를 생성한 뒤에 구독합니다.
-        // 반대 순서면 _signals가 null인 상태에서 Stream.empty()를 구독하게 되어
-        // 카메라 신호가 영원히 전달되지 않습니다.
         await _camera.acquire(
           camera: cam,
           appInForeground: () => appInForeground,
@@ -398,8 +402,8 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> _releaseCamera() async {
-    if (!_cameraAcquired) return;
-    await _camera.release();
+    if (!_cameraAcquired && !_camera.hasActiveCamera) return;
+    await _camera.forceStop();
     _cameraAcquired = false;
     _cameraLiveAt = null;
   }
@@ -524,7 +528,6 @@ class SessionController extends ChangeNotifier {
       appInForeground: appInForeground,
     );
     state = null;
-    frontCamera = null;
 
     await _presenceSub?.cancel();
     _presenceSub = null;
@@ -570,9 +573,7 @@ class SessionController extends ChangeNotifier {
     _timer?.cancel();
     _sub?.cancel();
     _presenceSub?.cancel();
-    if (_cameraAcquired) {
-      unawaited(_releaseCamera());
-    }
+    unawaited(_releaseCamera());
     _presence.dispose();
     super.dispose();
   }
