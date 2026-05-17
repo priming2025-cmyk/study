@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'dart:ui_web' as ui_web;
 
@@ -32,11 +33,14 @@ class SessionSelfCameraSurface extends StatefulWidget {
 }
 
 class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
-  static const String _viewType = 'session-self-cam';
-  static bool _viewRegistered = false;
+  static int _viewTypeSeq = 0;
+
+  late final String _viewType = 'session-self-cam-${_viewTypeSeq++}';
+  bool _viewRegistered = false;
 
   String? _cameraError;
   String? _analysisStatus;
+  bool _streamReady = false;
 
   Timer? _analysisTimer;
   Timer? _detectorRetryTimer;
@@ -47,14 +51,6 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   @override
   void initState() {
     super.initState();
-    final video = WebSharedCamera.instance.video;
-    if (video != null && !_viewRegistered) {
-      ui_web.platformViewRegistry.registerViewFactory(
-        _viewType,
-        (int _) => video,
-      );
-      _viewRegistered = true;
-    }
     unawaited(_boot());
   }
 
@@ -95,17 +91,16 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       if (mounted) {
         setState(() {
           _cameraError = null;
-          _analysisStatus =
-              WebFaceDetectorHolder.instance.isReady ? null : '얼굴 분석 준비 중…';
+          _streamReady = true;
+          _analysisStatus = '얼굴 분석 준비 중…';
         });
       }
 
-      // 카메라·WASM 병렬 준비
       unawaited(_ensureDetector());
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 900),
+        const Duration(milliseconds: 700),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -121,38 +116,38 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
   Future<void> _ensureDetector() async {
     if (WebFaceDetectorHolder.instance.isReady) {
-      if (mounted) setState(() => _analysisStatus = null);
+      _onDetectorReady();
       return;
-    }
-    if (mounted) {
-      setState(() => _analysisStatus = '얼굴 분석 준비 중…');
     }
     final d = await WebFaceDetectorHolder.instance.acquire();
     if (!mounted) return;
     if (d != null) {
-      _retryCount = 0;
-      setState(() => _analysisStatus = null);
-      _detectorRetryTimer?.cancel();
+      _onDetectorReady();
     } else {
       _scheduleDetectorRetry();
     }
   }
 
+  void _onDetectorReady() {
+    _retryCount = 0;
+    _detectorRetryTimer?.cancel();
+    if (mounted) {
+      setState(() => _analysisStatus = null);
+    }
+  }
+
   void _scheduleDetectorRetry() {
-    if (_retryCount >= 6) {
+    if (_retryCount >= 8) {
       if (mounted) {
-        setState(() => _analysisStatus = '분석 엔진 로딩이 느립니다. 잠시만 기다려 주세요.');
+        setState(() => _analysisStatus = '분석 엔진 로딩이 느립니다. Wi‑Fi 확인 후 새로고침해 주세요.');
       }
       return;
     }
     _retryCount++;
     _detectorRetryTimer?.cancel();
-    _detectorRetryTimer = Timer(Duration(seconds: 3 + _retryCount), () {
+    _detectorRetryTimer = Timer(Duration(seconds: 2 + _retryCount), () {
       if (!mounted) return;
       WebFaceDetectorHolder.instance.scheduleRetry();
-      if (mounted) {
-        setState(() => _analysisStatus = '얼굴 분석 준비 중… (자동 재시도)');
-      }
       unawaited(_ensureDetector());
     });
   }
@@ -164,44 +159,88 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     );
   }
 
+  Future<List<Face>> _detectFast(FaceDetector det, Object video) async {
+    try {
+      return await det.detectFacesFromVideo(
+        video,
+        mode: FaceDetectionMode.fast,
+      );
+    } catch (e) {
+      debugPrint('[SessionSelfCamera-Web] fast video: $e');
+      return const [];
+    }
+  }
+
+  Future<List<Face>> _detectFastFromBytes(FaceDetector det, Uint8List jpeg) async {
+    try {
+      return await det.detectFaces(jpeg, mode: FaceDetectionMode.fast);
+    } catch (e) {
+      debugPrint('[SessionSelfCamera-Web] fast jpeg: $e');
+      return const [];
+    }
+  }
+
   Future<void> _sampleFrame() async {
     if (!mounted || _busy) return;
-    final det = WebFaceDetectorHolder.instance.detector;
+
+    final video = WebSharedCamera.instance.video;
+    if (video == null || !WebSharedCamera.instance.isStreamReady) {
+      return;
+    }
+
+    var det = WebFaceDetectorHolder.instance.detector;
     if (det == null) {
+      unawaited(_ensureDetector());
       _emitNoFace();
       return;
     }
 
     _busy = true;
     try {
-      final bytes = await WebSharedCamera.instance.captureJpeg();
-      if (bytes == null) {
-        _emitNoFace();
-        return;
-      }
-      if (!WebAttentionFacePipeline.jpegLooksLikePhoto(bytes)) {
-        _emitNoFace();
-        return;
+      var fast = await _detectFast(det, video);
+      var full = const <Face>[];
+
+      if (fast.isNotEmpty) {
+        try {
+          full = await det.detectFacesFromVideo(
+            video,
+            mode: FaceDetectionMode.full,
+          );
+        } catch (e) {
+          debugPrint('[SessionSelfCamera-Web] full video: $e');
+        }
       }
 
-      final fast = await det.detectFaces(bytes, mode: FaceDetectionMode.fast);
-      final fastOk =
-          fast.where(WebAttentionFacePipeline.passesFastGate).toList();
-      if (fastOk.isEmpty) {
-        _emitNoFace();
-        return;
+      if (fast.isEmpty) {
+        final jpeg = await WebSharedCamera.instance.captureJpeg(
+          maxDim: 480,
+          quality: 0.82,
+        );
+        if (jpeg != null && WebAttentionFacePipeline.jpegLooksLikePhoto(jpeg)) {
+          fast = await _detectFastFromBytes(det, jpeg);
+          if (fast.isNotEmpty) {
+            try {
+              full = await det.detectFaces(jpeg, mode: FaceDetectionMode.full);
+            } catch (e) {
+              debugPrint('[SessionSelfCamera-Web] full jpeg: $e');
+            }
+          }
+        }
       }
-
-      final full = await det.detectFaces(bytes, mode: FaceDetectionMode.full);
-      final trusted = WebAttentionFacePipeline.filterTrustworthy(
-        full,
-        requireFastOverlap: fastOk,
-      );
 
       if (!mounted) return;
-      widget.onAttentionSignals(
-        _pipeline.processFaces(trusted, widget.appInForeground()),
+
+      final sig = _pipeline.processDetection(
+        fullFaces: full,
+        fastFaces: fast,
+        inForeground: widget.appInForeground(),
       );
+
+      if (mounted && _analysisStatus != null) {
+        setState(() => _analysisStatus = null);
+      }
+
+      widget.onAttentionSignals(sig);
     } catch (e) {
       debugPrint('[SessionSelfCamera-Web] sample: $e');
       _emitNoFace();
@@ -238,8 +277,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       );
     }
 
-    final video = WebSharedCamera.instance.video;
-    if (video == null) {
+    if (!_streamReady) {
       return SizedBox(
         width: widget.width,
         height: widget.height,
@@ -253,7 +291,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const HtmlElementView(viewType: _viewType),
+          HtmlElementView(viewType: _viewType),
           if (_analysisStatus != null)
             Positioned(
               left: 8,

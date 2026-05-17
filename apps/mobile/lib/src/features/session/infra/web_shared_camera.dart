@@ -5,9 +5,9 @@ import 'dart:convert' show base64Decode;
 import 'dart:html' as html;
 import 'dart:typed_data';
 
+import 'web_face_detector_holder.dart';
+
 /// 웹 전체에서 **카메라 스트림 1개**만 사용 (공부탭·셋터디·스냅샷 공유).
-///
-/// iOS Safari는 [getUserMedia]를 동시에 여러 번 호출하면 매우 느리거나 실패합니다.
 final class WebSharedCamera {
   WebSharedCamera._();
   static final WebSharedCamera instance = WebSharedCamera._();
@@ -20,6 +20,12 @@ final class WebSharedCamera {
 
   html.VideoElement? get video => _video;
   html.MediaStream? get stream => _stream;
+
+  bool get isStreamReady =>
+      _stream != null &&
+      _video != null &&
+      _video!.readyState >= html.MediaElement.HAVE_CURRENT_DATA &&
+      _video!.videoWidth >= 8;
 
   Future<html.MediaStream?> acquire() {
     _refs++;
@@ -48,7 +54,8 @@ final class WebSharedCamera {
   }
 
   Future<html.MediaStream?> _open() async {
-    if (_stream != null) return _stream;
+    if (_stream != null && _video != null) return _stream;
+
     final md = html.window.navigator.mediaDevices;
     if (md == null) return null;
 
@@ -58,33 +65,36 @@ final class WebSharedCamera {
       ..setAttribute('playsinline', 'true')
       ..style.display = 'block'
       ..style.objectFit = 'cover'
-      ..style.transform = 'scaleX(-1)';
+      ..style.transform = 'scaleX(-1)'
+      ..style.width = '100%'
+      ..style.height = '100%';
 
-    final stream = await md.getUserMedia({
-      'video': {
-        'facingMode': 'user',
-        'width': {'ideal': 640},
-        'height': {'ideal': 480},
-      },
-      'audio': false,
-    });
+    // Safari: 복잡한 constraint 가 실패하는 경우가 있어 단순 요청 후 fallback.
+    html.MediaStream stream;
+    try {
+      stream = await md.getUserMedia({'video': true, 'audio': false});
+    } catch (_) {
+      stream = await md.getUserMedia({'video': true});
+    }
+
     _stream = stream;
     _video!.srcObject = stream;
     try {
       await _video!.play();
     } catch (_) {}
 
-    for (var i = 0; i < 50; i++) {
+    for (var i = 0; i < 60; i++) {
       if (_video!.readyState >= html.MediaElement.HAVE_CURRENT_DATA &&
           _video!.videoWidth >= 8) {
-        break;
+        unawaited(WebFaceDetectorHolder.instance.warmUp());
+        return _stream;
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
+    unawaited(WebFaceDetectorHolder.instance.warmUp());
     return _stream;
   }
 
-  /// 공유 비디오에서 JPEG 캡처 (스냅샷·분석 공용).
   Future<Uint8List?> captureJpeg({double maxDim = 480, double quality = 0.88}) async {
     final v = _video;
     if (v == null || v.readyState < html.MediaElement.HAVE_CURRENT_DATA) {

@@ -1,11 +1,14 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
+import 'dart:async';
 import 'dart:html' as html;
 
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 import 'package:flutter/foundation.dart';
 
 /// 웹(Safari·Chrome) 전역 [FaceDetector] — 한 번만 초기화하고 재사용.
+///
+/// LiteRT.js는 [web/index.html] 에서 페이지 로드 시 미리 받습니다.
 final class WebFaceDetectorHolder {
   WebFaceDetectorHolder._();
   static final WebFaceDetectorHolder instance = WebFaceDetectorHolder._();
@@ -18,10 +21,8 @@ final class WebFaceDetectorHolder {
 
   bool get isReady => detector != null;
 
-  /// 앱 시작 직후 백그라운드 예열 (공부탭 진입 전 WASM 로드).
   Future<void> warmUp() => _getOrCreate();
 
-  /// 분석기를 가져옵니다. 실패 시 null.
   Future<FaceDetector?> acquire() => _getOrCreate();
 
   Future<FaceDetector?> _getOrCreate() async {
@@ -36,7 +37,6 @@ final class WebFaceDetectorHolder {
     return result;
   }
 
-  /// 재시도만 허용 (dispose 하지 않음 — Safari에서 연속 dispose가 더 불안정).
   void scheduleRetry() {
     _initFuture = null;
   }
@@ -62,19 +62,42 @@ final class WebFaceDetectorHolder {
         (ua.contains('mobile') && ua.contains('safari'));
   }
 
+  static bool _pageLiteRtReady() {
+    try {
+      final dynamic w = html.window;
+      return w.LiteRtReady == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<FaceDetector?> _initWithRetry() async {
-    // iOS Safari: WebGPU(auto) 실패가 잦아 wasm만, 더 긴 대기.
+    if (!_pageLiteRtReady()) {
+      final done = Completer<void>();
+      void onReady(html.Event _) {
+        if (!done.isCompleted) done.complete();
+      }
+
+      html.window.addEventListener('litert-ready', onReady);
+      try {
+        await done.future.timeout(
+          const Duration(seconds: 90),
+          onTimeout: () {},
+        );
+      } finally {
+        html.window.removeEventListener('litert-ready', onReady);
+      }
+    }
+
     final attempts = _isMobileSafari
         ? [
             ('wasm', 0),
-            ('wasm', 800),
-            ('wasm', 2000),
-            ('wasm', 4000),
+            ('wasm', 1500),
+            ('wasm', 3500),
           ]
         : [
-            ('auto', 0),
-            ('wasm', 500),
-            ('wasm', 1500),
+            ('wasm', 0),
+            ('auto', 800),
           ];
 
     for (var i = 0; i < attempts.length; i++) {
@@ -93,7 +116,7 @@ final class WebFaceDetectorHolder {
           continue;
         }
         _detector = d;
-        debugPrint('[WebFaceDetector] ready ($accel, mobile=$_isMobileSafari)');
+        debugPrint('[WebFaceDetector] ready ($accel)');
         return d;
       } catch (e, st) {
         debugPrint('[WebFaceDetector] init #$i ($accel): $e\n$st');

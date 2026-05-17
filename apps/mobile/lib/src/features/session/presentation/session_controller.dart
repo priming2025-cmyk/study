@@ -61,7 +61,7 @@ class SessionController extends ChangeNotifier {
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
   /// 카메라가 실제로 준비됐는지 (프리뷰·검출 가능).
-  /// 웹(Vercel·Safari): 최근 3초 안에 분석 신호가 왔으면 활성으로 봅니다.
+  /// 웹: [SessionSelfCameraSurface]에서 신호가 한 번이라도 오면 활성.
   bool get cameraActive => kIsWeb
       ? hasRecentSignal
       : _camera.hasActiveCamera;
@@ -77,9 +77,8 @@ class SessionController extends ChangeNotifier {
   }
 
   /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
-  /// (iOS 2회차 카메라 동결 시 ‘집중’이 굳지 않게 하는 안전장치)
+  /// (iOS 2회차 카메라 동결·웹 분석 끊김 시 집중 집계 차단)
   bool get hasRecentSignal {
-    if (kIsWeb) return true;
     final t = _lastSignalAt;
     if (t == null) return false;
     return DateTime.now().difference(t) < const Duration(seconds: 3);

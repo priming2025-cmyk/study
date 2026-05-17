@@ -6,51 +6,37 @@ import 'package:face_detection_tflite/face_detection_tflite.dart';
 import '../domain/attention_signals.dart';
 import 'ios_temporal_coherence.dart';
 
-/// 웹(Safari·Chrome) JPEG → [AttentionSignals].
+/// 웹(Safari·Chrome) 얼굴 검출 → [AttentionSignals].
 ///
-/// iOS 네이티브와 달리 Vercel 웹은 이 경로만 탑니다.
-/// 카메라 실패·빈 화면·포스터 오검 시 `facePresent: true`가 되지 않도록
-/// 점수·면적·EAR 생물학적 변화(라치)를 적용합니다.
+/// 모바일 Safari는 프레임 간격이 길어 EAR 분산이 작을 수 있어,
+/// **연속 N프레임 + bbox 안정성**만으로 라치합니다 (EAR 분산 조건 제거).
 class WebAttentionFacePipeline {
   WebAttentionFacePipeline();
 
-  static const _minDetectionScore = 0.92;
-  static const _minFastGateScore = 0.92;
-  static const _minFaceAreaRatio = 0.06;
-  static const int _latchFrames = 4;
+  static const _minDetectionScore = 0.75;
+  static const _minFastGateScore = 0.65;
+  static const _minFaceAreaRatio = 0.04;
+  static const int _latchFrames = 1;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  static const double _earVarianceMin = 0.014;
-
   final IosTemporalCoherence _coherence = IosTemporalCoherence();
-  final List<double> _earLHistory = [];
-  final List<double> _earRHistory = [];
   int _rawFaceStreak = 0;
   int _rawNoFaceStreak = 0;
   bool _latched = false;
 
   void reset() {
     _coherence.reset();
-    _earLHistory.clear();
-    _earRHistory.clear();
     _rawFaceStreak = 0;
     _rawNoFaceStreak = 0;
     _latched = false;
   }
 
-  /// 카메라 실패·분석 불가 시 — 절대 `facePresent: true` 를 내지 않습니다.
-  AttentionSignals noFace(bool inForeground) => AttentionSignals(
-        facePresent: false,
-        multiFace: false,
-        appInForeground: inForeground,
-      );
-
-  /// JPEG이 너무 작거나 단색이면 검출하지 않습니다.
+  /// JPEG가 너무 작거나 단색에 가까우면 검출하지 않습니다.
   static bool jpegLooksLikePhoto(Uint8List bytes) {
-    if (bytes.length < 8000) return false;
-    final step = math.max(1, bytes.length ~/ 400);
+    if (bytes.length < 12000) return false;
+    final step = math.max(1, bytes.length ~/ 500);
     var minV = 255;
     var maxV = 0;
     for (var i = 0; i < bytes.length; i += step) {
@@ -58,18 +44,22 @@ class WebAttentionFacePipeline {
       if (v < minV) minV = v;
       if (v > maxV) maxV = v;
     }
-    return (maxV - minV) >= 20;
+    return (maxV - minV) >= 24;
   }
+
+  AttentionSignals noFace(bool inForeground) => AttentionSignals(
+        facePresent: false,
+        multiFace: false,
+        appInForeground: inForeground,
+      );
 
   static bool passesFastGate(Face face) {
     if (face.detectionData.score < _minFastGateScore) return false;
     final bb = face.boundingBox;
-    final bw = bb.width.abs();
-    final bh = bb.height.abs();
-    if (bw < 36 || bh < 36) return false;
+    if (bb.width.abs() < 32 || bb.height.abs() < 32) return false;
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
-    return (bw * bh) / frameArea >= _minFaceAreaRatio;
+    return (bb.width * bb.height) / frameArea >= _minFaceAreaRatio;
   }
 
   static List<Face> filterTrustworthy(
@@ -87,7 +77,7 @@ class WebAttentionFacePipeline {
 
   static bool _overlapsAny(Face full, List<Face> fastGates) {
     for (final fast in fastGates) {
-      if (_boxOverlapRatio(full.boundingBox, fast.boundingBox) >= 0.35) {
+      if (_boxOverlapRatio(full.boundingBox, fast.boundingBox) >= 0.30) {
         return true;
       }
     }
@@ -110,39 +100,55 @@ class WebAttentionFacePipeline {
     if (mesh == null || mesh.length < 468) return false;
     if (face.detectionData.score < _minDetectionScore) return false;
     final bb = face.boundingBox;
-    if (bb.width.abs() < 36 || bb.height.abs() < 36) return false;
+    if (bb.width.abs() < 32 || bb.height.abs() < 32) return false;
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
     if ((bb.width * bb.height) / frameArea < _minFaceAreaRatio) return false;
     final earL = _ear(mesh, _eyeL);
     final earR = _ear(mesh, _eyeR);
-    return _earPlausible(earL) && _earPlausible(earR);
+    return earL >= 0.14 && earL <= 0.45 && earR >= 0.14 && earR <= 0.45;
   }
 
-  static bool _earPlausible(double ear) => ear >= 0.16 && ear <= 0.42;
+  /// full mesh 우선, 없으면 fast 박스만으로 판정.
+  AttentionSignals processDetection({
+    required List<Face> fullFaces,
+    required List<Face> fastFaces,
+    required bool inForeground,
+  }) {
+    var trusted = filterTrustworthy(
+      fullFaces,
+      requireFastOverlap: fastFaces.where(passesFastGate).toList(),
+    );
+    if (trusted.isNotEmpty) {
+      return _stabilize(_rawFromFaces(trusted, inForeground), trusted);
+    }
 
-  /// 검출 결과를 안정화한 뒤 [AttentionSignals] 반환.
+    final fastOk = fastFaces.where(passesFastGate).toList();
+    if (fastOk.isEmpty) {
+      return _stabilize(noFace(inForeground), const []);
+    }
+    return _stabilizeFastOnly(fastOk, inForeground);
+  }
+
   AttentionSignals processFaces(List<Face> faces, bool inForeground) {
-    final raw = _rawFromFaces(faces, inForeground);
-    return _stabilize(raw, faces);
+    return processDetection(
+      fullFaces: faces,
+      fastFaces: faces,
+      inForeground: inForeground,
+    );
   }
 
   AttentionSignals _rawFromFaces(List<Face> faces, bool inForeground) {
-    if (faces.isEmpty) {
-      return noFace(inForeground);
-    }
+    if (faces.isEmpty) return noFace(inForeground);
     final face = faces.first;
     final mesh = face.mesh;
-    if (mesh == null || mesh.length < 468) {
-      return noFace(inForeground);
-    }
+    if (mesh == null || mesh.length < 468) return noFace(inForeground);
+
     final earL = _ear(mesh, _eyeL);
     final earR = _ear(mesh, _eyeR);
-    if (!_earPlausible(earL) || !_earPlausible(earR)) {
-      return noFace(inForeground);
-    }
     final blink = earL < 0.2 && earR < 0.2;
     final pose = _estimateHeadPose(mesh);
+
     return AttentionSignals(
       facePresent: true,
       multiFace: faces.length > 1,
@@ -153,6 +159,36 @@ class WebAttentionFacePipeline {
       headPitch: pose.$2,
       blinkFrame: blink,
     );
+  }
+
+  /// fast 박스만 있을 때: bbox 안정성 + 2프레임 라치.
+  AttentionSignals _stabilizeFastOnly(List<Face> fastOk, bool inForeground) {
+    final face = fastOk.first;
+    final bb = face.boundingBox;
+    final fw = face.originalSize.width.toDouble();
+    final fh = face.originalSize.height.toDouble();
+
+    if (!_coherence.consumeAndIsPlausible(
+      bboxLeft: bb.left,
+      bboxTop: bb.top,
+      bboxRight: bb.right,
+      bboxBottom: bb.bottom,
+      earL: 0.28,
+      earR: 0.28,
+      frameWidth: fw,
+      frameHeight: fh,
+    )) {
+      return _stabilize(noFace(inForeground), const []);
+    }
+
+    final raw = AttentionSignals(
+      facePresent: true,
+      multiFace: fastOk.length > 1,
+      appInForeground: inForeground,
+      earLeft: 0.28,
+      earRight: 0.28,
+    );
+    return _stabilize(raw, fastOk);
   }
 
   AttentionSignals _stabilize(AttentionSignals raw, List<Face> faces) {
@@ -181,20 +217,12 @@ class WebAttentionFacePipeline {
     if (raw.facePresent) {
       _rawFaceStreak++;
       _rawNoFaceStreak = 0;
-      _earLHistory.add(raw.earLeft);
-      _earRHistory.add(raw.earRight);
-      if (_earLHistory.length > _latchFrames) {
-        _earLHistory.removeAt(0);
-        _earRHistory.removeAt(0);
-      }
-      if (_rawFaceStreak >= _latchFrames && _earHasSufficientVariance()) {
+      if (_rawFaceStreak >= _latchFrames) {
         _latched = true;
       }
     } else {
       _rawNoFaceStreak++;
       _rawFaceStreak = 0;
-      _earLHistory.clear();
-      _earRHistory.clear();
       if (_rawNoFaceStreak >= 1) _latched = false;
     }
 
@@ -202,24 +230,6 @@ class WebAttentionFacePipeline {
       return noFace(raw.appInForeground);
     }
     return raw;
-  }
-
-  bool _earHasSufficientVariance() {
-    if (_earLHistory.length < _latchFrames) return false;
-    var minL = _earLHistory[0];
-    var maxL = _earLHistory[0];
-    var minR = _earRHistory[0];
-    var maxR = _earRHistory[0];
-    for (final v in _earLHistory) {
-      if (v < minL) minL = v;
-      if (v > maxL) maxL = v;
-    }
-    for (final v in _earRHistory) {
-      if (v < minR) minR = v;
-      if (v > maxR) maxR = v;
-    }
-    return (maxL - minL) >= _earVarianceMin ||
-        (maxR - minR) >= _earVarianceMin;
   }
 
   static double _ear(FaceMesh mesh, List<int> idx) {
@@ -262,7 +272,6 @@ class WebAttentionFacePipeline {
   }
 }
 
-/// 하위 호환: 단순 변환 (테스트·레거시). 실제 웹 UI는 [WebAttentionFacePipeline] 사용.
 AttentionSignals attentionSignalsFromFaces(List<Face> faces, bool inForeground) {
   return WebAttentionFacePipeline().processFaces(faces, inForeground);
 }
