@@ -17,12 +17,12 @@ class WebAttentionFacePipeline {
   static const _minDetectionScore = 0.92;
   static const _minFastGateScore = 0.92;
   static const _minFaceAreaRatio = 0.06;
-  static const int _latchFrames = 5;
+  static const int _latchFrames = 4;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  static const double _earVarianceMin = 0.018;
+  static const double _earVarianceMin = 0.014;
 
   final IosTemporalCoherence _coherence = IosTemporalCoherence();
   final List<double> _earLHistory = [];
