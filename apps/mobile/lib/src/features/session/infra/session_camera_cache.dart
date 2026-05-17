@@ -1,14 +1,22 @@
+import 'dart:io' show Platform;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 
-/// 앱 생명 주기 동안 카메라 목록을 한 번만 열거해,
-/// 세션·스터디방 진입마다 `availableCameras()`가 반복 호출되며 권한/초기화가 겹치는 것을 줄입니다.
+/// 앱 생명 주기 동안 카메라 목록을 캐시.
+///
+/// - **iOS**: 매번 `availableCameras()`를 새로 호출합니다. 이전 세션에서
+///   AVCaptureSession이 닫힌 직후 캐시된 [CameraDescription]을 그대로 쓰면
+///   2회차 카메라가 안 열리는 케이스가 자주 보고됩니다.
+/// - **그 외 플랫폼**: 1회 캐시.
 abstract final class SessionCameraCache {
   static CameraDescription? _front;
   static bool _enumerated = false;
 
   static Future<CameraDescription?> getFrontOrDefault() async {
-    if (_enumerated) return _front;
+    final cacheValid =
+        _enumerated && !(kIsWeb == false && Platform.isIOS);
+    if (cacheValid) return _front;
     _enumerated = true;
     try {
       final cams = await availableCameras();

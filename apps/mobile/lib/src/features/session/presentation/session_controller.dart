@@ -52,6 +52,11 @@ class SessionController extends ChangeNotifier {
   bool appInForeground = true;
 
   DateTime? _cameraLiveAt;
+  DateTime? _lastSignalAt;
+  Timer? _cameraStartWatchdog;
+
+  /// 카메라 시작 watchdog이 실패로 판정한 경우의 메시지.
+  String? cameraStartError;
 
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
@@ -66,6 +71,15 @@ class SessionController extends ChangeNotifier {
     final t = _cameraLiveAt;
     if (t == null) return false;
     return DateTime.now().difference(t) >= const Duration(seconds: 2);
+  }
+
+  /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
+  /// (iOS 2회차 카메라 동결 시 ‘집중’이 굳지 않게 하는 안전장치)
+  bool get hasRecentSignal {
+    if (kIsWeb) return true;
+    final t = _lastSignalAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) < const Duration(seconds: 3);
   }
 
   /// 집중 초 누적 기준: 즉시 점수 ≥ 이 값 (80·65·50·35·20 중 선택, 기본 50).
@@ -287,7 +301,12 @@ class SessionController extends ChangeNotifier {
       multiFace: false,
       appInForeground: signals.appInForeground,
     );
-    final tickSignals = (cameraActive && attentionSensorReady) ? signals : noFace;
+    // 카메라가 죽었거나(2회차 실패), 신호가 3초 이상 끊겼거나, 워밍업 전이면
+    // 어떤 경우에도 ‘얼굴 있음’이 점수에 흘러들어가지 않도록 막습니다.
+    final ok = !kIsWeb
+        ? (cameraActive && attentionSensorReady && hasRecentSignal)
+        : true;
+    final tickSignals = ok ? signals : noFace;
     state = AttentionScoring.tick(
       state: s,
       now: DateTime.now(),
@@ -315,12 +334,25 @@ class SessionController extends ChangeNotifier {
     starting = false;
     // 카메라 붙기 전·재시작 직후 이전 세션 signals가 남으면 ‘집중’으로 보이는 문제 방지
     _cameraLiveAt = null;
+    _lastSignalAt = null;
+    cameraStartError = null;
     signals = const AttentionSignals(
       facePresent: false,
       multiFace: false,
       appInForeground: true,
     );
     notifyListeners();
+
+    // 카메라 시작 watchdog: 7초 안에 카메라가 활성화 안 되면 사용자에게 알리고 점수 누적 정지.
+    _cameraStartWatchdog?.cancel();
+    if (!kIsWeb) {
+      _cameraStartWatchdog = Timer(const Duration(seconds: 7), () {
+        if (!running) return;
+        if (cameraActive) return;
+        cameraStartError = '카메라를 켜지 못했어요. 잠깐 후 다시 시작해 주세요.';
+        notifyListeners();
+      });
+    }
 
     // 타이머를 먼저 걸어, 카메라 초기화·Presence가 오래 걸려도 초·집중도가 멈추지 않게 합니다.
     _timer?.cancel();
@@ -365,6 +397,12 @@ class SessionController extends ChangeNotifier {
         _cameraLiveAt = DateTime.now();
         _sub = _camera.stream.listen((s) {
           signals = s;
+          _lastSignalAt = DateTime.now();
+          // 카메라가 실제로 한 번이라도 신호를 흘렸다면 watchdog은 의미 없음.
+          _cameraStartWatchdog?.cancel();
+          if (cameraStartError != null) {
+            cameraStartError = null;
+          }
           notifyListeners();
         });
         signals = AttentionSignals(
@@ -411,6 +449,7 @@ class SessionController extends ChangeNotifier {
     _sub?.cancel();
     _sub = _camera.stream.listen((s) {
       signals = s;
+      _lastSignalAt = DateTime.now();
       notifyListeners();
     });
   }
@@ -500,6 +539,9 @@ class SessionController extends ChangeNotifier {
   Future<SessionSummary> stop() async {
     _timer?.cancel();
     _timer = null;
+    _cameraStartWatchdog?.cancel();
+    _cameraStartWatchdog = null;
+    cameraStartError = null;
     // 비동기 부트스트랩이 돌아가는 동안에도 즉시 false로 두어 카메라/Presence 경합을 줄입니다.
     running = false;
     notifyListeners();
@@ -570,6 +612,7 @@ class SessionController extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _cameraStartWatchdog?.cancel();
     _sub?.cancel();
     _presenceSub?.cancel();
     unawaited(_releaseCamera());

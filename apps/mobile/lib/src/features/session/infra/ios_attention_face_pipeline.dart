@@ -3,16 +3,20 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 
-/// iOS 전용: full mesh 결과가 **진짜 얼굴**인지 검증합니다.
+export 'ios_temporal_coherence.dart';
+
+/// iOS 전용: 얼굴 검출 결과가 **진짜 얼굴**인지 검증.
 ///
-/// 잘못된 회전/빈 프레임에서도 mesh가 나오면 `facePresent`가 true가 되어
-/// 배지가 ‘집중’으로 고정되는 문제를 막습니다.
+/// face_detection_tflite는 iOS에서 빈/잘못된 프레임에도 mesh를 환각하여
+/// `facePresent`가 true로 굳어지는 문제가 있습니다.
+/// - 단일 프레임 기준(점수·면적·기하·EAR 범위)
+/// - 시간 축 기준(최근 5프레임 bbox 중심 분포, EAR 변화)
 class IosAttentionFacePipeline {
   IosAttentionFacePipeline._();
 
-  static const _minDetectionScore = 0.90;
-  static const _minFastGateScore = 0.90;
-  static const _minFaceAreaRatio = 0.04;
+  static const _minDetectionScore = 0.93;
+  static const _minFastGateScore = 0.93;
+  static const _minFaceAreaRatio = 0.06;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
@@ -36,7 +40,6 @@ class IosAttentionFacePipeline {
     if (n < 8) return false;
     final mean = sum / n;
     final variance = sumSq / n - mean * mean;
-    // 완전 검은 화면·고정 노이즈는 분산이 매우 낮음.
     return variance > 90;
   }
 
@@ -136,7 +139,7 @@ class IosAttentionFacePipeline {
     return true;
   }
 
-  static bool _earPlausible(double ear) => ear >= 0.14 && ear <= 0.45;
+  static bool _earPlausible(double ear) => ear >= 0.16 && ear <= 0.42;
 
   static bool _meshGeometryOk(FaceMesh mesh) {
     try {
@@ -187,3 +190,4 @@ class IosAttentionFacePipeline {
     return math.sqrt(dx * dx + dy * dy);
   }
 }
+

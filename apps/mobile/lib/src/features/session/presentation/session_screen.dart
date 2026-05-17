@@ -320,6 +320,40 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         ),
                       if (running) ...[
                         const SizedBox(height: 14),
+                        if (_c.cameraStartError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              color: Theme.of(context).colorScheme.errorContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 12),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.videocam_off_rounded,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onErrorContainer),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _c.cameraStartError!,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onErrorContainer,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         if (shellSession) ...[
                           if (!kIsWeb)
                             Padding(

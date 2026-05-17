@@ -55,6 +55,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   );
   bool _appInForeground = true;
   DateTime? _cameraLiveAt;
+  DateTime? _lastSignalAt;
   bool _ownsCamera = false;
 
   late final _StudyRoomSelfLifecycle _life = _StudyRoomSelfLifecycle(
@@ -84,6 +85,14 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     final t = _cameraLiveAt;
     if (t == null || !_cameraActive) return false;
     return DateTime.now().difference(t) >= const Duration(seconds: 2);
+  }
+
+  /// 최근 3초 안에 센서 신호가 흘러들어왔는지 (2회차 동결 차단).
+  bool get _hasRecentSignal {
+    if (kIsWeb) return true;
+    final t = _lastSignalAt;
+    if (t == null) return false;
+    return DateTime.now().difference(t) < const Duration(seconds: 3);
   }
 
   void _onEngagedChanged() {
@@ -118,6 +127,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     await _sub?.cancel();
     _sub = null;
     _cameraLiveAt = null;
+    _lastSignalAt = null;
     if (_ownsCamera) {
       await _camera.release();
       _ownsCamera = false;
@@ -163,6 +173,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
         _cameraLiveAt = DateTime.now();
         _sub = _camera.stream.listen((s) {
           _signals = s;
+          _lastSignalAt = DateTime.now();
           if (mounted) setState(() {});
         });
         _signals = const AttentionSignals(
@@ -191,7 +202,11 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   void _onTick() {
     final st = _scoreState;
     if (st == null) return;
-    final tickSignals = _sensorReadyForUi
+    // 카메라 미준비 또는 신호가 끊긴 경우 점수 누적이 ‘얼굴 있음’으로 흐르지 않게 강제 차단.
+    final ok = !kIsWeb
+        ? (_sensorReadyForUi && _hasRecentSignal)
+        : true;
+    final tickSignals = ok
         ? _signals
         : const AttentionSignals(
             facePresent: false,

@@ -19,23 +19,31 @@ class FaceAttentionSensor {
   CameraController? _controller;
   StreamController<AttentionSignals>? _signals;
   Timer? _iosSampleTimer;
+  Timer? _heartbeatTimer;
   bool _running = false;
   bool _busy = false;
   int _streamGeneration = 0;
 
+  // iOS 시간 축 환각 차단
+  final IosTemporalCoherence _iosCoherence = IosTemporalCoherence();
   int _iosRawFaceStreak = 0;
   int _iosRawNoFaceStreak = 0;
   bool _iosLatchedFacePresent = false;
+
   DateTime? _lastValidSampleAt;
-  double? _iosLastEarL;
-  double? _iosLastEarR;
-  int _iosSameEarStreak = 0;
+  DateTime? _lastEmitAt;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
+  /// 얼굴 OK가 연속으로 4번 (≈ 4.8초) 지속되어야만 facePresent latch ON.
   static const int _iosFaceLatchFrames = 4;
   static const int _iosFaceUnlatchFrames = 1;
+
+  static const Duration _iosSampleInterval = Duration(milliseconds: 1200);
+  static const Duration _heartbeatInterval = Duration(milliseconds: 1500);
+  static const Duration _iosPostStopDelay = Duration(milliseconds: 1200);
+  static const Duration _iosPreStartDelay = Duration(milliseconds: 1000);
 
   FaceAttentionSensor();
 
@@ -60,21 +68,18 @@ class FaceAttentionSensor {
 
     await stop();
     if (Platform.isIOS) {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // 이전 AVCaptureSession이 완전히 닫힐 시간을 충분히 줍니다.
+      await Future<void>.delayed(_iosPreStartDelay);
     }
 
     _running = true;
     final gen = ++_streamGeneration;
     _lastValidSampleAt = null;
-
-    if (Platform.isIOS) {
-      _iosRawFaceStreak = 0;
-      _iosRawNoFaceStreak = 0;
-      _iosLatchedFacePresent = false;
-      _iosLastEarL = null;
-      _iosLastEarR = null;
-      _iosSameEarStreak = 0;
-    }
+    _lastEmitAt = null;
+    _iosRawFaceStreak = 0;
+    _iosRawNoFaceStreak = 0;
+    _iosLatchedFacePresent = false;
+    _iosCoherence.reset();
 
     _signals = StreamController<AttentionSignals>.broadcast();
 
@@ -90,7 +95,7 @@ class FaceAttentionSensor {
 
     _controller = CameraController(
       cam,
-      isIOS ? ResolutionPreset.medium : ResolutionPreset.medium,
+      ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup:
           isMacOS ? ImageFormatGroup.bgra8888 : ImageFormatGroup.yuv420,
@@ -102,12 +107,17 @@ class FaceAttentionSensor {
       return;
     }
 
-    _emitNoFace(appInForeground());
+    _emitSignal(AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: appInForeground(),
+    ));
+    _startHeartbeat(appInForeground);
 
     if (isIOS) {
       _iosSampleTimer?.cancel();
       _iosSampleTimer = Timer.periodic(
-        const Duration(milliseconds: 800),
+        _iosSampleInterval,
         (_) => unawaited(_iosSampleOnce(cam, appInForeground, gen)),
       );
       unawaited(_iosSampleOnce(cam, appInForeground, gen));
@@ -130,13 +140,28 @@ class FaceAttentionSensor {
         );
 
         final sig = _toSignals(faces, appInForeground());
-        _markSample(sig.facePresent);
-        _signals?.add(sig);
+        if (sig.facePresent) {
+          _lastValidSampleAt = DateTime.now();
+        }
+        _emitSignal(sig);
       } catch (e) {
         debugPrint('FaceAttentionSensor: 감지 오류 → $e');
         _emitNoFace(appInForeground());
       } finally {
         _busy = false;
+      }
+    });
+  }
+
+  void _startHeartbeat(bool Function() appInForeground) {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      if (!_running) return;
+      final last = _lastEmitAt;
+      if (last == null ||
+          DateTime.now().difference(last) > _heartbeatInterval) {
+        // 검출이 멈춘 채로 시간이 흐르면 ‘얼굴 없음’으로 흘려서 점수가 굳지 않게.
+        _emitNoFace(appInForeground());
       }
     });
   }
@@ -162,12 +187,12 @@ class FaceAttentionSensor {
 
       final faces = await _detectIOSFromJpeg(bytes);
       var sig = _toSignals(faces, appInForeground());
-      sig = _iosRejectSyntheticMesh(sig);
+      sig = _iosApplyTemporalCoherence(sig, faces);
       sig = _iosStabilizeFacePresent(sig);
       if (sig.facePresent) {
         _lastValidSampleAt = DateTime.now();
       }
-      _signals?.add(sig);
+      _emitSignal(sig);
     } catch (e) {
       debugPrint('FaceAttentionSensor[iOS]: 샘플 실패 → $e');
       _emitIosStabilizedNoFace(appInForeground());
@@ -254,40 +279,43 @@ class FaceAttentionSensor {
         .timeout(const Duration(milliseconds: 1500));
   }
 
-  void _markSample(bool facePresent) {
-    if (facePresent) {
-      _lastValidSampleAt = DateTime.now();
-    }
+  void _emitSignal(AttentionSignals s) {
+    _lastEmitAt = DateTime.now();
+    _signals?.add(s);
   }
 
   void _emitNoFace(bool inForeground) {
-    _signals?.add(AttentionSignals(
+    _emitSignal(AttentionSignals(
       facePresent: false,
       multiFace: false,
       appInForeground: inForeground,
     ));
   }
 
-  /// iOS 오검 mesh는 프레임마다 EAR이 완전히 동일한 경우가 많습니다.
-  AttentionSignals _iosRejectSyntheticMesh(AttentionSignals raw) {
-    if (!raw.facePresent) {
-      _iosSameEarStreak = 0;
-      _iosLastEarL = null;
-      _iosLastEarR = null;
+  /// iOS: 시간 축 무결성 검사. bbox 동결·튐·EAR 동결 모두 환각으로 간주.
+  AttentionSignals _iosApplyTemporalCoherence(
+    AttentionSignals raw,
+    List<Face> faces,
+  ) {
+    if (!raw.facePresent || faces.isEmpty) {
+      _iosCoherence.reset();
       return raw;
     }
-    final hasPrev = _iosLastEarL != null && _iosLastEarR != null;
-    final same = hasPrev &&
-        (_iosLastEarL! - raw.earLeft).abs() < 0.0005 &&
-        (_iosLastEarR! - raw.earRight).abs() < 0.0005;
-    if (same) {
-      _iosSameEarStreak++;
-    } else {
-      _iosSameEarStreak = 0;
-    }
-    _iosLastEarL = raw.earLeft;
-    _iosLastEarR = raw.earRight;
-    if (_iosSameEarStreak >= 4) {
+    final face = faces.first;
+    final bb = face.boundingBox;
+    final fw = face.originalSize.width.toDouble();
+    final fh = face.originalSize.height.toDouble();
+    final ok = _iosCoherence.consumeAndIsPlausible(
+      bboxLeft: bb.left,
+      bboxTop: bb.top,
+      bboxRight: bb.right,
+      bboxBottom: bb.bottom,
+      earL: raw.earLeft,
+      earR: raw.earRight,
+      frameWidth: fw,
+      frameHeight: fh,
+    );
+    if (!ok) {
       return AttentionSignals(
         facePresent: false,
         multiFace: false,
@@ -305,7 +333,7 @@ class FaceAttentionSensor {
         appInForeground: inForeground,
       ),
     );
-    _signals?.add(sig);
+    _emitSignal(sig);
   }
 
   AttentionSignals _iosStabilizeFacePresent(AttentionSignals raw) {
@@ -349,15 +377,15 @@ class FaceAttentionSensor {
     _streamGeneration++;
     _iosSampleTimer?.cancel();
     _iosSampleTimer = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     _lastValidSampleAt = null;
-    if (Platform.isIOS) {
-      _iosRawFaceStreak = 0;
-      _iosRawNoFaceStreak = 0;
-      _iosLatchedFacePresent = false;
-      _iosLastEarL = null;
-      _iosLastEarR = null;
-      _iosSameEarStreak = 0;
-    }
+    _lastEmitAt = null;
+    _iosRawFaceStreak = 0;
+    _iosRawNoFaceStreak = 0;
+    _iosLatchedFacePresent = false;
+    _iosCoherence.reset();
+
     await _tearDownCameraOnly();
     await _detector?.dispose();
     _detector = null;
@@ -365,7 +393,8 @@ class FaceAttentionSensor {
     _signals = null;
     await sc?.close();
     if (Platform.isIOS) {
-      await Future<void>.delayed(const Duration(milliseconds: 250));
+      // AVFoundation이 다음 세션을 위해 자원을 완전히 풀 시간을 줍니다.
+      await Future<void>.delayed(_iosPostStopDelay);
     }
   }
 
