@@ -10,6 +10,7 @@ final class AttentionCameraService {
 
   final FaceAttentionSensor _sensor = FaceAttentionSensor();
   int _holders = 0;
+  Future<void> _op = Future<void>.value();
 
   FaceAttentionSensor get sensor => _sensor;
 
@@ -30,27 +31,39 @@ final class AttentionCameraService {
   Future<void> acquire({
     required CameraDescription camera,
     required bool Function() appInForeground,
-  }) async {
-    if (!hasActiveCamera) {
-      if (_holders > 0) {
-        await forceStop();
+  }) {
+    return _enqueue(() async {
+      if (!hasActiveCamera) {
+        if (_holders > 0) {
+          _holders = 0;
+          await _sensor.stop();
+        }
+        await _sensor.start(camera: camera, appInForeground: appInForeground);
       }
-      await _sensor.start(camera: camera, appInForeground: appInForeground);
-    }
-    _holders++;
+      _holders++;
+    });
   }
 
-  Future<void> release() async {
-    if (_holders <= 0) return;
-    _holders--;
-    if (_holders <= 0) {
+  Future<void> release() {
+    return _enqueue(() async {
+      if (_holders <= 0) return;
+      _holders--;
+      if (_holders <= 0) {
+        _holders = 0;
+        await _sensor.stop();
+      }
+    });
+  }
+
+  Future<void> forceStop() {
+    return _enqueue(() async {
       _holders = 0;
       await _sensor.stop();
-    }
+    });
   }
 
-  Future<void> forceStop() async {
-    _holders = 0;
-    await _sensor.stop();
+  Future<void> _enqueue(Future<void> Function() action) {
+    _op = _op.then((_) => action());
+    return _op;
   }
 }

@@ -351,8 +351,7 @@ class SessionController extends ChangeNotifier {
 
     if (cam != null) {
       try {
-        await _camera.forceStop();
-        _cameraAcquired = false;
+        await _releaseCamera();
         // start()를 먼저 호출해 _signals 스트림 컨트롤러를 생성한 뒤에 구독합니다.
         await _camera.acquire(
           camera: cam,
@@ -402,8 +401,8 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> _releaseCamera() async {
-    if (!_cameraAcquired && !_camera.hasActiveCamera) return;
-    await _camera.forceStop();
+    if (!_cameraAcquired) return;
+    await _camera.release();
     _cameraAcquired = false;
     _cameraLiveAt = null;
   }

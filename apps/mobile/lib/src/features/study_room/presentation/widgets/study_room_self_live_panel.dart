@@ -119,7 +119,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     _sub = null;
     _cameraLiveAt = null;
     if (_ownsCamera) {
-      await _camera.forceStop();
+      await _camera.release();
       _ownsCamera = false;
     }
     if (mounted) setState(() {});
@@ -150,14 +150,13 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
     if (frontCam != null) {
       try {
-        await _camera.forceStop();
         await _camera.acquire(
           camera: frontCam,
           appInForeground: () => _appInForeground,
         );
         _ownsCamera = true;
         if (!mounted || !widget.cameraSlotActive) {
-          await _camera.forceStop();
+          await _camera.release();
           _ownsCamera = false;
           return;
         }
@@ -176,7 +175,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
         await _sub?.cancel();
         _sub = null;
         if (_ownsCamera) {
-          await _camera.forceStop();
+          await _camera.release();
           _ownsCamera = false;
         }
         _cameraLiveAt = null;

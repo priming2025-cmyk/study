@@ -276,9 +276,10 @@ class FaceAttentionSensor {
       _iosLastEarR = null;
       return raw;
     }
-    final same = _iosLastEarL == raw.earLeft &&
-        _iosLastEarR == raw.earRight &&
-        _iosLastEarL != null;
+    final hasPrev = _iosLastEarL != null && _iosLastEarR != null;
+    final same = hasPrev &&
+        (_iosLastEarL! - raw.earLeft).abs() < 0.0005 &&
+        (_iosLastEarR! - raw.earRight).abs() < 0.0005;
     if (same) {
       _iosSameEarStreak++;
     } else {
