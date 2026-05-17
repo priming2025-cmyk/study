@@ -4,38 +4,34 @@ import 'dart:typed_data';
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 
 import '../domain/attention_signals.dart';
-import 'ios_temporal_coherence.dart';
 
 /// 웹(Safari·Chrome) 얼굴 검출 → [AttentionSignals].
 ///
-/// 모바일 Safari는 프레임 간격이 길어 EAR 분산이 작을 수 있어,
-/// **연속 N프레임 + bbox 안정성**만으로 라치합니다 (EAR 분산 조건 제거).
+/// iOS용 [IosTemporalCoherence]는 웹에서 쓰지 않습니다. 웹캠 앞에서
+/// 가만히 있어도 bbox spread가 작아 ‘환각’으로 오판되기 때문입니다.
 class WebAttentionFacePipeline {
   WebAttentionFacePipeline();
 
-  static const _minDetectionScore = 0.75;
-  static const _minFastGateScore = 0.65;
-  static const _minFaceAreaRatio = 0.04;
+  static const _minDetectionScore = 0.70;
+  static const _minFastGateScore = 0.60;
+  static const _minFaceAreaRatio = 0.03;
   static const int _latchFrames = 1;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
 
-  final IosTemporalCoherence _coherence = IosTemporalCoherence();
   int _rawFaceStreak = 0;
   int _rawNoFaceStreak = 0;
   bool _latched = false;
 
   void reset() {
-    _coherence.reset();
     _rawFaceStreak = 0;
     _rawNoFaceStreak = 0;
     _latched = false;
   }
 
-  /// JPEG가 너무 작거나 단색에 가까우면 검출하지 않습니다.
   static bool jpegLooksLikePhoto(Uint8List bytes) {
-    if (bytes.length < 12000) return false;
+    if (bytes.length < 6000) return false;
     final step = math.max(1, bytes.length ~/ 500);
     var minV = 255;
     var maxV = 0;
@@ -44,7 +40,7 @@ class WebAttentionFacePipeline {
       if (v < minV) minV = v;
       if (v > maxV) maxV = v;
     }
-    return (maxV - minV) >= 24;
+    return (maxV - minV) >= 18;
   }
 
   AttentionSignals noFace(bool inForeground) => AttentionSignals(
@@ -56,7 +52,7 @@ class WebAttentionFacePipeline {
   static bool passesFastGate(Face face) {
     if (face.detectionData.score < _minFastGateScore) return false;
     final bb = face.boundingBox;
-    if (bb.width.abs() < 32 || bb.height.abs() < 32) return false;
+    if (bb.width.abs() < 24 || bb.height.abs() < 24) return false;
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
     return (bb.width * bb.height) / frameArea >= _minFaceAreaRatio;
@@ -77,7 +73,7 @@ class WebAttentionFacePipeline {
 
   static bool _overlapsAny(Face full, List<Face> fastGates) {
     for (final fast in fastGates) {
-      if (_boxOverlapRatio(full.boundingBox, fast.boundingBox) >= 0.30) {
+      if (_boxOverlapRatio(full.boundingBox, fast.boundingBox) >= 0.25) {
         return true;
       }
     }
@@ -100,34 +96,40 @@ class WebAttentionFacePipeline {
     if (mesh == null || mesh.length < 468) return false;
     if (face.detectionData.score < _minDetectionScore) return false;
     final bb = face.boundingBox;
-    if (bb.width.abs() < 32 || bb.height.abs() < 32) return false;
+    if (bb.width.abs() < 24 || bb.height.abs() < 24) return false;
     final frameArea = face.originalSize.width * face.originalSize.height;
     if (frameArea < 1) return false;
     if ((bb.width * bb.height) / frameArea < _minFaceAreaRatio) return false;
     final earL = _ear(mesh, _eyeL);
     final earR = _ear(mesh, _eyeR);
-    return earL >= 0.14 && earL <= 0.45 && earR >= 0.14 && earR <= 0.45;
+    return earL >= 0.12 && earL <= 0.50 && earR >= 0.12 && earR <= 0.50;
   }
 
-  /// full mesh 우선, 없으면 fast 박스만으로 판정.
   AttentionSignals processDetection({
     required List<Face> fullFaces,
     required List<Face> fastFaces,
     required bool inForeground,
   }) {
+    final fastOk = fastFaces.where(passesFastGate).toList();
     var trusted = filterTrustworthy(
       fullFaces,
-      requireFastOverlap: fastFaces.where(passesFastGate).toList(),
+      requireFastOverlap: fastOk,
     );
     if (trusted.isNotEmpty) {
-      return _stabilize(_rawFromFaces(trusted, inForeground), trusted);
+      return _stabilize(_rawFromFaces(trusted, inForeground));
     }
 
-    final fastOk = fastFaces.where(passesFastGate).toList();
     if (fastOk.isEmpty) {
-      return _stabilize(noFace(inForeground), const []);
+      return _stabilize(noFace(inForeground));
     }
-    return _stabilizeFastOnly(fastOk, inForeground);
+
+    return _stabilize(AttentionSignals(
+      facePresent: true,
+      multiFace: fastOk.length > 1,
+      appInForeground: inForeground,
+      earLeft: 0.28,
+      earRight: 0.28,
+    ));
   }
 
   AttentionSignals processFaces(List<Face> faces, bool inForeground) {
@@ -161,59 +163,7 @@ class WebAttentionFacePipeline {
     );
   }
 
-  /// fast 박스만 있을 때: bbox 안정성 + 2프레임 라치.
-  AttentionSignals _stabilizeFastOnly(List<Face> fastOk, bool inForeground) {
-    final face = fastOk.first;
-    final bb = face.boundingBox;
-    final fw = face.originalSize.width.toDouble();
-    final fh = face.originalSize.height.toDouble();
-
-    if (!_coherence.consumeAndIsPlausible(
-      bboxLeft: bb.left,
-      bboxTop: bb.top,
-      bboxRight: bb.right,
-      bboxBottom: bb.bottom,
-      earL: 0.28,
-      earR: 0.28,
-      frameWidth: fw,
-      frameHeight: fh,
-    )) {
-      return _stabilize(noFace(inForeground), const []);
-    }
-
-    final raw = AttentionSignals(
-      facePresent: true,
-      multiFace: fastOk.length > 1,
-      appInForeground: inForeground,
-      earLeft: 0.28,
-      earRight: 0.28,
-    );
-    return _stabilize(raw, fastOk);
-  }
-
-  AttentionSignals _stabilize(AttentionSignals raw, List<Face> faces) {
-    if (raw.facePresent && faces.isNotEmpty) {
-      final face = faces.first;
-      final bb = face.boundingBox;
-      final fw = face.originalSize.width.toDouble();
-      final fh = face.originalSize.height.toDouble();
-
-      if (!_coherence.consumeAndIsPlausible(
-        bboxLeft: bb.left,
-        bboxTop: bb.top,
-        bboxRight: bb.right,
-        bboxBottom: bb.bottom,
-        earL: raw.earLeft,
-        earR: raw.earRight,
-        frameWidth: fw,
-        frameHeight: fh,
-      )) {
-        raw = noFace(raw.appInForeground);
-      }
-    } else {
-      _coherence.reset();
-    }
-
+  AttentionSignals _stabilize(AttentionSignals raw) {
     if (raw.facePresent) {
       _rawFaceStreak++;
       _rawNoFaceStreak = 0;
@@ -223,7 +173,7 @@ class WebAttentionFacePipeline {
     } else {
       _rawNoFaceStreak++;
       _rawFaceStreak = 0;
-      if (_rawNoFaceStreak >= 1) _latched = false;
+      if (_rawNoFaceStreak >= 2) _latched = false;
     }
 
     if (!_latched) {

@@ -18,6 +18,8 @@ import '../domain/session_reward_result.dart';
 import '../infra/attention_camera_service.dart';
 import '../infra/session_camera_cache.dart';
 import '../infra/study_presence.dart';
+import '../infra/web_camera.dart';
+import '../infra/web_session_teardown.dart';
 
 class SessionController extends ChangeNotifier {
   final PlanRepository _planRepo;
@@ -61,9 +63,8 @@ class SessionController extends ChangeNotifier {
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
   /// 카메라가 실제로 준비됐는지 (프리뷰·검출 가능).
-  /// 웹: [SessionSelfCameraSurface]에서 신호가 한 번이라도 오면 활성.
   bool get cameraActive => kIsWeb
-      ? hasRecentSignal
+      ? (WebSharedCamera.instance.isStreamReady || hasRecentSignal)
       : _camera.hasActiveCamera;
 
   /// iOS: 카메라가 붙은 뒤 2초 전에는 ‘집중’ 표시·집중 초 누적 안 함.
@@ -566,6 +567,9 @@ class SessionController extends ChangeNotifier {
     await _sub?.cancel();
     _sub = null;
     await _releaseCamera();
+    if (kIsWeb) {
+      await teardownWebSessionMedia();
+    }
     signals = AttentionSignals(
       facePresent: false,
       multiFace: false,

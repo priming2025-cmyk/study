@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
+import '../../session/infra/web_camera.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/study_room_ambient_sheet.dart';
@@ -226,10 +228,27 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                   roomNameCtrl: _roomNameCtrl,
                   roomIdCtrl: _roomIdCtrl,
                   joining: _controller.joining,
-                  onCreate: _createRoom,
-                  onJoin: _joinRoom,
+                  onCreate: () {
+                    if (kIsWeb) {
+                      WebSharedCamera.instance.openFromUserGesture();
+                    }
+                    unawaited(_createRoom());
+                  },
+                  onJoin: () {
+                    if (kIsWeb) {
+                      WebSharedCamera.instance.openFromUserGesture();
+                    }
+                    unawaited(_joinRoom());
+                  },
                   recentRoomId: recentId,
-                  onQuickJoinRecent: recentId == null ? null : _quickJoinRecent,
+                  onQuickJoinRecent: recentId == null
+                      ? null
+                      : () {
+                          if (kIsWeb) {
+                            WebSharedCamera.instance.openFromUserGesture();
+                          }
+                          unawaited(_quickJoinRecent());
+                        },
                 );
               },
             ),

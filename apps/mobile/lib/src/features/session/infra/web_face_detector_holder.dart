@@ -5,10 +5,10 @@ import 'dart:html' as html;
 
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_litert/src/web/js_interop/litertjs_bindings.dart'
+    show isLiteRtReady, liteRtLoadError, waitForLiteRt;
 
 /// 웹(Safari·Chrome) 전역 [FaceDetector] — 한 번만 초기화하고 재사용.
-///
-/// LiteRT.js는 [web/index.html] 에서 페이지 로드 시 미리 받습니다.
 final class WebFaceDetectorHolder {
   WebFaceDetectorHolder._();
   static final WebFaceDetectorHolder instance = WebFaceDetectorHolder._();
@@ -62,42 +62,27 @@ final class WebFaceDetectorHolder {
         (ua.contains('mobile') && ua.contains('safari'));
   }
 
-  static bool _pageLiteRtReady() {
-    try {
-      final dynamic w = html.window;
-      return w.LiteRtReady == true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<FaceDetector?> _initWithRetry() async {
-    if (!_pageLiteRtReady()) {
-      final done = Completer<void>();
-      void onReady(html.Event _) {
-        if (!done.isCompleted) done.complete();
-      }
+    try {
+      await waitForLiteRt(timeout: const Duration(seconds: 60));
+    } catch (e) {
+      debugPrint('[WebFaceDetector] LiteRT wait: $e');
+      final err = liteRtLoadError();
+      if (err != null) debugPrint('[WebFaceDetector] LiteRT error: $err');
+    }
 
-      html.window.addEventListener('litert-ready', onReady);
-      try {
-        await done.future.timeout(
-          const Duration(seconds: 90),
-          onTimeout: () {},
-        );
-      } finally {
-        html.window.removeEventListener('litert-ready', onReady);
-      }
+    if (!isLiteRtReady()) {
+      debugPrint('[WebFaceDetector] LiteRT not ready after wait');
     }
 
     final attempts = _isMobileSafari
         ? [
             ('wasm', 0),
-            ('wasm', 1500),
-            ('wasm', 3500),
+            ('wasm', 2000),
           ]
         : [
             ('wasm', 0),
-            ('auto', 800),
+            ('auto', 600),
           ];
 
     for (var i = 0; i < attempts.length; i++) {

@@ -10,6 +10,7 @@ import '../../../session/domain/attention_signals.dart';
 import '../../../session/infra/attention_camera_service.dart';
 import '../../../session/infra/session_camera_cache.dart';
 import '../../../session/infra/session_self_camera.dart';
+import '../../../session/infra/web_camera.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
 
@@ -78,8 +79,9 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   bool get _isIOS => !kIsWeb && Platform.isIOS;
 
-  bool get _cameraActive =>
-      kIsWeb ? _hasRecentSignal : _camera.hasActiveCamera;
+  bool get _cameraActive => kIsWeb
+      ? (WebSharedCamera.instance.isStreamReady || _hasRecentSignal)
+      : _camera.hasActiveCamera;
 
   bool get _sensorReadyForUi {
     if (kIsWeb || !_isIOS) return _cameraActive;

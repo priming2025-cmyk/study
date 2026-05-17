@@ -431,7 +431,7 @@ packages:
     source: hosted
     version: "4.0.0"
   flutter_litert:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: flutter_litert
       sha256: e5779d130af155a4aaa518e3e5e94696bfc62ec0dbeb238ddafe065b4bca778c

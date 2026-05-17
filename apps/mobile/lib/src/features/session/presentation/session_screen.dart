@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+
+import '../infra/web_camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -442,7 +444,15 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         minimum: const EdgeInsets.all(16),
         child: running
             ? RunningBar(c: _c, onStop: _stopAndUpload)
-            : StartBar(onStart: _start, starting: _c.starting),
+            : StartBar(
+                onStart: () {
+                  if (kIsWeb) {
+                    WebSharedCamera.instance.openFromUserGesture();
+                  }
+                  unawaited(_start());
+                },
+                starting: _c.starting,
+              ),
       ),
     );
   }

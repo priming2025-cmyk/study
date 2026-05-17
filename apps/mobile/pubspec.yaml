@@ -35,6 +35,7 @@ dependencies:
   # face_detection_tflite: iOS·Android·macOS·Win·Linux 지원, ML Kit 대비 ~5.5배 빠름
   # 웹: face_attention_sensor_web.dart 가 takePicture JPEG + detectFaces 로 집중 신호 생성
   face_detection_tflite: ^6.2.5
+  flutter_litert: ^2.5.2
   camera: ^0.11.0+2
 
   # 로컬 알림(계획 시작 시각)

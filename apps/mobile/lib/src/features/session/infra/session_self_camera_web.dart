@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
 
 import 'dart:async';
+import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'dart:ui_web' as ui_web;
@@ -10,8 +11,8 @@ import 'package:flutter/material.dart';
 
 import '../domain/attention_signals.dart';
 import 'web_attention_face_codec.dart';
-import 'web_face_detector_holder.dart';
 import 'web_shared_camera.dart';
+import 'web_face_detector_holder.dart';
 
 /// 브라우저 공유 카메라 + [FaceDetector] 분석 → [onAttentionSignals].
 class SessionSelfCameraSurface extends StatefulWidget {
@@ -36,8 +37,13 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   static int _viewTypeSeq = 0;
 
   late final String _viewType = 'session-self-cam-${_viewTypeSeq++}';
-  bool _viewRegistered = false;
+  late final html.DivElement _host = html.DivElement()
+    ..style.width = '100%'
+    ..style.height = '100%'
+    ..style.overflow = 'hidden'
+    ..style.backgroundColor = '#000';
 
+  bool _viewRegistered = false;
   String? _cameraError;
   String? _analysisStatus;
   bool _streamReady = false;
@@ -51,41 +57,61 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   @override
   void initState() {
     super.initState();
+    _registerViewHost();
     unawaited(_boot());
+  }
+
+  void _registerViewHost() {
+    if (_viewRegistered) return;
+    ui_web.platformViewRegistry.registerViewFactory(
+      _viewType,
+      (int _) => _host,
+    );
+    _viewRegistered = true;
   }
 
   @override
   void didUpdateWidget(SessionSelfCameraSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
     _applySize();
+    _attachVideoIfNeeded();
   }
 
   void _applySize() {
+    _host.style.width = '${widget.width}px';
+    _host.style.height = '${widget.height}px';
     final v = WebSharedCamera.instance.video;
-    if (v == null) return;
-    v.style.width = '${widget.width}px';
-    v.style.height = '${widget.height}px';
+    if (v != null) {
+      v.style.width = '${widget.width}px';
+      v.style.height = '${widget.height}px';
+    }
+  }
+
+  void _attachVideoIfNeeded() {
+    final video = WebSharedCamera.instance.video;
+    if (video == null) return;
+    if (_host.children.contains(video)) return;
+    _host.children.clear();
+    _host.append(video);
   }
 
   Future<void> _boot() async {
     try {
       final stream = await WebSharedCamera.instance.acquire();
       if (stream == null) {
+        final err = WebSharedCamera.instance.lastOpenError;
         if (mounted) {
-          setState(() => _cameraError = '이 브라우저는 카메라를 지원하지 않아요.');
+          setState(() {
+            _cameraError = err != null
+                ? '카메라를 열 수 없어요. Safari 설정에서 카메라를 허용해 주세요.'
+                : '이 브라우저는 카메라를 지원하지 않아요.';
+          });
         }
         _emitNoFace();
         return;
       }
 
-      final video = WebSharedCamera.instance.video;
-      if (video != null && !_viewRegistered) {
-        ui_web.platformViewRegistry.registerViewFactory(
-          _viewType,
-          (int _) => video,
-        );
-        _viewRegistered = true;
-      }
+      _attachVideoIfNeeded();
       _applySize();
 
       if (mounted) {
@@ -100,7 +126,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 700),
+        const Duration(milliseconds: 650),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -139,7 +165,8 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void _scheduleDetectorRetry() {
     if (_retryCount >= 8) {
       if (mounted) {
-        setState(() => _analysisStatus = '분석 엔진 로딩이 느립니다. Wi‑Fi 확인 후 새로고침해 주세요.');
+        setState(() => _analysisStatus =
+            '분석 엔진 로딩이 느립니다. Wi‑Fi 확인 후 새로고침해 주세요.');
       }
       return;
     }
@@ -183,10 +210,14 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   Future<void> _sampleFrame() async {
     if (!mounted || _busy) return;
 
-    final video = WebSharedCamera.instance.video;
-    if (video == null || !WebSharedCamera.instance.isStreamReady) {
+    if (!WebSharedCamera.instance.isStreamReady) {
       return;
     }
+
+    _attachVideoIfNeeded();
+
+    final video = WebSharedCamera.instance.video;
+    if (video == null) return;
 
     var det = WebFaceDetectorHolder.instance.detector;
     if (det == null) {
@@ -254,7 +285,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _analysisTimer?.cancel();
     _detectorRetryTimer?.cancel();
     _pipeline.reset();
-    WebSharedCamera.instance.release();
+    // 탭 전환 시 release 하지 않음 — Safari는 재허용 제스처가 필요합니다.
     super.dispose();
   }
 
@@ -277,7 +308,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       );
     }
 
-    if (!_streamReady) {
+    if (!_streamReady && !WebSharedCamera.instance.isStreamReady) {
       return SizedBox(
         width: widget.width,
         height: widget.height,
