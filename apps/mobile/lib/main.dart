@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'dart:async' show unawaited;
+
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import 'src/core/push/push_notifications.dart';
 import 'src/core/supabase/supabase_config.dart';
 import 'src/features/auth/auth_feature_flags.dart';
 import 'src/features/plan/infra/plan_alarm_service.dart';
+import 'src/features/session/infra/web_platform_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +50,10 @@ Future<void> main() async {
         );
       }
     }
+  }
+
+  if (kIsWeb) {
+    unawaited(warmUpWebAttentionStack());
   }
 
   runApp(const ProviderScope(child: StudyUpApp()));

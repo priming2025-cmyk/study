@@ -1,33 +1,33 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
+import 'dart:html' as html;
+
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 import 'package:flutter/foundation.dart';
 
 /// 웹(Safari·Chrome) 전역 [FaceDetector] — 한 번만 초기화하고 재사용.
-///
-/// iOS Safari는 WebGPU 초기화가 실패하는 경우가 많아 `wasm`으로 재시도합니다.
-/// 위젯이 dispose될 때마다 새로 만들면 "already initialized"·메모리 오류가 납니다.
 final class WebFaceDetectorHolder {
   WebFaceDetectorHolder._();
   static final WebFaceDetectorHolder instance = WebFaceDetectorHolder._();
 
   FaceDetector? _detector;
   Future<FaceDetector?>? _initFuture;
-  int _holders = 0;
 
   FaceDetector? get detector =>
       (_detector != null && _detector!.isReady) ? _detector : null;
 
-  /// 분석기를 가져옵니다. 실패 시 null (가짜 facePresent 는 내지 않음).
-  Future<FaceDetector?> acquire() {
-    _holders++;
-    return _getOrCreate();
-  }
+  bool get isReady => detector != null;
+
+  /// 앱 시작 직후 백그라운드 예열 (공부탭 진입 전 WASM 로드).
+  Future<void> warmUp() => _getOrCreate();
+
+  /// 분석기를 가져옵니다. 실패 시 null.
+  Future<FaceDetector?> acquire() => _getOrCreate();
 
   Future<FaceDetector?> _getOrCreate() async {
     final existing = _detector;
     if (existing != null && existing.isReady) return existing;
-    if (_initFuture != null) {
-      return _initFuture!;
-    }
+    if (_initFuture != null) return _initFuture!;
     _initFuture = _initWithRetry();
     final result = await _initFuture!;
     if (result == null) {
@@ -36,18 +36,12 @@ final class WebFaceDetectorHolder {
     return result;
   }
 
-  void release() {
-    if (_holders <= 0) return;
-    _holders--;
-    if (_holders <= 0) {
-      _holders = 0;
-      // 페이지를 벗어날 때만 완전 해제 (탭 전환 시 재초기화 부담 감소)
-    }
+  /// 재시도만 허용 (dispose 하지 않음 — Safari에서 연속 dispose가 더 불안정).
+  void scheduleRetry() {
+    _initFuture = null;
   }
 
-  /// 완전 초기화 (페이지 새로고침 전용).
   Future<void> disposeAll() async {
-    _holders = 0;
     _initFuture = null;
     final d = _detector;
     _detector = null;
@@ -60,13 +54,28 @@ final class WebFaceDetectorHolder {
     }
   }
 
+  static bool get _isMobileSafari {
+    final ua = html.window.navigator.userAgent.toLowerCase();
+    return ua.contains('iphone') ||
+        ua.contains('ipad') ||
+        ua.contains('ipod') ||
+        (ua.contains('mobile') && ua.contains('safari'));
+  }
+
   Future<FaceDetector?> _initWithRetry() async {
-    const attempts = [
-      ('auto', 0),
-      ('wasm', 400),
-      ('wasm', 900),
-      ('wasm', 1600),
-    ];
+    // iOS Safari: WebGPU(auto) 실패가 잦아 wasm만, 더 긴 대기.
+    final attempts = _isMobileSafari
+        ? [
+            ('wasm', 0),
+            ('wasm', 800),
+            ('wasm', 2000),
+            ('wasm', 4000),
+          ]
+        : [
+            ('auto', 0),
+            ('wasm', 500),
+            ('wasm', 1500),
+          ];
 
     for (var i = 0; i < attempts.length; i++) {
       final accel = attempts[i].$1;
@@ -75,8 +84,7 @@ final class WebFaceDetectorHolder {
         await Future<void>.delayed(Duration(milliseconds: delayMs));
       }
       try {
-        final d = FaceDetector();
-        await d.initialize(
+        final d = await FaceDetector.create(
           model: FaceDetectionModel.frontCamera,
           liteRtAccelerator: accel,
         );
@@ -85,7 +93,7 @@ final class WebFaceDetectorHolder {
           continue;
         }
         _detector = d;
-        debugPrint('[WebFaceDetector] ready (accelerator=$accel)');
+        debugPrint('[WebFaceDetector] ready ($accel, mobile=$_isMobileSafari)');
         return d;
       } catch (e, st) {
         debugPrint('[WebFaceDetector] init #$i ($accel): $e\n$st');

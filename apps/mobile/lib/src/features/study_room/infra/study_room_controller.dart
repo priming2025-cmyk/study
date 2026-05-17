@@ -128,16 +128,61 @@ class StudyRoomController extends ChangeNotifier {
       await _fetchMessages(roomId);
       await _joinMessageChannel(roomId);
 
+      if (kIsWeb) {
+        // 웹: presence 먼저(빠른 입장) → 스냅샷은 백그라운드 (카메라/WASM과 경합 방지)
+        await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: '');
+        unawaited(_webFinishJoinSnapshot(roomId: roomId, userId: userId));
+      } else {
+        if (!_snapshotInitialized) {
+          await _snapshot.initialize();
+          _snapshotInitialized = true;
+        }
+
+        final url = await _uploadSnapshot(roomId: roomId, userId: userId);
+        selfSnapshotUrl = url;
+
+        await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: url);
+
+        _snapshotTimer?.cancel();
+        _snapshotTimer = Timer.periodic(_snapshotInterval, (_) async {
+          final rid = this.roomId;
+          final uid = _selfId;
+          if (rid == null || uid == null) return;
+          final newUrl = await _uploadSnapshot(roomId: rid, userId: uid);
+          if (newUrl != null) {
+            selfSnapshotUrl = newUrl;
+            await _trackSelfFull(snapshotUrl: newUrl);
+            notifyListeners();
+          }
+        });
+      }
+    } catch (e) {
+      error = '방 입장 실패: $e';
+      debugPrint('[StudyRoomController] joinRoom error: $e');
+    } finally {
+      joining = false;
+      notifyListeners();
+    }
+  }
+
+  // ── 나가기 ────────────────────────────────────────────────────────────────
+
+  /// 웹: 방 입장 후 스냅샷·주기 업로드를 백그라운드에서 처리합니다.
+  Future<void> _webFinishJoinSnapshot({
+    required String roomId,
+    required String userId,
+  }) async {
+    try {
       if (!_snapshotInitialized) {
         await _snapshot.initialize();
         _snapshotInitialized = true;
       }
-
       final url = await _uploadSnapshot(roomId: roomId, userId: userId);
-      selfSnapshotUrl = url;
-
-      await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: url);
-
+      if (url != null) {
+        selfSnapshotUrl = url;
+        await _trackSelfFull(snapshotUrl: url);
+        notifyListeners();
+      }
       _snapshotTimer?.cancel();
       _snapshotTimer = Timer.periodic(_snapshotInterval, (_) async {
         final rid = this.roomId;
@@ -151,15 +196,9 @@ class StudyRoomController extends ChangeNotifier {
         }
       });
     } catch (e) {
-      error = '방 입장 실패: $e';
-      debugPrint('[StudyRoomController] joinRoom error: $e');
-    } finally {
-      joining = false;
-      notifyListeners();
+      debugPrint('[StudyRoomController] web snapshot: $e');
     }
   }
-
-  // ── 나가기 ────────────────────────────────────────────────────────────────
 
   Future<void> leave() async {
     _snapshotTimer?.cancel();
@@ -194,6 +233,10 @@ class StudyRoomController extends ChangeNotifier {
 
     await _leaveMessageChannel();
     await _leavePresence();
+    try {
+      await _snapshot.dispose();
+    } catch (_) {}
+    _snapshotInitialized = false;
     notifyListeners();
   }
 

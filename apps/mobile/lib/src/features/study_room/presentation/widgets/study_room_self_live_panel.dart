@@ -88,9 +88,8 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     return DateTime.now().difference(t) >= const Duration(seconds: 2);
   }
 
-  /// 최근 3초 안에 센서 신호가 흘러들어왔는지 (2회차 동결 차단).
+  /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
   bool get _hasRecentSignal {
-    if (kIsWeb) return true;
     final t = _lastSignalAt;
     if (t == null) return false;
     return DateTime.now().difference(t) < const Duration(seconds: 3);

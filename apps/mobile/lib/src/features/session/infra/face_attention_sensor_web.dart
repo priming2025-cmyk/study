@@ -152,7 +152,6 @@ class FaceAttentionSensor {
     _streamGeneration++;
     _lastValidSampleAt = null;
     _pipeline.reset();
-    WebFaceDetectorHolder.instance.release();
     try {
       await _controller?.dispose();
     } catch (_) {}
