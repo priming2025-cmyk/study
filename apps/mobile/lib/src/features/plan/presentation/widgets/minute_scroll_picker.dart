@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 5분 단위 스크롤 선택 (시작 시각·소요 시간).
+/// 스크롤 + 위·아래 버튼 시간 선택. 간격(5·10·15분) 변경 가능.
 class MinuteScrollPicker extends StatefulWidget {
   final int valueMinutes;
   final int minMinutes;
   final int maxMinutes;
-  final int stepMinutes;
+  final int initialStepMinutes;
   final ValueChanged<int> onChanged;
   final String Function(int minutes)? labelBuilder;
   final bool showAmPmToggle;
@@ -18,7 +18,7 @@ class MinuteScrollPicker extends StatefulWidget {
     required this.onChanged,
     this.minMinutes = 0,
     this.maxMinutes = 24 * 60 - 1,
-    this.stepMinutes = 5,
+    this.initialStepMinutes = 5,
     this.labelBuilder,
     this.showAmPmToggle = false,
     this.isDuration = false,
@@ -31,23 +31,43 @@ class MinuteScrollPicker extends StatefulWidget {
 class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   late FixedExtentScrollController _ctrl;
   late List<int> _values;
+  late int _step;
   bool _isPm = false;
+
+  static const _steps = [5, 10, 15];
 
   @override
   void initState() {
     super.initState();
+    _step = widget.initialStepMinutes;
     _values = _buildValues();
-    final idx = _values.indexOf(_clamp(widget.valueMinutes));
-    _ctrl = FixedExtentScrollController(initialItem: idx < 0 ? 0 : idx);
+    final idx = _indexFor(_clamp(widget.valueMinutes));
+    _ctrl = FixedExtentScrollController(initialItem: idx);
     if (widget.showAmPmToggle && !widget.isDuration) {
-      final h = widget.valueMinutes ~/ 60;
-      _isPm = h >= 12;
+      _isPm = widget.valueMinutes ~/ 60 >= 12;
     }
+  }
+
+  @override
+  void didUpdateWidget(MinuteScrollPicker old) {
+    super.didUpdateWidget(old);
+    if (old.valueMinutes != widget.valueMinutes && _ctrl.hasClients) {
+      final idx = _indexFor(_clamp(widget.valueMinutes));
+      if (idx != _ctrl.selectedItem) {
+        _ctrl.jumpToItem(idx);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
   }
 
   List<int> _buildValues() {
     final list = <int>[];
-    for (var m = widget.minMinutes; m <= widget.maxMinutes; m += widget.stepMinutes) {
+    for (var m = widget.minMinutes; m <= widget.maxMinutes; m += _step) {
       list.add(m);
     }
     return list;
@@ -56,7 +76,37 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   int _clamp(int m) {
     if (m < widget.minMinutes) return widget.minMinutes;
     if (m > widget.maxMinutes) return widget.maxMinutes;
-    return ((m / widget.stepMinutes).round() * widget.stepMinutes);
+    final rounded = ((m / _step).round() * _step);
+    return rounded.clamp(widget.minMinutes, widget.maxMinutes);
+  }
+
+  int _indexFor(int m) {
+    final idx = _values.indexOf(m);
+    if (idx >= 0) return idx;
+    var best = 0;
+    var bestDiff = 1 << 30;
+    for (var i = 0; i < _values.length; i++) {
+      final d = (_values[i] - m).abs();
+      if (d < bestDiff) {
+        bestDiff = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  void _setStep(int step) {
+    if (_step == step) return;
+    setState(() {
+      _step = step;
+      _values = _buildValues();
+      final clamped = _clamp(widget.valueMinutes);
+      widget.onChanged(clamped);
+      final idx = _indexFor(clamped);
+      _ctrl.dispose();
+      _ctrl = FixedExtentScrollController(initialItem: idx);
+    });
+    HapticFeedback.selectionClick();
   }
 
   String _label(int minutes) {
@@ -75,10 +125,23 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     return '$ap $h12:${mm.toString().padLeft(2, '0')}';
   }
 
+  void _nudge(int delta) {
+    if (!_ctrl.hasClients) return;
+    final next = (_ctrl.selectedItem + delta).clamp(0, _values.length - 1);
+    _ctrl.animateToItem(
+      next,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final current = _ctrl.hasClients
+        ? _values[_ctrl.selectedItem.clamp(0, _values.length - 1)]
+        : _clamp(widget.valueMinutes);
 
     return Column(
       children: [
@@ -98,73 +161,102 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
             ),
           ),
         SizedBox(
-          height: 160,
-          child: Stack(
-            alignment: Alignment.center,
+          height: 200,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                height: 44,
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              ListWheelScrollView.useDelegate(
-                controller: _ctrl,
-                itemExtent: 44,
-                perspective: 0.003,
-                diameterRatio: 1.4,
-                physics: const FixedExtentScrollPhysics(),
-                onSelectedItemChanged: (i) {
-                  HapticFeedback.selectionClick();
-                  widget.onChanged(_values[i]);
-                },
-                childDelegate: ListWheelChildBuilderDelegate(
-                  childCount: _values.length,
-                  builder: (context, i) {
-                    final sel = _ctrl.hasClients && _ctrl.selectedItem == i;
-                    return Center(
-                      child: Text(
-                        _label(_values[i]),
-                        style: (sel ? tt.titleMedium : tt.bodyMedium)?.copyWith(
-                          fontWeight: sel ? FontWeight.w800 : FontWeight.w400,
-                          color: sel ? cs.primary : cs.onSurfaceVariant,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: _steps.map((s) {
+                  final sel = _step == s;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Material(
+                      color: sel
+                          ? cs.primaryContainer
+                          : cs.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: () => _setStep(s),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: Text(
+                            '${s}분',
+                            style: tt.labelSmall?.copyWith(
+                              fontWeight:
+                                  sel ? FontWeight.w800 : FontWeight.w500,
+                              color: sel ? cs.primary : cs.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                iconSize: 36,
+                tooltip: '이전',
+                onPressed: () => _nudge(-1),
+                icon: Icon(Icons.keyboard_arrow_up_rounded, color: cs.primary),
+              ),
+              Expanded(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      height: 56,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: cs.primaryContainer.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: cs.primary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _label(current),
+                      style: tt.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: cs.primary,
+                        fontSize: 28,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    IgnorePointer(
+                      child: ListWheelScrollView.useDelegate(
+                        controller: _ctrl,
+                        itemExtent: 56,
+                        perspective: 0.002,
+                        diameterRatio: 1.2,
+                        physics: const FixedExtentScrollPhysics(),
+                        onSelectedItemChanged: (i) {
+                          HapticFeedback.selectionClick();
+                          widget.onChanged(_values[i]);
+                        },
+                        childDelegate: ListWheelChildBuilderDelegate(
+                          childCount: _values.length,
+                          builder: (context, i) => const SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              IconButton(
+                iconSize: 36,
+                tooltip: '다음',
+                onPressed: () => _nudge(1),
+                icon: Icon(Icons.keyboard_arrow_down_rounded, color: cs.primary),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_up_rounded),
-              onPressed: () {
-                if (!_ctrl.hasClients) return;
-                final next = (_ctrl.selectedItem - 1).clamp(0, _values.length - 1);
-                _ctrl.animateToItem(next,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut);
-              },
-            ),
-            Text('위·아래로 5분씩', style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
-              onPressed: () {
-                if (!_ctrl.hasClients) return;
-                final next = (_ctrl.selectedItem + 1).clamp(0, _values.length - 1);
-                _ctrl.animateToItem(next,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut);
-              },
-            ),
-          ],
         ),
       ],
     );

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/dream_city_state.dart';
 import 'dream_city_isometric_view.dart';
 
-/// 꿈의 도시 — 섹터 기반 건설 게임 카드.
-/// 2×2 → 3×3 그리드 확장, 건물 Lv.1~8, 블럭으로 섹터·건물 구매.
+/// 꿈의 도시 — 3D 마을 미리보기 카드.
 class CityProgressCard extends StatelessWidget {
   final int blockCount;
   final int totalFocusMinutes;
@@ -16,32 +16,21 @@ class CityProgressCard extends StatelessWidget {
     this.onTap,
   });
 
-  int get _gridSize {
-    if (blockCount >= 300) return 3;
-    if (blockCount >= 80) return 3;
-    return 2;
-  }
-
-  List<_CityBuilding> get _placed => _buildingsForBlocks(blockCount);
-
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final grid = _gridSize;
-    final placed = _placed;
+    final state = DreamCityState.fromBlocks(blockCount);
+    final next = state.nextGoals.isNotEmpty ? state.nextGoals.first : null;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF0F172A),
-              const Color(0xFF1E293B),
-            ],
+            colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
           ),
           borderRadius: BorderRadius.circular(20),
         ),
@@ -64,17 +53,14 @@ class CityProgressCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '블럭 $blockCount · $grid×$grid 마을',
-                        style: tt.bodySmall?.copyWith(
-                          color: Colors.white70,
-                        ),
+                        'Lv.${state.cityLevel.toStringAsFixed(1)} · 건물 ${state.placed.length}개 · 집중 ${totalFocusMinutes}분',
+                        style: tt.bodySmall?.copyWith(color: Colors.white70),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(99),
@@ -101,35 +87,52 @@ class CityProgressCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               child: DreamCityIsometricView(
                 blockCount: blockCount,
-                height: 180,
+                height: 200,
               ),
             ),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 2.4,
-              child: GridView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                scrollDirection: Axis.horizontal,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 1,
-                  mainAxisSpacing: 6,
-                  crossAxisSpacing: 6,
-                  childAspectRatio: 1.1,
+            if (state.placed.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: state.placed.length.clamp(0, 8),
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, i) {
+                    final p = state.placed[i];
+                    return Container(
+                      width: 72,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(p.def.emoji, style: const TextStyle(fontSize: 20)),
+                          Text(
+                            p.def.nameKo,
+                            style: tt.labelSmall?.copyWith(
+                              color: Colors.white70,
+                              fontSize: 9,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-                itemCount: placed.length.clamp(0, 6),
-                itemBuilder: (context, i) {
-                  final building = placed[i];
-                  return _SectorTile(
-                    unlocked: true,
-                    building: building,
-                    index: i,
-                  );
-                },
               ),
-            ),
-            const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 10),
             Text(
-              _nextHint(blockCount),
+              next != null
+                  ? '다음: ${next.emoji} ${next.nameKo} (${next.blockCost - blockCount}블럭)'
+                  : '모든 꿈 건물을 완성했어요!',
               style: tt.labelSmall?.copyWith(color: Colors.white60),
             ),
           ],
@@ -137,137 +140,4 @@ class CityProgressCard extends StatelessWidget {
       ),
     );
   }
-
-  String _nextHint(int blocks) {
-    if (blocks < 10) return '블럭 10개 → 2번째 섹터 해금';
-    if (blocks < 30) return '블럭 30개 → 3번째 섹터 해금';
-    if (blocks < 80) return '블럭 80개 → 3×3 도시 확장';
-    if (blocks < 120) return '블럭 120개 → 병원 Lv.3 건설 가능';
-    return '더 높은 레벨 건물을 위해 블럭을 모아보세요';
-  }
-
-  static List<_CityBuilding> _buildingsForBlocks(int blocks) {
-    final list = <_CityBuilding>[];
-    if (blocks >= 10) {
-      list.add(const _CityBuilding(name: '집', emoji: '🏠', level: 1, sectors: 1));
-    }
-    if (blocks >= 30) {
-      list.add(const _CityBuilding(name: '학교', emoji: '🏫', level: 2, sectors: 1));
-    }
-    if (blocks >= 60) {
-      list.add(const _CityBuilding(name: '도서관', emoji: '📚', level: 3, sectors: 2));
-    }
-    if (blocks >= 100) {
-      list.add(const _CityBuilding(name: '공원', emoji: '🌳', level: 4, sectors: 2));
-    }
-    if (blocks >= 150) {
-      list.add(const _CityBuilding(name: '병원', emoji: '🏥', level: 5, sectors: 3));
-    }
-    if (blocks >= 220) {
-      list.add(const _CityBuilding(name: '법원', emoji: '⚖️', level: 6, sectors: 3));
-    }
-    if (blocks >= 300) {
-      list.add(const _CityBuilding(name: '시청', emoji: '🏛️', level: 7, sectors: 4));
-    }
-    if (blocks >= 500) {
-      list.add(const _CityBuilding(name: '대학', emoji: '🎓', level: 8, sectors: 4));
-    }
-    return list;
-  }
 }
-
-class _CityBuilding {
-  final String name;
-  final String emoji;
-  final int level;
-  final int sectors;
-
-  const _CityBuilding({
-    required this.name,
-    required this.emoji,
-    required this.level,
-    required this.sectors,
-  });
-}
-
-class _SectorTile extends StatelessWidget {
-  final bool unlocked;
-  final _CityBuilding? building;
-  final int index;
-
-  const _SectorTile({
-    required this.unlocked,
-    required this.building,
-    required this.index,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!unlocked) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: const Center(
-          child: Icon(Icons.lock_outline, color: Colors.white24, size: 18),
-        ),
-      );
-    }
-
-    if (building == null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-        ),
-        child: const Center(
-          child: Icon(Icons.add_rounded, color: Colors.white54, size: 20),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.amber.withValues(alpha: 0.25),
-            Colors.orange.withValues(alpha: 0.1),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(building!.emoji, style: const TextStyle(fontSize: 22)),
-          Text(
-            'Lv.${building!.level}',
-            style: const TextStyle(
-              fontSize: 9,
-              color: Colors.white70,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 건물 카탈로그 (Lv.1~8, 섹터 요구)
-const cityBuildingCatalog = [
-  (name: '오두막', emoji: '🏠', level: 1, sectors: 1, blocks: 10),
-  (name: '학교', emoji: '🏫', level: 2, sectors: 1, blocks: 30),
-  (name: '도서관', emoji: '📚', level: 3, sectors: 2, blocks: 60),
-  (name: '카페', emoji: '☕', level: 4, sectors: 2, blocks: 100),
-  (name: '병원', emoji: '🏥', level: 5, sectors: 3, blocks: 150),
-  (name: '법원', emoji: '⚖️', level: 6, sectors: 3, blocks: 220),
-  (name: '시청', emoji: '🏛️', level: 7, sectors: 4, blocks: 300),
-  (name: '대학교', emoji: '🎓', level: 8, sectors: 4, blocks: 500),
-];

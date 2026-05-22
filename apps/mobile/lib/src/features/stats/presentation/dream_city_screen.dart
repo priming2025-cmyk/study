@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'widgets/city_progress_card.dart';
+import '../domain/dream_city_state.dart';
 import 'widgets/dream_city_isometric_view.dart';
+import 'widgets/dream_city_tech_panel.dart';
 
-/// 꿈의 도시 상세 — 건설·성장 게임 화면.
+/// 꿈의 도시 상세 — 3D 마을 + 직업 테크트리.
 class DreamCityScreen extends StatelessWidget {
   final int blockCount;
   final int totalFocusMinutes;
@@ -17,12 +18,10 @@ class DreamCityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
-    final buildings = DreamCityIsometricView.buildingsFromBlocks(blockCount);
+    final state = DreamCityState.fromBlocks(blockCount);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('꿈의 도시'),
-      ),
+      appBar: AppBar(title: const Text('꿈의 도시')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -30,51 +29,68 @@ class DreamCityScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             child: DreamCityIsometricView(
               blockCount: blockCount,
-              height: 260,
-              interactive: true,
+              height: 280,
+              animate: true,
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            '집중 시간·계획 달성·친구와 함께 공부한 블럭으로 마을을 키워요.',
+            '집중 시간·계획 달성·친구와 함께 공부한 블럭으로 '
+            '의사, 과학자, 개발자… 꿈의 직업 마을을 키워요.',
             style: tt.bodyMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            '총 집중 ${totalFocusMinutes}분 · 보유 블럭 $blockCount개',
+            '총 집중 $totalFocusMinutes분 · 블럭 $blockCount개 · 도시 Lv.${state.cityLevel.toStringAsFixed(1)}',
             style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 20),
-          Text('건설된 건물', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          if (buildings.isEmpty)
-            const Text('블럭을 모아 첫 건물을 지어 보세요!')
-          else
-            ...buildings.map(
-              (b) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Text(b.emoji, style: const TextStyle(fontSize: 28)),
-                  title: Text('Lv.${b.level} 건물'),
-                  subtitle: const Text('집중과 계획으로 자동 성장'),
-                ),
+          if (state.placed.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text('내 마을',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: state.placed.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final p = state.placed[i];
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(p.def.emoji, style: const TextStyle(fontSize: 28)),
+                          Text(p.def.nameKo,
+                              style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w700)),
+                          Text(p.def.branch.labelKo, style: tt.labelSmall),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
+          ],
+          if (state.nextGoals.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text('다음 건설 목표',
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            ...state.nextGoals.map(
+              (d) => ListTile(
+                leading: Text(d.emoji, style: const TextStyle(fontSize: 24)),
+                title: Text(d.nameKo),
+                subtitle: Text(d.kidDreamLine),
+                trailing: Text('${d.blockCost - blockCount}블럭'),
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          DreamCityTechPanel(state: state),
           const SizedBox(height: 16),
-          Text('다음 목표', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          ...cityBuildingCatalog.map((e) {
-            final done = blockCount >= e.blocks;
-            return ListTile(
-              leading: Text(e.emoji, style: const TextStyle(fontSize: 22)),
-              title: Text(e.name),
-              subtitle: Text('블럭 ${e.blocks}개 필요'),
-              trailing: done
-                  ? const Icon(Icons.check_circle, color: Colors.green)
-                  : Text('${e.blocks - blockCount}개 남음'),
-            );
-          }),
-          const SizedBox(height: 24),
           Card(
             color: Theme.of(context).colorScheme.primaryContainer,
             child: Padding(
@@ -82,14 +98,12 @@ class DreamCityScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '프로필에 노출',
-                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                  ),
+                  Text('프로필에 노출',
+                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   Text(
-                    '친구가 내 프로필을 볼 때 이 마을 미리보기가 함께 보여요. '
-                    '셋터디·기록에서 성장한 도시를 자랑해 보세요.',
+                    '친구가 내 프로필을 볼 때 이 3D 마을이 함께 보여요. '
+                    '더 공부할수록 우주센터·로켓 발사대까지 성장해요!',
                     style: tt.bodySmall,
                   ),
                 ],

@@ -56,6 +56,18 @@ class CustomSubjectStore {
     );
   }
 
+  static bool isDefault(String name) =>
+      defaultSubjects.any((s) => s.name == name);
+
+  static Future<bool> remove(String name) async {
+    if (isDefault(name)) return false;
+    final list = await load();
+    final next = list.where((s) => s.name != name).toList();
+    if (next.length == list.length) return false;
+    await save(next);
+    return true;
+  }
+
   static Future<void> upsert(String name, int colorValue) async {
     final list = await load();
     final i = list.indexWhere((s) => s.name == name);

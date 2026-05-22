@@ -61,10 +61,17 @@ class PlanItemCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        item.subject,
-                        style: tt.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
+                      child: InkWell(
+                        onTap: onEdit,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            item.subject,
+                            style: tt.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -86,7 +93,9 @@ class PlanItemCard extends StatelessWidget {
                       onPressed: onEdit,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: '오늘 계획에서 삭제',
+                      icon: Icon(Icons.delete_outline,
+                          size: 20, color: cs.error.withValues(alpha: 0.85)),
                       visualDensity: VisualDensity.compact,
                       onPressed: onDelete,
                     ),

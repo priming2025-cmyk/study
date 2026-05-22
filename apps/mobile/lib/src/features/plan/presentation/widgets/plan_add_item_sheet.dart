@@ -4,10 +4,11 @@ import '../../data/plan_models.dart';
 import '../../data/plan_repeat_config.dart';
 import 'minute_scroll_picker.dart';
 
-/// 과목 · 시작시간 · 소요시간 · 반복 — 4탭 계획 추가 시트.
+/// 과목 · 시작시간 · 계획시간 · 반복 — 4탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
   final DateTime planDay;
   final PlanItem? editItem;
+  final Future<bool> Function()? onDelete;
   final Future<void> Function({
     required String subject,
     required int targetMinutes,
@@ -21,6 +22,7 @@ class PlanAddItemSheet extends StatefulWidget {
     required this.planDay,
     required this.onAdd,
     this.editItem,
+    this.onDelete,
   });
 
   @override
@@ -40,7 +42,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   int _durationMin = 50;
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
-  Set<int> _weekdays = {1, 2, 3, 4, 5};
+  late Set<int> _weekdays;
   bool _repeatNone = true;
   bool _saving = false;
 
@@ -50,6 +52,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
+    _weekdays = {widget.planDay.weekday};
     _loadSubjects();
     final e = widget.editItem;
     if (e != null) {
@@ -83,6 +86,55 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
       interval: _repeatInterval,
       weekdays: _weekdays,
     );
+  }
+
+  Future<void> _deleteSubjectFromList(String name) async {
+    if (CustomSubjectStore.isDefault(name)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('기본 과목은 삭제할 수 없어요')),
+      );
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('과목 목록에서 삭제'),
+        content: Text('「$name」을(를) 자주 쓰는 과목에서 지울까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await CustomSubjectStore.remove(name);
+    await _loadSubjects();
+    if (mounted) {
+      setState(() {
+        if (_selectedName == name) {
+          _selectedName = null;
+          _nameCtrl.clear();
+        }
+      });
+    }
+  }
+
+  Future<void> _deletePlanItem() async {
+    final fn = widget.onDelete;
+    if (fn == null) return;
+    setState(() => _saving = true);
+    try {
+      final ok = await fn();
+      if (ok && mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -163,6 +215,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                         _selectedName = n;
                       });
                     },
+                    onDeleteSubject: _deleteSubjectFromList,
                   ),
                   _StartTab(
                     startMin: _startMin,
@@ -208,10 +261,23 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                     tabs: const [
                       Tab(text: '과목'),
                       Tab(text: '시작시간'),
-                      Tab(text: '소요시간'),
+                      Tab(text: '계획시간'),
                       Tab(text: '반복'),
                     ],
                   ),
+                  if (_editing && widget.onDelete != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: OutlinedButton.icon(
+                        onPressed: _saving ? null : _deletePlanItem,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 44),
+                          foregroundColor: cs.error,
+                        ),
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        label: const Text('이 계획 삭제'),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: FilledButton(
@@ -249,6 +315,7 @@ class _SubjectTab extends StatelessWidget {
   final ValueChanged<CustomSubject> onSelect;
   final ValueChanged<int> onColor;
   final VoidCallback onAddCustom;
+  final Future<void> Function(String name) onDeleteSubject;
 
   const _SubjectTab({
     required this.subjects,
@@ -258,6 +325,7 @@ class _SubjectTab extends StatelessWidget {
     required this.onSelect,
     required this.onColor,
     required this.onAddCustom,
+    required this.onDeleteSubject,
   });
 
   static const _palette = [
@@ -309,20 +377,32 @@ class _SubjectTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         TextButton(onPressed: onAddCustom, child: const Text('과목 목록에 저장')),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        Text(
+          '과목 탭하면 선택 · 길게 누르면 목록에서 삭제',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: subjects.map((s) {
             final isSel = selected == s.name;
-            return FilterChip(
+            final canDelete = !CustomSubjectStore.isDefault(s.name);
+            return InputChip(
               label: Text(s.name),
               selected: isSel,
               avatar: CircleAvatar(
                 radius: 6,
                 backgroundColor: s.color,
               ),
-              onSelected: (_) => onSelect(s),
+              deleteIcon: canDelete
+                  ? Icon(Icons.close, size: 16, color: cs.error)
+                  : null,
+              onDeleted: canDelete ? () => onDeleteSubject(s.name) : null,
+              onPressed: () => onSelect(s),
             );
           }).toList(),
         ),
@@ -345,7 +425,7 @@ class _StartTab extends StatelessWidget {
         valueMinutes: startMin,
         minMinutes: 5 * 60,
         maxMinutes: 23 * 60 + 55,
-        stepMinutes: 5,
+        initialStepMinutes: 5,
         showAmPmToggle: true,
         onChanged: onChanged,
       ),
@@ -367,7 +447,7 @@ class _DurationTab extends StatelessWidget {
         valueMinutes: durationMin,
         minMinutes: 5,
         maxMinutes: 240,
-        stepMinutes: 5,
+        initialStepMinutes: 5,
         isDuration: true,
         onChanged: onChanged,
       ),

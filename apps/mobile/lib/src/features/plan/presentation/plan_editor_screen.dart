@@ -55,12 +55,12 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     }
   }
 
-  Future<void> _deleteItem(PlanItem item) async {
+  Future<bool> _confirmDeleteItem(PlanItem item) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('이 과목을 삭제할까요?'),
-        content: Text('「${item.subject}」 항목이 계획에서 사라집니다.'),
+        content: Text('「${item.subject}」 항목이 오늘 계획에서 사라집니다.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -68,19 +68,28 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
             child: const Text('삭제'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (ok != true || !mounted) return false;
     try {
       await _c.deleteItem(item);
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      return false;
     }
+  }
+
+  Future<void> _deleteItem(PlanItem item) async {
+    await _confirmDeleteItem(item);
   }
 
   void _openTimeSheet(PlanItem item) {
@@ -143,6 +152,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       builder: (_) => PlanAddItemSheet(
         planDay: _c.planDay,
         editItem: item,
+        onDelete: () => _confirmDeleteItem(item),
         onAdd: ({
           required String subject,
           required int targetMinutes,
@@ -294,12 +304,29 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                         return ReorderableDelayedDragStartListener(
                           key: ValueKey(item.id),
                           index: i,
-                          child: PlanItemCard(
-                            item: item,
-                            onEdit: () => _openEditSheet(item),
-                            onSchedule: () => _openTimeSheet(item),
-                            onDelete: () => _deleteItem(item),
-                            showDragHandle: items.length > 1,
+                          child: Dismissible(
+                            key: ValueKey('dismiss-${item.id}'),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                Icons.delete_outline,
+                                color: Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                            confirmDismiss: (_) => _confirmDeleteItem(item),
+                            child: PlanItemCard(
+                              item: item,
+                              onEdit: () => _openEditSheet(item),
+                              onSchedule: () => _openTimeSheet(item),
+                              onDelete: () => _deleteItem(item),
+                              showDragHandle: items.length > 1,
+                            ),
                           ),
                         );
                       },
