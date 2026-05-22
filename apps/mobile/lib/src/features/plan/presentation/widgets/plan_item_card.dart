@@ -8,16 +8,16 @@ import 'subject_preset_picker.dart';
 class PlanItemCard extends StatelessWidget {
   final PlanItem item;
   final VoidCallback onEdit;
+  final VoidCallback onSchedule;
   final VoidCallback onDelete;
-  final ValueChanged<bool> onDoneChanged;
   final bool showDragHandle;
 
   const PlanItemCard({
     super.key,
     required this.item,
     required this.onEdit,
+    required this.onSchedule,
     required this.onDelete,
-    required this.onDoneChanged,
     this.showDragHandle = false,
   });
 
@@ -29,7 +29,7 @@ class PlanItemCard extends StatelessWidget {
     final actualMin = (item.actualSeconds / 60).round();
     final rate = item.completionRate.clamp(0.0, 1.0);
     final color = subjectColor(item.subject);
-    final isDone = item.isDone;
+    final met = item.focusGoalMet;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -40,8 +40,8 @@ class PlanItemCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: isDone
-                  ? cs.outlineVariant.withValues(alpha: 0.5)
+              color: met
+                  ? color.withValues(alpha: 0.45)
                   : color.withValues(alpha: 0.25),
             ),
           ),
@@ -55,7 +55,7 @@ class PlanItemCard extends StatelessWidget {
                       width: 3,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: isDone ? cs.outline : color,
+                        color: met ? color : color.withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
@@ -65,18 +65,20 @@ class PlanItemCard extends StatelessWidget {
                         item.subject,
                         style: tt.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
-                          decoration:
-                              isDone ? TextDecoration.lineThrough : null,
-                          color: isDone ? cs.onSurfaceVariant : cs.onSurface,
                         ),
                       ),
                     ),
-                    Checkbox(
-                      value: isDone,
-                      activeColor: color,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    IconButton(
+                      tooltip: '시간 설정',
+                      icon: Icon(
+                        Icons.access_time_rounded,
+                        size: 20,
+                        color: item.scheduledStartAt != null
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
+                      ),
                       visualDensity: VisualDensity.compact,
-                      onChanged: (v) => onDoneChanged(v ?? false),
+                      onPressed: onSchedule,
                     ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 18),
@@ -89,9 +91,11 @@ class PlanItemCard extends StatelessWidget {
                       onPressed: onDelete,
                     ),
                     if (showDragHandle)
-                      Icon(Icons.drag_handle_rounded,
-                          size: 18,
-                          color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+                      Icon(
+                        Icons.drag_handle_rounded,
+                        size: 18,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.4),
+                      ),
                   ],
                 ),
               ),
@@ -117,7 +121,7 @@ class PlanItemCard extends StatelessWidget {
                       '${formatPlanMinutes(actualMin)}/${formatPlanMinutes(targetMin)}',
                       style: tt.labelMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: isDone ? cs.onSurfaceVariant : color,
+                        color: met ? color : cs.onSurface,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -127,17 +131,17 @@ class PlanItemCard extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: rate,
                           minHeight: 5,
-                          color: isDone ? cs.outline : color,
+                          color: color,
                           backgroundColor: color.withValues(alpha: 0.12),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${(rate * 100).round()}%',
+                      met ? '달성' : '${(rate * 100).round()}%',
                       style: tt.labelSmall?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: cs.onSurfaceVariant,
+                        color: met ? color : cs.onSurfaceVariant,
                       ),
                     ),
                   ],

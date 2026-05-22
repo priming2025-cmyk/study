@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/plan_models.dart';
+import '../data/plan_repeat_config.dart';
 import '../data/plan_repository.dart';
 import '../infra/plan_alarm_service.dart';
 
@@ -121,43 +122,79 @@ class PlanEditorController extends ChangeNotifier {
     required int targetMinutes,
     TimeOfDay? startTime,
     required bool reminderEnabled,
+    DateTime? forDay,
+    PlanRepeatConfig? repeat,
   }) async {
     final trimmed = subject.trim();
     if (trimmed.isEmpty) return;
 
+    final repeatCfg = repeat ?? const PlanRepeatConfig();
+    final anchor = forDay ?? planDay;
+    final dates = repeatCfg.enabled
+        ? repeatCfg.occurrenceDates(anchor)
+        : [DateTime(anchor.year, anchor.month, anchor.day)];
+
+    for (final day in dates) {
+      await _addPlanEntryForDay(
+        day: day,
+        subject: trimmed,
+        targetMinutes: targetMinutes,
+        startTime: startTime,
+        reminderEnabled: reminderEnabled,
+        refreshTodayView: sameCalendarDay(day, planDay),
+      );
+    }
+    if (repeatCfg.enabled) {
+      await bootstrap();
+    }
+  }
+
+  Future<void> _addPlanEntryForDay({
+    required DateTime day,
+    required String subject,
+    required int targetMinutes,
+    TimeOfDay? startTime,
+    required bool reminderEnabled,
+    required bool refreshTodayView,
+  }) async {
     DateTime? scheduledUtc;
     if (startTime != null) {
       final local = DateTime(
-        planDay.year,
-        planDay.month,
-        planDay.day,
+        day.year,
+        day.month,
+        day.day,
         startTime.hour,
         startTime.minute,
       );
       scheduledUtc = local.toUtc();
     }
 
-    final planId = await ensurePlanId();
-    final item = await _repo.addItem(
+    var plan = await _repo.fetchPlanForDate(day);
+    if (plan == null) {
+      final id = await _repo.createOrUpdatePlanForDate(day);
+      plan = TodayPlan(id: id, date: day, title: null, items: const []);
+    }
+    final planId = plan.id;
+
+    await _repo.addItem(
       planId: planId,
-      subject: trimmed,
+      subject: subject,
       targetSeconds: targetMinutes * 60,
       scheduledStartAtUtc: scheduledUtc,
       reminderEnabled: reminderEnabled && scheduledUtc != null,
     );
 
-    final plan = todayPlan;
-    todayPlan = TodayPlan(
-      id: planId,
-      date: planDay,
-      title: plan?.title,
-      items: [...(plan?.items ?? const []), item],
-    );
-    await _persistCache();
-    showingOfflinePlan = false;
-    await PlanAlarmService.syncFromPlan(todayPlan);
-    notifyListeners();
+    if (refreshTodayView) {
+      todayPlan = await _repo.fetchPlanForDate(planDay);
+      await _persistCache();
+      showingOfflinePlan = false;
+      await PlanAlarmService.syncFromPlan(todayPlan);
+      notifyListeners();
+    }
   }
+
+  static bool sameCalendarDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// 기존 항목의 과목·목표 시간·시작 시각·알림 수정.
   Future<void> updatePlanEntry({

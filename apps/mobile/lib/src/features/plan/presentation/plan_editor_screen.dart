@@ -4,10 +4,12 @@ import 'dart:math' as math;
 
 import '../../../core/providers/core_providers.dart';
 import '../data/plan_models.dart';
+import '../data/plan_repeat_config.dart';
 import 'monthly_plan_overview_sheet.dart';
 import 'plan_editor_controller.dart';
 import 'widgets/plan_add_item_sheet.dart';
 import 'widgets/plan_item_card.dart';
+import 'widgets/plan_item_time_sheet.dart';
 import 'widgets/plan_time_utils.dart';
 import 'widgets/plan_week_bar.dart';
 
@@ -81,14 +83,23 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     }
   }
 
-  Future<void> _toggleDone(PlanItem item, bool done) async {
-    try {
-      await _c.toggleDone(item, done);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
-    }
+  void _openTimeSheet(PlanItem item) {
+    PlanItemTimeSheet.show(
+      context,
+      item: item,
+      onSave: ({
+        required int targetMinutes,
+        required TimeOfDay? startTime,
+        required bool reminderEnabled,
+      }) =>
+          _c.updatePlanEntry(
+            item: item,
+            subject: item.subject,
+            targetMinutes: targetMinutes,
+            startTime: startTime,
+            reminderEnabled: reminderEnabled,
+          ),
+    );
   }
 
   void _openAddSheet() {
@@ -102,18 +113,19 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       ),
       builder: (_) => PlanAddItemSheet(
         planDay: _c.planDay,
-        recentSubjects: _c.recentSubjects,
         onAdd: ({
           required String subject,
           required int targetMinutes,
           TimeOfDay? startTime,
           required bool reminderEnabled,
+          PlanRepeatConfig? repeat,
         }) =>
             _c.addPlanEntry(
               subject: subject,
               targetMinutes: targetMinutes,
               startTime: startTime,
               reminderEnabled: reminderEnabled,
+              repeat: repeat,
             ),
       ),
     );
@@ -131,12 +143,12 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       builder: (_) => PlanAddItemSheet(
         planDay: _c.planDay,
         editItem: item,
-        recentSubjects: _c.recentSubjects,
         onAdd: ({
           required String subject,
           required int targetMinutes,
           TimeOfDay? startTime,
           required bool reminderEnabled,
+          PlanRepeatConfig? repeat,
         }) =>
             _c.updatePlanEntry(
               item: item,
@@ -223,7 +235,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                         completionRate: completionRate,
                         totalActualSeconds: plan?.totalActualSeconds ?? 0,
                         totalTargetSeconds: plan?.totalTargetSeconds ?? 0,
-                        doneCount: items.where((e) => e.isDone).length,
+                        doneCount: items.where((e) => e.focusGoalMet).length,
                         totalCount: items.length,
                       ),
                       const SizedBox(height: 12),
@@ -251,7 +263,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                               const Spacer(),
                               if (items.length > 1)
                                 Text(
-                                  '길게 누른 후 드래그해서 순서 변경',
+                                  '길게 눌러 순서 변경',
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelSmall
@@ -285,8 +297,8 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                           child: PlanItemCard(
                             item: item,
                             onEdit: () => _openEditSheet(item),
+                            onSchedule: () => _openTimeSheet(item),
                             onDelete: () => _deleteItem(item),
-                            onDoneChanged: (v) => _toggleDone(item, v),
                             showDragHandle: items.length > 1,
                           ),
                         );
@@ -393,7 +405,7 @@ class _ProgressRing extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  totalCount > 0 ? '완료 $doneCount/$totalCount과목' : '과목을 추가해 보세요',
+                  totalCount > 0 ? '집중 달성 $doneCount/$totalCount과목' : '과목을 추가해 보세요',
                   style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],

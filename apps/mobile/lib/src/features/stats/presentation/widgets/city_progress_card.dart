@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'dream_city_isometric_view.dart';
+
 /// 꿈의 도시 — 섹터 기반 건설 게임 카드.
 /// 2×2 → 3×3 그리드 확장, 건물 Lv.1~8, 블럭으로 섹터·건물 구매.
 class CityProgressCard extends StatelessWidget {
@@ -18,16 +20,6 @@ class CityProgressCard extends StatelessWidget {
     if (blockCount >= 300) return 3;
     if (blockCount >= 80) return 3;
     return 2;
-  }
-
-  int get _unlockedSectors {
-    final max = _gridSize * _gridSize;
-    if (blockCount >= 200) return max;
-    if (blockCount >= 120) return max - 1;
-    if (blockCount >= 60) return max - 2;
-    if (blockCount >= 30) return 3;
-    if (blockCount >= 10) return 2;
-    return 1;
   }
 
   List<_CityBuilding> get _placed => _buildingsForBlocks(blockCount);
@@ -104,22 +96,31 @@ class CityProgressCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: DreamCityIsometricView(
+                blockCount: blockCount,
+                height: 180,
+              ),
+            ),
+            const SizedBox(height: 8),
             AspectRatio(
-              aspectRatio: 1,
+              aspectRatio: 2.4,
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
+                scrollDirection: Axis.horizontal,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: grid,
-                  crossAxisSpacing: 6,
+                  crossAxisCount: 1,
                   mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  childAspectRatio: 1.1,
                 ),
-                itemCount: grid * grid,
+                itemCount: placed.length.clamp(0, 6),
                 itemBuilder: (context, i) {
-                  final unlocked = i < _unlockedSectors;
-                  final building = i < placed.length ? placed[i] : null;
+                  final building = placed[i];
                   return _SectorTile(
-                    unlocked: unlocked,
+                    unlocked: true,
                     building: building,
                     index: i,
                   );

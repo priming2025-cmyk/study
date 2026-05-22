@@ -6,8 +6,6 @@ import '../../../plan/presentation/widgets/subject_preset_picker.dart';
 import 'session_plan_subject_tile.dart';
 
 /// 집중 세션에서 오늘 과목을 고르거나 퀵스타트로 즉시 시작합니다.
-/// 계획이 있을 때: 과목 카드 한 번 탭 → 바로 시작 선택 (1탭!)
-/// 계획이 없을 때: 과목 칩 + 시간 칩 → 시작 버튼 (2탭)
 class SubjectPickerCard extends StatefulWidget {
   final TodayPlan? todayPlan;
   final String? selectedPlanItemId;
@@ -18,8 +16,9 @@ class SubjectPickerCard extends StatefulWidget {
     required int targetMinutes,
   }) onQuickAdd;
   final VoidCallback onOpenAdvancedAdd;
-  final void Function(PlanItem item) onScheduleItem;
+  final void Function(PlanItem item) onEditItem;
   final Future<void> Function(PlanItem item) onDeleteItem;
+  final void Function(int oldIndex, int newIndex)? onReorder;
 
   const SubjectPickerCard({
     super.key,
@@ -29,8 +28,9 @@ class SubjectPickerCard extends StatefulWidget {
     required this.recentSubjects,
     required this.onQuickAdd,
     required this.onOpenAdvancedAdd,
-    required this.onScheduleItem,
+    required this.onEditItem,
     required this.onDeleteItem,
+    this.onReorder,
   });
 
   @override
@@ -42,7 +42,6 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
   int _quickMinutes = 60;
   bool _adding = false;
 
-  // 퀵스타트 시간 옵션
   static const _timeOptions = [
     (label: '30분', minutes: 30),
     (label: '1시간', minutes: 60),
@@ -51,7 +50,6 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
     (label: '3시간', minutes: 180),
   ];
 
-  // 퀵스타트 과목 프리셋 (자주 쓰는 과목 우선)
   static const _quickSubjects = ['국어', '영어', '수학', '과학', '사회', '역사'];
 
   Future<void> _submitQuickAdd() async {
@@ -89,15 +87,15 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
         items: items,
         selectedPlanItemId: widget.selectedPlanItemId,
         onSelected: widget.onSelected,
-        onScheduleItem: widget.onScheduleItem,
+        onEditItem: widget.onEditItem,
         onDeleteItem: widget.onDeleteItem,
+        onReorder: widget.onReorder,
         onOpenAdvancedAdd: widget.onOpenAdvancedAdd,
         cs: cs,
         tt: tt,
       );
     }
 
-    // 계획 없을 때 — 퀵스타트 UI
     return _QuickStartSection(
       quickSubject: _quickSubject,
       quickMinutes: _quickMinutes,
@@ -115,15 +113,13 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
   }
 }
 
-// ─────────────────────────────────────────────
-// 계획 있을 때 — 1탭 시작 카드 목록
-// ─────────────────────────────────────────────
 class _PlanSection extends StatelessWidget {
   final List<PlanItem> items;
   final String? selectedPlanItemId;
   final ValueChanged<PlanItem> onSelected;
-  final void Function(PlanItem) onScheduleItem;
+  final void Function(PlanItem) onEditItem;
   final Future<void> Function(PlanItem) onDeleteItem;
+  final void Function(int oldIndex, int newIndex)? onReorder;
   final VoidCallback onOpenAdvancedAdd;
   final ColorScheme cs;
   final TextTheme tt;
@@ -132,8 +128,9 @@ class _PlanSection extends StatelessWidget {
     required this.items,
     required this.selectedPlanItemId,
     required this.onSelected,
-    required this.onScheduleItem,
+    required this.onEditItem,
     required this.onDeleteItem,
+    required this.onReorder,
     required this.onOpenAdvancedAdd,
     required this.cs,
     required this.tt,
@@ -141,14 +138,14 @@ class _PlanSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final doneCount = items.where((e) => e.isDone).length;
+    final metCount = items.where((e) => e.focusGoalMet).length;
     final totalCount = items.length;
-    final allDone = doneCount == totalCount && totalCount > 0;
+    final allMet = metCount == totalCount && totalCount > 0;
+    final canReorder = onReorder != null && items.length > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 헤더 + 진행률
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
           child: Row(
@@ -158,16 +155,16 @@ class _PlanSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      allDone ? '오늘 계획 완료! 🎉' : '오늘의 계획',
+                      allMet ? '오늘 목표 달성! 🎉' : '오늘의 계획',
                       style: tt.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: allDone ? cs.primary : cs.onSurface,
+                        color: allMet ? cs.primary : cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      allDone
-                          ? '훌륭해요! 추가로 공부할 과목을 선택하거나 퀵스타트를 써보세요.'
+                      allMet
+                          ? '추가로 공부할 과목을 선택하거나 새 과목을 추가해 보세요.'
                           : '과목을 탭하면 바로 공부를 시작해요',
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
@@ -185,12 +182,11 @@ class _PlanSection extends StatelessWidget {
             ],
           ),
         ),
-        // 진행률 바
         if (totalCount > 0) ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
             child: LinearProgressIndicator(
-              value: doneCount / totalCount,
+              value: metCount / totalCount,
               minHeight: 5,
               backgroundColor: cs.surfaceContainerHighest,
               color: cs.primary,
@@ -198,28 +194,49 @@ class _PlanSection extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$doneCount/$totalCount 완료',
+            '집중 달성 $metCount/$totalCount',
             style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
             textAlign: TextAlign.end,
           ),
           const SizedBox(height: 10),
         ],
-        // 과목 카드 목록
-        ...items.map((e) => SessionPlanSubjectTile(
+        if (canReorder)
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            onReorder: onReorder!,
+            itemBuilder: (context, i) {
+              final e = items[i];
+              return ReorderableDelayedDragStartListener(
+                key: ValueKey(e.id),
+                index: i,
+                child: SessionPlanSubjectTile(
+                  item: e,
+                  selected: e.id == selectedPlanItemId,
+                  onTap: () => onSelected(e),
+                  onEdit: () => onEditItem(e),
+                  onDelete: () => onDeleteItem(e),
+                  showDragHandle: true,
+                ),
+              );
+            },
+          )
+        else
+          ...items.map(
+            (e) => SessionPlanSubjectTile(
               item: e,
               selected: e.id == selectedPlanItemId,
               onTap: () => onSelected(e),
-              onSchedule: () => onScheduleItem(e),
+              onEdit: () => onEditItem(e),
               onDelete: () => onDeleteItem(e),
-            )),
+            ),
+          ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────
-// 계획 없을 때 — 퀵스타트 UI (2탭)
-// ─────────────────────────────────────────────
 class _QuickStartSection extends StatelessWidget {
   final String? quickSubject;
   final int quickMinutes;
@@ -259,7 +276,6 @@ class _QuickStartSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 헤더
         Text(
           '지금 바로 시작',
           style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -270,8 +286,6 @@ class _QuickStartSection extends StatelessWidget {
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
-
-        // 1단계: 과목 선택
         _StepLabel(step: '1', label: '과목 선택', cs: cs, tt: tt),
         const SizedBox(height: 8),
         Wrap(
@@ -287,8 +301,7 @@ class _QuickStartSection extends StatelessWidget {
               checkmarkColor: color,
               labelStyle: TextStyle(
                 color: isSelected ? color : cs.onSurfaceVariant,
-                fontWeight:
-                    isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
               side: BorderSide(
                 color: isSelected ? color : cs.outlineVariant,
@@ -300,8 +313,6 @@ class _QuickStartSection extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: 16),
-
-        // 2단계: 시간 선택
         _StepLabel(step: '2', label: '공부 시간', cs: cs, tt: tt),
         const SizedBox(height: 8),
         Wrap(
@@ -318,8 +329,6 @@ class _QuickStartSection extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: 20),
-
-        // 시작 버튼
         FilledButton.icon(
           onPressed: adding || quickSubject == null ? null : onStart,
           style: FilledButton.styleFrom(
@@ -348,7 +357,7 @@ class _QuickStartSection extends StatelessWidget {
           child: TextButton.icon(
             onPressed: onOpenAdvancedAdd,
             icon: const Icon(Icons.tune, size: 16),
-            label: const Text('시작 시각·알림 설정'),
+            label: const Text('시작 시각·반복 설정'),
             style: TextButton.styleFrom(
               foregroundColor: cs.onSurfaceVariant,
               visualDensity: VisualDensity.compact,

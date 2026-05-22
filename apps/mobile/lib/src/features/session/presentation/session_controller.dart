@@ -273,6 +273,23 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 오늘 계획 항목 순서 변경 (공부 탭 드래그).
+  void reorderPlanItems(int oldIndex, int newIndex) {
+    final plan = todayPlan;
+    if (plan == null) return;
+    final items = List<PlanItem>.from(plan.items);
+    if (newIndex > oldIndex) newIndex--;
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    todayPlan = TodayPlan(
+      id: plan.id,
+      date: plan.date,
+      title: plan.title,
+      items: items,
+    );
+    notifyListeners();
+  }
+
   /// 오늘 계획에서 항목 삭제. 선택 중이던 항목이면 다른 항목으로 옮깁니다.
   Future<void> deletePlanItem(PlanItem item) async {
     await PlanAlarmService.cancel(item.id);

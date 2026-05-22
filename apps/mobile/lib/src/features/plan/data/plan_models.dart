@@ -42,6 +42,10 @@ class PlanItem {
     this.reminderEnabled = false,
   });
 
+  /// 집중 세션으로 목표 시간을 채웠는지 (수동 체크와 무관).
+  bool get focusGoalMet =>
+      targetSeconds > 0 && actualSeconds >= targetSeconds;
+
   double get completionRate {
     if (targetSeconds <= 0) return 0;
     final r = actualSeconds / targetSeconds;

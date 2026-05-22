@@ -7,7 +7,9 @@ import '../../../core/supabase/supabase_client.dart';
 import '../../motivation/domain/motivation_models.dart';
 import '../../session/domain/wallet_balances.dart';
 import '../data/daily_focus_stat.dart';
+import 'dream_city_screen.dart';
 import 'widgets/city_progress_card.dart';
+import 'widgets/dream_city_isometric_view.dart';
 import 'widgets/weekly_focus_chart.dart';
 
 String formatFocusDuration(int seconds) {
@@ -139,7 +141,14 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                 CityProgressCard(
                   blockCount: p.wallet.blocks,
                   totalFocusMinutes: total ~/ 60,
-                  onTap: () => context.push('/coins'),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => DreamCityScreen(
+                        blockCount: p.wallet.blocks,
+                        totalFocusMinutes: total ~/ 60,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
                 Text(
@@ -178,6 +187,21 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                                 ),
                           ),
                         ],
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: DreamCityIsometricView(
+                            blockCount: p.wallet.blocks,
+                            height: 120,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '프로필에 노출되는 꿈의 도시 — 친구도 볼 수 있어요',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        ),
                         const Divider(height: 22),
                         Row(
                           children: [

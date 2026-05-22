@@ -253,3 +253,31 @@
 - 인스타그램式: 여백↑, 설명↓, 아이콘 중심, 카드 border 얇게
 - Material 3 유지, gradient 최소화 (기록 도시 카드 제외)
 
+---
+
+## 3차 개선 (2026-05-22) — UX 정리 + 게임 확장
+
+### 계획탭
+- **체크박스 제거** → 왼쪽 **시계** (시간 설정), 연필·휴지통·드래그
+- 완료 = **집중 시간 ≥ 목표** (`focusGoalMet`), 과목명 취소선 없음
+- `+` 시트: **과목 / 시작시간 / 소요시간 / 반복** 4탭 (지하철 UI 제거)
+  - `MinuteScrollPicker` 5분 단위, 오전·오후
+  - `PlanRepeatConfig` 주·일 반복, 「반복 안 함」
+  - `CustomSubjectStore` 과목 색상
+
+### 공부탭
+- **시계 제거** → 연필(편집)·휴지통·드래그 순서 변경
+- 시간 설정은 **계획탭**에서만 (시계 버튼)
+
+### 셋터디
+- **연락처에서 친구 찾기** (`flutter_contacts`, `ContactsImportSheet`)
+
+### 기록 · 꿈의 도시
+- **아이소메트릭 3D 느낌** `DreamCityIsometricView`
+- 상세 화면 `DreamCityScreen`, 프로필(기록) 미리보기
+
+### 미완 (서버 연동)
+- `friend_presences` / DM 실시간
+- 연락처 ↔ `profiles.phone` 매칭 API 정식화
+- 도시 배치·블럭 상점 풀 게임 루프
+

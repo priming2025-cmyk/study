@@ -12,8 +12,8 @@ import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../plan/data/plan_models.dart';
+import '../../plan/data/plan_repeat_config.dart';
 import '../../plan/presentation/widgets/plan_add_item_sheet.dart';
-import '../../plan/presentation/widgets/study_time_range_sheet.dart';
 import '../../study_room/infra/study_room_ambient_player.dart';
 import '../../study_room/presentation/widgets/study_room_ambient_sheet.dart';
 import '../domain/attention_scoring.dart';
@@ -114,12 +114,12 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       ),
       builder: (ctx) => PlanAddItemSheet(
         planDay: DateTime.now(),
-        recentSubjects: _c.recentSubjects,
         onAdd: ({
           required String subject,
           required int targetMinutes,
           TimeOfDay? startTime,
           required bool reminderEnabled,
+          PlanRepeatConfig? repeat,
         }) =>
             _c.addItemAndSelect(
               subject: subject,
@@ -131,38 +131,34 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     );
   }
 
-  Future<void> _openScheduleSheet(PlanItem item) async {
-    TimeOfDay? end;
-    if (item.scheduledStartAt != null && item.targetSeconds > 0) {
-      final start = item.scheduledStartAt!.toLocal();
-      final endDt = start.add(Duration(seconds: item.targetSeconds));
-      end = TimeOfDay(hour: endDt.hour, minute: endDt.minute);
-    }
-    final result = await StudyTimeRangeSheet.show(
-      context,
-      subject: item.subject,
-      initialStart: item.scheduledStartAt != null
-          ? TimeOfDay(
-              hour: item.scheduledStartAt!.toLocal().hour,
-              minute: item.scheduledStartAt!.toLocal().minute,
-            )
-          : null,
-      initialEnd: end,
+  void _openEditSheet(PlanItem item) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => PlanAddItemSheet(
+        planDay: DateTime.now(),
+        editItem: item,
+        onAdd: ({
+          required String subject,
+          required int targetMinutes,
+          TimeOfDay? startTime,
+          required bool reminderEnabled,
+          PlanRepeatConfig? repeat,
+        }) =>
+            _c.updatePlanItem(
+              item: item,
+              subject: subject,
+              targetMinutes: targetMinutes,
+              startTime: startTime,
+              reminderEnabled: reminderEnabled,
+            ),
+      ),
     );
-    if (result == null || !mounted) return;
-    try {
-      await _c.updatePlanItem(
-        item: item,
-        subject: item.subject,
-        targetMinutes: result.targetMinutes,
-        startTime: result.start,
-        reminderEnabled: true,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('저장 실패: $e')));
-    }
   }
 
   Future<void> _onDeleteSessionPlanItem(PlanItem item) async {
@@ -432,8 +428,9 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                                   targetMinutes: targetMinutes,
                                 ),
                         onOpenAdvancedAdd: _openSessionAddSheet,
-                        onScheduleItem: _openScheduleSheet,
+                        onEditItem: _openEditSheet,
                         onDeleteItem: _onDeleteSessionPlanItem,
+                        onReorder: _c.reorderPlanItems,
                       ),
                       // 같이 공부 중(others) 카드 제거: 스터디방에서만 노출
                       const SizedBox(height: 80),

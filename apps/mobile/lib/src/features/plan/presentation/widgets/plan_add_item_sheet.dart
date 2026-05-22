@@ -1,28 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
+import '../../data/custom_subject_store.dart';
 import '../../data/plan_models.dart';
-import 'station_time_picker.dart';
-import 'subject_preset_picker.dart';
+import '../../data/plan_repeat_config.dart';
+import 'minute_scroll_picker.dart';
 
-/// "과목 + 목표 시간(지하철 정류장 방식) + (선택) 시작 시각 + 알림" 바텀시트.
-/// [editItem]이 있으면 수정 모드가 됩니다.
+/// 과목 · 시작시간 · 소요시간 · 반복 — 4탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
   final DateTime planDay;
-  final List<String> recentSubjects;
   final PlanItem? editItem;
   final Future<void> Function({
     required String subject,
     required int targetMinutes,
     TimeOfDay? startTime,
     required bool reminderEnabled,
+    PlanRepeatConfig? repeat,
   }) onAdd;
 
   const PlanAddItemSheet({
     super.key,
     required this.planDay,
     required this.onAdd,
-    this.recentSubjects = const [],
     this.editItem,
   });
 
@@ -30,12 +27,21 @@ class PlanAddItemSheet extends StatefulWidget {
   State<PlanAddItemSheet> createState() => _PlanAddItemSheetState();
 }
 
-class _PlanAddItemSheetState extends State<PlanAddItemSheet> {
-  final _textController = TextEditingController();
-  String? _selectedSubject;
-  int _targetMinutes = 60;
-  TimeOfDay? _startTime;
-  bool _reminderEnabled = false;
+class _PlanAddItemSheetState extends State<PlanAddItemSheet>
+    with SingleTickerProviderStateMixin {
+  late TabController _tab;
+  final _nameCtrl = TextEditingController();
+
+  List<CustomSubject> _subjects = List.from(defaultSubjects);
+  String? _selectedName;
+  int _selectedColor = 0xFF3B82F6;
+
+  int _startMin = 9 * 60; // 09:00
+  int _durationMin = 50;
+  PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
+  int _repeatInterval = 1;
+  Set<int> _weekdays = {1, 2, 3, 4, 5};
+  bool _repeatNone = true;
   bool _saving = false;
 
   bool get _editing => widget.editItem != null;
@@ -43,71 +49,62 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet> {
   @override
   void initState() {
     super.initState();
+    _tab = TabController(length: 4, vsync: this);
+    _loadSubjects();
     final e = widget.editItem;
     if (e != null) {
-      _textController.text = e.subject;
-      _selectedSubject = e.subject;
-      _targetMinutes = (e.targetSeconds / 60).round().clamp(5, 240);
-      final sched = e.scheduledStartAt;
+      _selectedName = e.subject;
+      _nameCtrl.text = e.subject;
+      _durationMin = (e.targetSeconds / 60).round().clamp(5, 240);
+      final sched = e.scheduledStartAt?.toLocal();
       if (sched != null) {
-        final local = sched.toLocal();
-        _startTime = TimeOfDay(hour: local.hour, minute: local.minute);
-        _reminderEnabled = e.reminderEnabled;
+        _startMin = sched.hour * 60 + sched.minute;
       }
+      _repeatNone = true;
     }
+  }
+
+  Future<void> _loadSubjects() async {
+    final list = await CustomSubjectStore.load();
+    if (mounted) setState(() => _subjects = list);
   }
 
   @override
   void dispose() {
-    _textController.dispose();
+    _tab.dispose();
+    _nameCtrl.dispose();
     super.dispose();
   }
 
-  void _onPresetSelected(String s) {
-    setState(() {
-      _selectedSubject = s;
-      _textController.text = s;
-    });
-  }
-
-  Future<void> _pickStartTime() async {
-    final t = await showTimePicker(
-      context: context,
-      initialTime: _startTime ?? TimeOfDay.now(),
+  PlanRepeatConfig get _repeatConfig {
+    if (_repeatNone || _editing) return const PlanRepeatConfig();
+    return PlanRepeatConfig(
+      unit: _repeatUnit,
+      interval: _repeatInterval,
+      weekdays: _weekdays,
     );
-    if (t != null) {
-      setState(() {
-        _startTime = t;
-        _reminderEnabled = true;
-      });
-    }
-  }
-
-  void _clearStartTime() {
-    setState(() {
-      _startTime = null;
-      _reminderEnabled = false;
-    });
   }
 
   Future<void> _submit() async {
-    final subject = _textController.text.trim();
-    if (subject.isEmpty) {
+    final name = (_selectedName ?? _nameCtrl.text).trim();
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('과목명을 입력하거나 선택해 주세요')),
+        const SnackBar(content: Text('과목을 선택하거나 입력해 주세요')),
       );
       return;
     }
-
+    await CustomSubjectStore.upsert(name, _selectedColor);
     setState(() => _saving = true);
     try {
+      final start = TimeOfDay(hour: _startMin ~/ 60, minute: _startMin % 60);
       await widget.onAdd(
-        subject: subject,
-        targetMinutes: _targetMinutes,
-        startTime: _startTime,
-        reminderEnabled: _startTime != null && _reminderEnabled,
+        subject: name,
+        targetMinutes: _durationMin,
+        startTime: start,
+        reminderEnabled: true,
+        repeat: _repeatConfig,
       );
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,166 +119,120 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final dayLabel = DateFormat.yMMMEd('ko').format(widget.planDay);
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final navH = kBottomNavigationBarHeight;
+    final sheetH = MediaQuery.of(context).size.height * 0.78;
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottom),
+    return SizedBox(
+      height: sheetH,
+      child: Material(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 드래그 핸들
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: cs.outlineVariant,
-                  borderRadius: BorderRadius.circular(99),
-                ),
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(99),
               ),
             ),
-            const SizedBox(height: 16),
-            // 제목 + 날짜
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _editing ? '과목 수정' : '과목 추가',
-                        style: tt.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        dayLabel,
-                        style: tt.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
+            Expanded(
+              child: TabBarView(
+                controller: _tab,
+                children: [
+                  _SubjectTab(
+                    subjects: _subjects,
+                    selected: _selectedName,
+                    nameCtrl: _nameCtrl,
+                    color: _selectedColor,
+                    onSelect: (s) => setState(() {
+                      _selectedName = s.name;
+                      _selectedColor = s.colorValue;
+                      _nameCtrl.text = s.name;
+                    }),
+                    onColor: (c) => setState(() => _selectedColor = c),
+                    onAddCustom: () async {
+                      final n = _nameCtrl.text.trim();
+                      if (n.isEmpty) return;
+                      await CustomSubjectStore.upsert(n, _selectedColor);
+                      await _loadSubjects();
+                      setState(() {
+                        _selectedName = n;
+                      });
+                    },
+                  ),
+                  _StartTab(
+                    startMin: _startMin,
+                    onChanged: (m) => setState(() => _startMin = m),
+                  ),
+                  _DurationTab(
+                    durationMin: _durationMin,
+                    onChanged: (m) => setState(() => _durationMin = m),
+                  ),
+                  _RepeatTab(
+                    unit: _repeatUnit,
+                    interval: _repeatInterval,
+                    weekdays: _weekdays,
+                    onUnit: (u) => setState(() {
+                      _repeatUnit = u;
+                      _repeatNone = false;
+                    }),
+                    onInterval: (n) => setState(() => _repeatInterval = n),
+                    onWeekdayToggle: (d) => setState(() {
+                      if (_weekdays.contains(d)) {
+                        _weekdays = Set.from(_weekdays)..remove(d);
+                      } else {
+                        _weekdays = Set.from(_weekdays)..add(d);
+                      }
+                    }),
+                    onNone: () => setState(() => _repeatNone = true),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.only(bottom: bottom + navH * 0.5),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
+                color: cs.surface,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TabBar(
+                    controller: _tab,
+                    labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    tabs: const [
+                      Tab(text: '과목'),
+                      Tab(text: '시작시간'),
+                      Tab(text: '소요시간'),
+                      Tab(text: '반복'),
                     ],
                   ),
-                ),
-                // 시작 시각 아이콘 버튼 (우상단)
-                _StartTimeButton(
-                  startTime: _startTime,
-                  onPick: _pickStartTime,
-                  onClear: _clearStartTime,
-                  reminderEnabled: _reminderEnabled,
-                  onReminderChanged: (v) =>
-                      setState(() => _reminderEnabled = v),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // ── 과목 입력 ──
-            TextField(
-              controller: _textController,
-              autofocus: false,
-              textInputAction: TextInputAction.done,
-              onChanged: (_) => setState(() => _selectedSubject = null),
-              decoration: InputDecoration(
-                labelText: '과목명 직접 입력 또는 아래에서 선택',
-                filled: true,
-                fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: cs.primary, width: 2),
-                ),
-                prefixIcon: _selectedSubject != null
-                    ? Icon(Icons.circle,
-                        size: 12, color: subjectColor(_selectedSubject!))
-                    : const Icon(Icons.edit_outlined),
-              ),
-            ),
-            const SizedBox(height: 14),
-            SubjectPresetPicker(
-              selected: _selectedSubject,
-              onSelect: _onPresetSelected,
-            ),
-            if (widget.recentSubjects.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text('최근',
-                  style: tt.labelMedium?.copyWith(
-                      color: cs.onSurfaceVariant)),
-              const SizedBox(height: 6),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: widget.recentSubjects
-                      .map(
-                        (s) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            label: Text(s,
-                                style: const TextStyle(fontSize: 12)),
-                            onPressed: () => _onPresetSelected(s),
-                            avatar: Icon(Icons.history,
-                                size: 14, color: cs.onSurfaceVariant),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ],
-
-            // ── 목표 공부 시간 (지하철 정류장) ──
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Icon(Icons.directions_subway_rounded,
-                    size: 18, color: cs.primary),
-                const SizedBox(width: 8),
-                Text('목표 공부 시간', style: tt.labelLarge),
-                const Spacer(),
-                Text(
-                  '30분 단위 정류장 · 5분씩 조정 가능',
-                  style: tt.labelSmall
-                      ?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            StationTimePicker(
-              initialMinutes: _targetMinutes,
-              onChanged: (m) => setState(() => _targetMinutes = m),
-            ),
-
-            const SizedBox(height: 24),
-            // 저장 버튼
-            FilledButton(
-              onPressed: _saving ? null : _submit,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
                       ),
-                    )
-                  : Text(
-                      _editing ? '변경 저장' : '계획에 추가',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(_editing ? '저장' : '계획에 추가'),
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -290,82 +241,228 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet> {
   }
 }
 
-// ─────────────────────────────────────────────
-// 시작 시각 아이콘 버튼 (우상단)
-// ─────────────────────────────────────────────
-class _StartTimeButton extends StatelessWidget {
-  final TimeOfDay? startTime;
-  final VoidCallback onPick;
-  final VoidCallback onClear;
-  final bool reminderEnabled;
-  final ValueChanged<bool> onReminderChanged;
+class _SubjectTab extends StatelessWidget {
+  final List<CustomSubject> subjects;
+  final String? selected;
+  final TextEditingController nameCtrl;
+  final int color;
+  final ValueChanged<CustomSubject> onSelect;
+  final ValueChanged<int> onColor;
+  final VoidCallback onAddCustom;
 
-  const _StartTimeButton({
-    required this.startTime,
-    required this.onPick,
-    required this.onClear,
-    required this.reminderEnabled,
-    required this.onReminderChanged,
+  const _SubjectTab({
+    required this.subjects,
+    required this.selected,
+    required this.nameCtrl,
+    required this.color,
+    required this.onSelect,
+    required this.onColor,
+    required this.onAddCustom,
   });
+
+  static const _palette = [
+    0xFFEF4444,
+    0xFFF59E0B,
+    0xFF10B981,
+    0xFF3B82F6,
+    0xFF8B5CF6,
+    0xFFEC4899,
+    0xFF06B6D4,
+    0xFF64748B,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        TextField(
+          controller: nameCtrl,
+          decoration: const InputDecoration(
+            labelText: '새 과목 이름',
+            hintText: '직접 입력',
+          ),
+          onChanged: (_) {},
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _palette.map((c) {
+            final sel = color == c;
+            return GestureDetector(
+              onTap: () => onColor(c),
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Color(c),
+                  shape: BoxShape.circle,
+                  border: sel
+                      ? Border.all(color: cs.onSurface, width: 3)
+                      : null,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 8),
+        TextButton(onPressed: onAddCustom, child: const Text('과목 목록에 저장')),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: subjects.map((s) {
+            final isSel = selected == s.name;
+            return FilterChip(
+              label: Text(s.name),
+              selected: isSel,
+              avatar: CircleAvatar(
+                radius: 6,
+                backgroundColor: s.color,
+              ),
+              onSelected: (_) => onSelect(s),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _StartTab extends StatelessWidget {
+  final int startMin;
+  final ValueChanged<int> onChanged;
+
+  const _StartTab({required this.startMin, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: MinuteScrollPicker(
+        valueMinutes: startMin,
+        minMinutes: 5 * 60,
+        maxMinutes: 23 * 60 + 55,
+        stepMinutes: 5,
+        showAmPmToggle: true,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _DurationTab extends StatelessWidget {
+  final int durationMin;
+  final ValueChanged<int> onChanged;
+
+  const _DurationTab({required this.durationMin, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: MinuteScrollPicker(
+        valueMinutes: durationMin,
+        minMinutes: 5,
+        maxMinutes: 240,
+        stepMinutes: 5,
+        isDuration: true,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _RepeatTab extends StatelessWidget {
+  final PlanRepeatUnit unit;
+  final int interval;
+  final Set<int> weekdays;
+  final ValueChanged<PlanRepeatUnit> onUnit;
+  final ValueChanged<int> onInterval;
+  final ValueChanged<int> onWeekdayToggle;
+  final VoidCallback onNone;
+
+  const _RepeatTab({
+    required this.unit,
+    required this.interval,
+    required this.weekdays,
+    required this.onUnit,
+    required this.onInterval,
+    required this.onWeekdayToggle,
+    required this.onNone,
+  });
+
+  static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final hasTime = startTime != null;
 
-    return GestureDetector(
-      onTap: onPick,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: hasTime
-              ? cs.primaryContainer
-              : cs.surfaceContainerHighest.withValues(alpha: 0.6),
-          borderRadius: BorderRadius.circular(12),
-          border: hasTime
-              ? Border.all(color: cs.primary.withValues(alpha: 0.3), width: 1.5)
-              : null,
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('반복 주기', style: tt.titleSmall),
+        const SizedBox(height: 8),
+        SegmentedButton<PlanRepeatUnit>(
+          segments: const [
+            ButtonSegment(value: PlanRepeatUnit.day, label: Text('일')),
+            ButtonSegment(value: PlanRepeatUnit.week, label: Text('주')),
+          ],
+          selected: {unit},
+          onSelectionChanged: (s) => onUnit(s.first),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        const SizedBox(height: 16),
+        Row(
           children: [
-            Icon(
-              Icons.access_time_rounded,
-              size: 20,
-              color: hasTime ? cs.primary : cs.onSurfaceVariant,
+            IconButton(
+              onPressed: interval > 1 ? () => onInterval(interval - 1) : null,
+              icon: const Icon(Icons.remove_circle_outline),
             ),
-            if (hasTime) ...[
-              const SizedBox(width: 6),
-              Text(
-                startTime!.format(context),
-                style: tt.labelMedium?.copyWith(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+            Expanded(
+              child: Text(
+                unit == PlanRepeatUnit.week
+                    ? '$interval주마다'
+                    : '$interval일마다',
+                textAlign: TextAlign.center,
+                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: onClear,
-                child: Icon(
-                  Icons.close_rounded,
-                  size: 14,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ] else ...[
-              const SizedBox(width: 6),
-              Text(
-                '시작 시각',
-                style: tt.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ],
+            ),
+            IconButton(
+              onPressed: () => onInterval(interval + 1),
+              icon: const Icon(Icons.add_circle_outline),
+            ),
           ],
         ),
-      ),
+        if (unit == PlanRepeatUnit.week) ...[
+          const SizedBox(height: 12),
+          Text('요일', style: tt.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: List.generate(7, (i) {
+              final d = i + 1;
+              final sel = weekdays.contains(d);
+              return FilterChip(
+                label: Text(_days[i]),
+                selected: sel,
+                onSelected: (_) => onWeekdayToggle(d),
+              );
+            }),
+          ),
+        ],
+        const SizedBox(height: 24),
+        OutlinedButton(
+          onPressed: onNone,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+            foregroundColor: cs.error,
+          ),
+          child: const Text('반복 안 함'),
+        ),
+      ],
     );
   }
 }

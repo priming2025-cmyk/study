@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'contacts_import_sheet.dart';
 import 'friend_status_section.dart';
 import 'study_group_browser_sheet.dart';
 
@@ -57,8 +58,21 @@ class SettudySocialView extends ConsumerWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Text('친구',
-                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            child: Row(
+              children: [
+                Text('친구',
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => ContactsImportSheet.show(context),
+                  icon: const Icon(Icons.contacts_rounded, size: 18),
+                  label: const Text('연락처'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         friends.when(
@@ -394,9 +408,15 @@ class _EmptyFriends extends StatelessWidget {
               style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
           const SizedBox(height: 8),
           Text(
-            '오른쪽 아래 + 로 셋을 만들거나\n그룹 찾기에서 함께 공부할 팀을 찾아보세요',
+            '연락처에서 셋터디 친구를 찾거나\n+ 로 셋을 만들어 보세요',
             textAlign: TextAlign.center,
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            onPressed: () => ContactsImportSheet.show(context),
+            icon: const Icon(Icons.contacts_rounded),
+            label: const Text('연락처에서 친구 찾기'),
           ),
         ],
       ),
