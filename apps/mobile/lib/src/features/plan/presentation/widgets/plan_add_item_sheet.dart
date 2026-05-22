@@ -89,12 +89,6 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   }
 
   Future<void> _deleteSubjectFromList(String name) async {
-    if (CustomSubjectStore.isDefault(name)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('기본 과목은 삭제할 수 없어요')),
-      );
-      return;
-    }
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -189,6 +183,26 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
               decoration: BoxDecoration(
                 color: cs.outlineVariant,
                 borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _editing ? '계획 수정' : '새 계획',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '닫기',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
             ),
             Expanded(
@@ -345,13 +359,52 @@ class _SubjectTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        TextField(
-          controller: nameCtrl,
-          decoration: const InputDecoration(
-            labelText: '새 과목 이름',
-            hintText: '직접 입력',
-          ),
-          onChanged: (_) {},
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: subjects.map((s) {
+            final isSel = selected == s.name;
+            return InputChip(
+              label: Text(s.name),
+              selected: isSel,
+              showCheckmark: true,
+              avatar: CircleAvatar(
+                radius: 6,
+                backgroundColor: s.color,
+              ),
+              deleteIcon: Icon(Icons.delete_outline, size: 18, color: cs.error),
+              onDeleted: () => onDeleteSubject(s.name),
+              onPressed: () => onSelect(s),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: nameCtrl,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '새 과목',
+                  prefixIcon: Icon(Icons.add, size: 20, color: cs.onSurfaceVariant),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              onPressed: onAddCustom,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('저장'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -372,37 +425,6 @@ class _SubjectTab extends StatelessWidget {
                       : null,
                 ),
               ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 8),
-        TextButton(onPressed: onAddCustom, child: const Text('과목 목록에 저장')),
-        const SizedBox(height: 8),
-        Text(
-          '과목 탭하면 선택 · 길게 누르면 목록에서 삭제',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: subjects.map((s) {
-            final isSel = selected == s.name;
-            final canDelete = !CustomSubjectStore.isDefault(s.name);
-            return InputChip(
-              label: Text(s.name),
-              selected: isSel,
-              avatar: CircleAvatar(
-                radius: 6,
-                backgroundColor: s.color,
-              ),
-              deleteIcon: canDelete
-                  ? Icon(Icons.close, size: 16, color: cs.error)
-                  : null,
-              onDeleted: canDelete ? () => onDeleteSubject(s.name) : null,
-              onPressed: () => onSelect(s),
             );
           }).toList(),
         ),

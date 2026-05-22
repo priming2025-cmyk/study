@@ -60,7 +60,6 @@ class CustomSubjectStore {
       defaultSubjects.any((s) => s.name == name);
 
   static Future<bool> remove(String name) async {
-    if (isDefault(name)) return false;
     final list = await load();
     final next = list.where((s) => s.name != name).toList();
     if (next.length == list.length) return false;

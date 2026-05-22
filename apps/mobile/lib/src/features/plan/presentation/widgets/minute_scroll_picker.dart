@@ -157,56 +157,63 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
               },
             ),
           ),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // 간격 선택 (유지)
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: _steps.map((s) {
-                final sel = _step == s;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Material(
-                    color: sel
-                        ? cs.surfaceContainerHigh
-                        : cs.surfaceContainerLowest,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: _steps.map((s) {
+              final sel = _step == s;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Material(
+                  color: sel
+                      ? cs.surfaceContainerHigh
+                      : cs.surfaceContainerLowest,
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
                     borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => _setStep(s),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        child: Text(
-                          '${s}분',
-                          style: tt.labelSmall?.copyWith(
-                            fontWeight:
-                                sel ? FontWeight.w700 : FontWeight.w500,
-                            color: sel
-                                ? cs.onSurface
-                                : cs.onSurfaceVariant,
-                          ),
+                    onTap: () => _setStep(s),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        '${s}분',
+                        style: tt.labelSmall?.copyWith(
+                          fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                          color:
+                              sel ? cs.onSurface : cs.onSurfaceVariant,
                         ),
                       ),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(width: 8),
-            // 예전 스타일 휠 (스와이프 + 주변 시간 미리보기)
-            Expanded(
-              child: SizedBox(
-                height: 160,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        SizedBox(
+          height: 160,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              IconButton(
+                iconSize: 32,
+                tooltip: '이전',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 80),
+                icon: Icon(Icons.keyboard_arrow_up_rounded,
+                    color: cs.onSurfaceVariant),
+                onPressed: () => _nudge(-1),
+              ),
+              Expanded(
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
                       height: 44,
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerHigh.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(12),
@@ -246,25 +253,17 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_up_rounded),
-              color: cs.onSurfaceVariant,
-              onPressed: () => _nudge(-1),
-            ),
-            const SizedBox(width: 48),
-            IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
-              color: cs.onSurfaceVariant,
-              onPressed: () => _nudge(1),
-            ),
-          ],
+              IconButton(
+                iconSize: 32,
+                tooltip: '다음',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 80),
+                icon: Icon(Icons.keyboard_arrow_down_rounded,
+                    color: cs.onSurfaceVariant),
+                onPressed: () => _nudge(1),
+              ),
+            ],
+          ),
         ),
       ],
     );

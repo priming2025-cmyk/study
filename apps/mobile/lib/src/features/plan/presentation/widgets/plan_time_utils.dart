@@ -1,3 +1,5 @@
+import '../../data/plan_models.dart';
+
 /// 계획·공부 화면 공통 시간/과목 표시 유틸.
 String formatPlanMinutes(int minutes) {
   if (minutes <= 0) return '0m';
@@ -9,6 +11,27 @@ String formatPlanMinutes(int minutes) {
 }
 
 String formatPlanSeconds(int seconds) => formatPlanMinutes((seconds / 60).round());
+
+/// 계획된 시작~종료 (예: 09:00~09:50).
+String formatPlanTimeRange(PlanItem item) {
+  if (item.scheduledStartAt == null || item.targetSeconds <= 0) {
+    return item.scheduledStartAt != null
+        ? _formatClock(item.scheduledStartAt!.toLocal())
+        : '시간 미정';
+  }
+  final start = item.scheduledStartAt!.toLocal();
+  final end = start.add(Duration(seconds: item.targetSeconds));
+  return '${_formatClock(start)}~${_formatClock(end)}';
+}
+
+String _formatClock(DateTime dt) {
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
+int planFocusPercent(PlanItem item) =>
+    (item.completionRate.clamp(0.0, 1.0) * 100).round();
 
 String subjectShortLabel(String subject) {
   final s = subject.trim();

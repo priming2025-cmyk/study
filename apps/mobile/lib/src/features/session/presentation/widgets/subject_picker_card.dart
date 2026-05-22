@@ -151,24 +151,12 @@ class _PlanSection extends StatelessWidget {
           child: Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      allMet ? '오늘 목표 달성! 🎉' : '오늘의 계획',
-                      style: tt.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: allMet ? cs.primary : cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      allMet
-                          ? '추가로 공부할 과목을 선택하거나 새 과목을 추가해 보세요.'
-                          : '과목을 탭하면 바로 공부를 시작해요',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
+                child: Text(
+                  allMet ? '오늘 목표 달성 🎉' : '오늘의 계획',
+                  style: tt.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: allMet ? cs.primary : cs.onSurface,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -280,14 +268,7 @@ class _QuickStartSection extends StatelessWidget {
           '지금 바로 시작',
           style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 4),
-        Text(
-          '과목과 시간을 선택하고 시작 버튼을 누르세요',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        _StepLabel(step: '1', label: '과목 선택', cs: cs, tt: tt),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -312,9 +293,7 @@ class _QuickStartSection extends StatelessWidget {
             );
           }).toList(),
         ),
-        const SizedBox(height: 16),
-        _StepLabel(step: '2', label: '공부 시간', cs: cs, tt: tt),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -364,47 +343,6 @@ class _QuickStartSection extends StatelessWidget {
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _StepLabel extends StatelessWidget {
-  final String step;
-  final String label;
-  final ColorScheme cs;
-  final TextTheme tt;
-
-  const _StepLabel({
-    required this.step,
-    required this.label,
-    required this.cs,
-    required this.tt,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          decoration: BoxDecoration(
-            color: cs.primaryContainer,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              step,
-              style: tt.labelSmall?.copyWith(
-                color: cs.onPrimaryContainer,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(label, style: tt.labelLarge),
       ],
     );
   }

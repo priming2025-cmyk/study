@@ -58,19 +58,7 @@ class _DreamCityIsometricViewState extends State<DreamCityIsometricView>
       width: double.infinity,
       child: CustomPaint(
         painter: DreamCityPainter(state: state, time: _time),
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              '집중·계획·친구 블럭으로 꿈의 직업 마을 성장',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
-                  ),
-            ),
-          ),
-        ),
+        const SizedBox.shrink(),
       ),
     );
   }

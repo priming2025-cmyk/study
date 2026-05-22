@@ -257,34 +257,16 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                       else
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                          child: Row(
-                            children: [
-                              Text(
-                                '과목 ${items.length}개',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelLarge
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
-                              const Spacer(),
-                              if (items.length > 1)
-                                Text(
-                                  '길게 눌러 순서 변경',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant
-                                            .withValues(alpha: 0.6),
-                                      ),
+                          child: Text(
+                            '과목 ${items.length}개',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
-                            ],
                           ),
                         ),
                     ],
