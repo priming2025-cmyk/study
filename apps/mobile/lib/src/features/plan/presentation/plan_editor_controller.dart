@@ -237,6 +237,24 @@ class PlanEditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 계획 아이템 순서 변경 (롱프레스 드래그 후 호출).
+  void reorderItems(int oldIndex, int newIndex) {
+    final plan = todayPlan;
+    if (plan == null) return;
+    final items = List<PlanItem>.from(plan.items);
+    if (newIndex > oldIndex) newIndex--;
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    todayPlan = TodayPlan(
+      id: plan.id,
+      date: plan.date,
+      title: plan.title,
+      items: items,
+    );
+    _persistCache();
+    notifyListeners();
+  }
+
   Future<void> setActualMinutes(PlanItem item, int minutes) async {
     final seconds = (minutes * 60).clamp(0, 24 * 3600);
     await _repo.updateItem(itemId: item.id, actualSeconds: seconds);

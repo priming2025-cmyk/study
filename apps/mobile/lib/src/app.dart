@@ -16,7 +16,6 @@ import 'features/coins/presentation/coin_history_screen.dart';
 import 'features/coins/presentation/coin_earning_guide_screen.dart';
 import 'features/family/presentation/family_hub_screen.dart';
 import 'features/legal/legal_routes.dart';
-import 'features/home/presentation/dashboard_screen.dart';
 import 'features/motivation/presentation/gacha_shop_screen.dart';
 import 'features/motivation/presentation/social_hub_screen.dart';
 import 'features/plan/presentation/plan_editor_screen.dart';
@@ -31,6 +30,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
   final authStream = Supabase.instance.client.auth.onAuthStateChange;
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
+    initialLocation: '/session',
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
@@ -53,7 +53,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
           !legal) {
         return '/login';
       }
-      if (authed && onAuthScreen) return '/';
+      if (authed && onAuthScreen) return '/session';
       return null;
     },
     routes: [
@@ -100,22 +100,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
         branches: [
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/',
-                builder: (context, state) => const DashboardScreen(),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: '/plan',
-                builder: (context, state) => const PlanEditorScreen(),
-              ),
-            ],
-          ),
+          // 0: 공부 (기본 화면)
           StatefulShellBranch(
             preload: true,
             routes: [
@@ -129,6 +114,16 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // 1: 계획
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/plan',
+                builder: (context, state) => const PlanEditorScreen(),
+              ),
+            ],
+          ),
+          // 2: 셋터디
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -141,6 +136,7 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
+          // 3: 기록
           StatefulShellBranch(
             routes: [
               GoRoute(

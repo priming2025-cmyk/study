@@ -7,6 +7,8 @@ import '../../../core/supabase/supabase_client.dart';
 import '../../motivation/domain/motivation_models.dart';
 import '../../session/domain/wallet_balances.dart';
 import '../data/daily_focus_stat.dart';
+import 'widgets/city_progress_card.dart';
+import 'widgets/weekly_focus_chart.dart';
 
 String formatFocusDuration(int seconds) {
   if (seconds <= 0) return '0분';
@@ -125,10 +127,6 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
           }
           final p = snapshot.data!;
           final stats = p.stats;
-          final maxSec = stats.fold<int>(
-            1,
-            (m, e) => e.focusedSeconds > m ? e.focusedSeconds : m,
-          );
           final total = stats.fold<int>(0, (a, e) => a + e.focusedSeconds);
 
           return RefreshIndicator(
@@ -137,6 +135,13 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
+                // 꿈의 도시 건설 카드
+                CityProgressCard(
+                  blockCount: p.wallet.blocks,
+                  totalFocusMinutes: total ~/ 60,
+                  onTap: () => context.push('/coins'),
+                ),
+                const SizedBox(height: 20),
                 Text(
                   '나의 정보',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -334,17 +339,13 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  total == 0
-                      ? '공부를 끝내면 여기에 쌓여요.'
-                      : '합계 ${formatFocusDuration(total)} · 그래프는 가장 긴 날 기준이에요.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: WeeklyFocusChart(stats: stats),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                ...stats.map((e) => _DayRow(stat: e, maxSeconds: maxSec)),
               ],
             ),
           );
@@ -354,69 +355,3 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   }
 }
 
-class _DayRow extends StatelessWidget {
-  const _DayRow({required this.stat, required this.maxSeconds});
-
-  final DailyFocusStat stat;
-  final int maxSeconds;
-
-  static String _weekdayShort(DateTime d) {
-    return switch (d.weekday) {
-      DateTime.monday => '월',
-      DateTime.tuesday => '화',
-      DateTime.wednesday => '수',
-      DateTime.thursday => '목',
-      DateTime.friday => '금',
-      DateTime.saturday => '토',
-      _ => '일',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final ratio = maxSeconds <= 0 ? 0.0 : stat.focusedSeconds / maxSeconds;
-    final label =
-        '${stat.dayLocal.month}/${stat.dayLocal.day} (${_weekdayShort(stat.dayLocal)})';
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 88,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
-            ),
-          ),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: ratio.clamp(0.0, 1.0),
-                minHeight: 10,
-                backgroundColor: scheme.surfaceContainerHighest,
-                color: scheme.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 64,
-            child: Text(
-              formatFocusDuration(stat.focusedSeconds),
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

@@ -10,6 +10,7 @@ class PlanItemCard extends StatelessWidget {
   final VoidCallback onDelete;
   final ValueChanged<bool> onDoneChanged;
   final ValueChanged<int> onActualMinutesChanged;
+  final bool showDragHandle;
 
   const PlanItemCard({
     super.key,
@@ -18,6 +19,7 @@ class PlanItemCard extends StatelessWidget {
     required this.onDelete,
     required this.onDoneChanged,
     required this.onActualMinutesChanged,
+    this.showDragHandle = false,
   });
 
   @override
@@ -109,6 +111,14 @@ class PlanItemCard extends StatelessWidget {
                         visualDensity: VisualDensity.compact,
                         onPressed: onDelete,
                       ),
+                      if (showDragHandle) ...[
+                        Icon(
+                          Icons.drag_handle_rounded,
+                          size: 20,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                     ],
                   ),
                 ),

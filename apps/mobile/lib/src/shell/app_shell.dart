@@ -42,8 +42,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: (index) async {
           final currentIndex = widget.navigationShell.currentIndex;
-          final leavingSessionTab =
-              currentIndex == kShellBranchSession && index != kShellBranchSession;
+          final leavingSessionTab = currentIndex == kShellBranchSession &&
+              index != kShellBranchSession;
           final leavingStudyTab =
               currentIndex == kShellBranchStudy && index != kShellBranchStudy;
           final sessionRunning = ref.read(sessionRunningProvider);
@@ -112,22 +112,16 @@ class _AppShellState extends ConsumerState<AppShell> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: '홈',
-            tooltip: '홈 대시보드',
+            icon: Icon(Icons.timer_outlined),
+            selectedIcon: Icon(Icons.timer),
+            label: '공부',
+            tooltip: '집중 공부',
           ),
           NavigationDestination(
             icon: Icon(Icons.edit_calendar_outlined),
             selectedIcon: Icon(Icons.edit_calendar),
             label: '계획',
             tooltip: '오늘 계획표',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.timer_outlined),
-            selectedIcon: Icon(Icons.timer),
-            label: '공부',
-            tooltip: '집중 공부',
           ),
           NavigationDestination(
             icon: Icon(Icons.groups_outlined),

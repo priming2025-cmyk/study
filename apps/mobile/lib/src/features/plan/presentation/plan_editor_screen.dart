@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import '../../../core/providers/core_providers.dart';
 import '../data/plan_models.dart';
+import 'monthly_plan_overview_sheet.dart';
 import 'plan_editor_controller.dart';
 import 'widgets/plan_item_card.dart';
 import 'widgets/plan_add_item_sheet.dart';
@@ -157,12 +158,26 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     );
   }
 
+  void _openMonthlyOverview() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MonthlyPlanOverviewSheet(
+        selectedDay: _c.planDay,
+        onSelectDay: (day) async {
+          await _c.setPlanDayAndReload(day);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plan = _c.todayPlan;
     final completionRate = plan?.completionRate ?? 0.0;
     final items = plan?.items ?? const [];
-
     final viewingToday = sameCalendarDay(_c.planDay, DateTime.now());
 
     return Scaffold(
@@ -172,12 +187,18 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
         actions: [
           if (_c.loading)
             const Padding(
-              padding: EdgeInsets.only(right: 16),
+              padding: EdgeInsets.only(right: 8),
               child: SizedBox(
                 width: 18, height: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
+          // 달력 버튼 → 월별 오버뷰
+          IconButton(
+            tooltip: '월별 계획 보기',
+            onPressed: _openMonthlyOverview,
+            icon: const Icon(Icons.calendar_month_rounded),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -193,10 +214,8 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 오프라인 배너
                       if (_c.showingOfflinePlan)
                         _OfflineBanner(),
-                      // 주간 날짜 바 (이전/다음 주 · 스와이프 · 오늘로)
                       PlanWeekBar(
                         planDay: _c.planDay,
                         onSelectDay: (d) => _c.setPlanDayAndReload(d),
@@ -206,10 +225,10 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                         onNextWeek: () => _c.setPlanDayAndReload(
                           _c.planDay.add(const Duration(days: 7)),
                         ),
-                        onJumpToday: () => _c.setPlanDayAndReload(DateTime.now()),
+                        onJumpToday: () =>
+                            _c.setPlanDayAndReload(DateTime.now()),
                       ),
                       const SizedBox(height: 4),
-                      // 링 진행률 + 요약
                       _ProgressRing(
                         completionRate: completionRate,
                         totalActualSeconds: plan?.totalActualSeconds ?? 0,
@@ -217,7 +236,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                         doneCount: items.where((e) => e.isDone).length,
                         totalCount: items.length,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       if (items.isEmpty)
                         _EmptyState(
                           onAdd: _openAddSheet,
@@ -225,9 +244,8 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                         )
                       else
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                          child: Row(
                             children: [
                               Text(
                                 '과목 ${items.length}개',
@@ -240,44 +258,53 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                                           .onSurfaceVariant,
                                     ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '체크: 완료 표시 · 연필: 과목·목표·알림 수정 · 휴지통: 삭제',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
+                              const Spacer(),
+                              if (items.length > 1)
+                                Text(
+                                  '길게 누른 후 드래그해서 순서 변경',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                ),
                             ],
                           ),
                         ),
-                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
+                // 드래그 순서 변경 가능한 리스트
+                if (items.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    sliver: SliverReorderableList(
+                      itemCount: items.length,
+                      onReorder: (oldIndex, newIndex) {
+                        _c.reorderItems(oldIndex, newIndex);
+                      },
+                      itemBuilder: (context, i) {
                         final item = items[i];
-                        return PlanItemCard(
-                          item: item,
-                          onEdit: () => _openEditSheet(item),
-                          onDelete: () => _deleteItem(item),
-                          onDoneChanged: (v) => _toggleDone(item, v),
-                          onActualMinutesChanged: (m) =>
-                              _setActualMinutes(item, m),
+                        return ReorderableDelayedDragStartListener(
+                          key: ValueKey(item.id),
+                          index: i,
+                          child: PlanItemCard(
+                            item: item,
+                            onEdit: () => _openEditSheet(item),
+                            onDelete: () => _deleteItem(item),
+                            onDoneChanged: (v) => _toggleDone(item, v),
+                            onActualMinutesChanged: (m) =>
+                                _setActualMinutes(item, m),
+                            showDragHandle: items.length > 1,
+                          ),
                         );
                       },
-                      childCount: items.length,
                     ),
                   ),
-                ),
               ],
             ),
     );
@@ -359,7 +386,6 @@ class _ProgressRing extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 링
             SizedBox(
               width: 88,
               height: 88,

@@ -5,7 +5,9 @@ import '../../../plan/data/plan_models.dart';
 import '../../../plan/presentation/widgets/subject_preset_picker.dart';
 import 'session_plan_subject_tile.dart';
 
-/// 집중 세션에서 오늘 과목을 고르거나, 계획 편집과 비슷한 흐름으로 빠르게 추가합니다.
+/// 집중 세션에서 오늘 과목을 고르거나 퀵스타트로 즉시 시작합니다.
+/// 계획이 있을 때: 과목 카드 한 번 탭 → 바로 시작 선택 (1탭!)
+/// 계획이 없을 때: 과목 칩 + 시간 칩 → 시작 버튼 (2탭)
 class SubjectPickerCard extends StatefulWidget {
   final TodayPlan? todayPlan;
   final String? selectedPlanItemId;
@@ -36,57 +38,34 @@ class SubjectPickerCard extends StatefulWidget {
 }
 
 class _SubjectPickerCardState extends State<SubjectPickerCard> {
-  final _subjectCtrl = TextEditingController();
-  final _minutesCtrl = TextEditingController();
-  String? _selectedPreset;
-  int _targetMinutes = 50;
+  String? _quickSubject;
+  int _quickMinutes = 60;
   bool _adding = false;
 
-  static const _quickMinutes = [25, 30, 50, 60, 90, 120];
+  // 퀵스타트 시간 옵션
+  static const _timeOptions = [
+    (label: '30분', minutes: 30),
+    (label: '1시간', minutes: 60),
+    (label: '1.5시간', minutes: 90),
+    (label: '2시간', minutes: 120),
+    (label: '3시간', minutes: 180),
+  ];
 
-  @override
-  void dispose() {
-    _subjectCtrl.dispose();
-    _minutesCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onPreset(String s) {
-    setState(() {
-      _selectedPreset = s;
-      _subjectCtrl.text = s;
-    });
-  }
-
-  void _onMinutesChip(int m) {
-    setState(() {
-      _targetMinutes = m;
-      _minutesCtrl.clear();
-    });
-  }
+  // 퀵스타트 과목 프리셋 (자주 쓰는 과목 우선)
+  static const _quickSubjects = ['국어', '영어', '수학', '과학', '사회', '역사'];
 
   Future<void> _submitQuickAdd() async {
-    final custom = int.tryParse(_minutesCtrl.text.trim());
-    var minutes = _targetMinutes;
-    if (custom != null && custom > 0) minutes = custom.clamp(1, 960);
-
-    final subject = _subjectCtrl.text.trim();
-    if (subject.isEmpty) {
+    final subject = _quickSubject;
+    if (subject == null || subject.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('과목명을 입력하거나 아래에서 선택해 주세요')),
+        const SnackBar(content: Text('과목을 선택해 주세요')),
       );
       return;
     }
-
+    HapticFeedback.mediumImpact();
     setState(() => _adding = true);
     try {
-      await widget.onQuickAdd(subject: subject, targetMinutes: minutes);
-      if (mounted) {
-        _subjectCtrl.clear();
-        _minutesCtrl.clear();
-        _selectedPreset = null;
-        _targetMinutes = 50;
-      }
+      await widget.onQuickAdd(subject: subject, targetMinutes: _quickMinutes);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,161 +84,319 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('오늘 집중할 과목', style: tt.titleMedium),
-                      const SizedBox(height: 4),
-                      if (!hasPlan)
-                        Text(
-                          '아래에서 빠르게 추가하거나, 전체 옵션에서 시작 시각·알림까지 설정할 수 있어요.',
-                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                    ],
-                  ),
-                ),
-                if (hasPlan)
-                  TextButton.icon(
-                    onPressed: widget.onOpenAdvancedAdd,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('추가'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (hasPlan) ...[
-              ...items.map((e) => SessionPlanSubjectTile(
-                    item: e,
-                    selected: e.id == widget.selectedPlanItemId,
-                    onTap: () => widget.onSelected(e),
-                    onEdit: () => widget.onEditItem(e),
-                    onDelete: () => widget.onDeleteItem(e),
-                  )),
-            ] else ...[
-              TextField(
-                controller: _subjectCtrl,
-                textInputAction: TextInputAction.next,
-                onChanged: (_) => setState(() => _selectedPreset = null),
-                decoration: InputDecoration(
-                  labelText: '과목명',
-                  hintText: '직접 입력하거나 아래에서 선택',
-                  prefixIcon: _selectedPreset != null
-                      ? Icon(Icons.circle, size: 12, color: subjectColor(_selectedPreset!))
-                      : const Icon(Icons.edit_outlined),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SubjectPresetPicker(
-                selected: _selectedPreset,
-                onSelect: _onPreset,
-              ),
-              if (widget.recentSubjects.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text('최근', style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
-                const SizedBox(height: 6),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: widget.recentSubjects
-                        .map(
-                          (s) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              label: Text(s, style: const TextStyle(fontSize: 12)),
-                              onPressed: () => _onPreset(s),
-                              avatar: Icon(Icons.history, size: 14, color: cs.onSurfaceVariant),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 14),
-              Text('목표 공부 시간', style: tt.labelLarge),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _quickMinutes.map((m) {
-                          final sel = _minutesCtrl.text.isEmpty && _targetMinutes == m;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: ChoiceChip(
-                              label: Text('$m분', style: const TextStyle(fontSize: 12)),
-                              selected: sel,
-                              visualDensity: VisualDensity.compact,
-                              onSelected: (_) => _onMinutesChip(m),
-                            ),
-                          );
-                        }).toList(),
+    if (hasPlan) {
+      return _PlanSection(
+        items: items,
+        selectedPlanItemId: widget.selectedPlanItemId,
+        onSelected: widget.onSelected,
+        onEditItem: widget.onEditItem,
+        onDeleteItem: widget.onDeleteItem,
+        onOpenAdvancedAdd: widget.onOpenAdvancedAdd,
+        cs: cs,
+        tt: tt,
+      );
+    }
+
+    // 계획 없을 때 — 퀵스타트 UI
+    return _QuickStartSection(
+      quickSubject: _quickSubject,
+      quickMinutes: _quickMinutes,
+      recentSubjects: widget.recentSubjects,
+      adding: _adding,
+      onSelectSubject: (s) => setState(() => _quickSubject = s),
+      onSelectMinutes: (m) => setState(() => _quickMinutes = m),
+      onStart: _submitQuickAdd,
+      onOpenAdvancedAdd: widget.onOpenAdvancedAdd,
+      timeOptions: _timeOptions,
+      quickSubjects: _quickSubjects,
+      cs: cs,
+      tt: tt,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// 계획 있을 때 — 1탭 시작 카드 목록
+// ─────────────────────────────────────────────
+class _PlanSection extends StatelessWidget {
+  final List<PlanItem> items;
+  final String? selectedPlanItemId;
+  final ValueChanged<PlanItem> onSelected;
+  final void Function(PlanItem) onEditItem;
+  final Future<void> Function(PlanItem) onDeleteItem;
+  final VoidCallback onOpenAdvancedAdd;
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  const _PlanSection({
+    required this.items,
+    required this.selectedPlanItemId,
+    required this.onSelected,
+    required this.onEditItem,
+    required this.onDeleteItem,
+    required this.onOpenAdvancedAdd,
+    required this.cs,
+    required this.tt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final doneCount = items.where((e) => e.isDone).length;
+    final totalCount = items.length;
+    final allDone = doneCount == totalCount && totalCount > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 헤더 + 진행률
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      allDone ? '오늘 계획 완료! 🎉' : '오늘의 계획',
+                      style: tt.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: allDone ? cs.primary : cs.onSurface,
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: 88,
-                    child: TextField(
-                      controller: _minutesCtrl,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
-                        hintText: '직접',
-                        suffixText: '분',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                      ),
-                      onChanged: (_) => setState(() {}),
+                    const SizedBox(height: 4),
+                    Text(
+                      allDone
+                          ? '훌륭해요! 추가로 공부할 과목을 선택하거나 퀵스타트를 써보세요.'
+                          : '과목을 탭하면 바로 공부를 시작해요',
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _adding ? null : _submitQuickAdd,
-                      icon: _adding
-                          ? SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: cs.onPrimary,
-                              ),
-                            )
-                          : const Icon(Icons.play_arrow_outlined),
-                      label: Text(_adding ? '추가 중…' : '계획에 넣고 이 과목 선택'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton.icon(
-                  onPressed: widget.onOpenAdvancedAdd,
-                  icon: const Icon(Icons.tune, size: 18),
-                  label: const Text('시작 시각·알림까지 설정'),
+              TextButton.icon(
+                onPressed: onOpenAdvancedAdd,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('추가'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
                 ),
               ),
             ],
-          ],
+          ),
         ),
-      ),
+        // 진행률 바
+        if (totalCount > 0) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: doneCount / totalCount,
+              minHeight: 5,
+              backgroundColor: cs.surfaceContainerHighest,
+              color: cs.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$doneCount/$totalCount 완료',
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+            textAlign: TextAlign.end,
+          ),
+          const SizedBox(height: 10),
+        ],
+        // 과목 카드 목록
+        ...items.map((e) => SessionPlanSubjectTile(
+              item: e,
+              selected: e.id == selectedPlanItemId,
+              onTap: () => onSelected(e),
+              onEdit: () => onEditItem(e),
+              onDelete: () => onDeleteItem(e),
+            )),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// 계획 없을 때 — 퀵스타트 UI (2탭)
+// ─────────────────────────────────────────────
+class _QuickStartSection extends StatelessWidget {
+  final String? quickSubject;
+  final int quickMinutes;
+  final List<String> recentSubjects;
+  final bool adding;
+  final ValueChanged<String> onSelectSubject;
+  final ValueChanged<int> onSelectMinutes;
+  final VoidCallback onStart;
+  final VoidCallback onOpenAdvancedAdd;
+  final List<({String label, int minutes})> timeOptions;
+  final List<String> quickSubjects;
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  const _QuickStartSection({
+    required this.quickSubject,
+    required this.quickMinutes,
+    required this.recentSubjects,
+    required this.adding,
+    required this.onSelectSubject,
+    required this.onSelectMinutes,
+    required this.onStart,
+    required this.onOpenAdvancedAdd,
+    required this.timeOptions,
+    required this.quickSubjects,
+    required this.cs,
+    required this.tt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final allSubjects = [
+      ...quickSubjects,
+      ...recentSubjects.where((s) => !quickSubjects.contains(s)),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 헤더
+        Text(
+          '지금 바로 시작',
+          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '과목과 시간을 선택하고 시작 버튼을 누르세요',
+          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 16),
+
+        // 1단계: 과목 선택
+        _StepLabel(step: '1', label: '과목 선택', cs: cs, tt: tt),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: allSubjects.map((s) {
+            final isSelected = quickSubject == s;
+            final color = subjectColor(s);
+            return ChoiceChip(
+              label: Text(s),
+              selected: isSelected,
+              selectedColor: color.withValues(alpha: 0.18),
+              checkmarkColor: color,
+              labelStyle: TextStyle(
+                color: isSelected ? color : cs.onSurfaceVariant,
+                fontWeight:
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+              side: BorderSide(
+                color: isSelected ? color : cs.outlineVariant,
+                width: isSelected ? 1.5 : 1,
+              ),
+              backgroundColor: cs.surfaceContainerLowest,
+              onSelected: (_) => onSelectSubject(s),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+
+        // 2단계: 시간 선택
+        _StepLabel(step: '2', label: '공부 시간', cs: cs, tt: tt),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: timeOptions.map((opt) {
+            final isSelected = quickMinutes == opt.minutes;
+            return ChoiceChip(
+              label: Text(opt.label),
+              selected: isSelected,
+              onSelected: (_) => onSelectMinutes(opt.minutes),
+              visualDensity: VisualDensity.compact,
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+
+        // 시작 버튼
+        FilledButton.icon(
+          onPressed: adding || quickSubject == null ? null : onStart,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 52),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          icon: adding
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: cs.onPrimary,
+                  ),
+                )
+              : const Icon(Icons.play_arrow_rounded, size: 24),
+          label: Text(
+            adding ? '추가 중…' : '공부 시작',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: TextButton.icon(
+            onPressed: onOpenAdvancedAdd,
+            icon: const Icon(Icons.tune, size: 16),
+            label: const Text('시작 시각·알림 설정'),
+            style: TextButton.styleFrom(
+              foregroundColor: cs.onSurfaceVariant,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepLabel extends StatelessWidget {
+  final String step;
+  final String label;
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  const _StepLabel({
+    required this.step,
+    required this.label,
+    required this.cs,
+    required this.tt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: cs.primaryContainer,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              step,
+              style: tt.labelSmall?.copyWith(
+                color: cs.onPrimaryContainer,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(label, style: tt.labelLarge),
+      ],
     );
   }
 }

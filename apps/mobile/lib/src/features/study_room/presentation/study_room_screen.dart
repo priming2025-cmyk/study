@@ -228,6 +228,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                   roomNameCtrl: _roomNameCtrl,
                   roomIdCtrl: _roomIdCtrl,
                   joining: _controller.joining,
+                  userDisplayName: null,
                   onCreate: () {
                     if (kIsWeb) {
                       WebSharedCamera.instance.openFromUserGesture();
