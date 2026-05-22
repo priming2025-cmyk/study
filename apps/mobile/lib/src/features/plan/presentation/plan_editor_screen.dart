@@ -115,6 +115,8 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(
@@ -144,6 +146,8 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       useSafeArea: true,
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
       shape: const RoundedRectangleBorder(

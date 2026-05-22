@@ -73,20 +73,31 @@ class SessionPlanSubjectTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Expanded(
-                            child: Text(
-                              timeRange,
-                              style: tt.bodySmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
-                              ),
+                          Text(
+                            timeRange,
+                            style: tt.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
                             ),
                           ),
-                          Text(
-                            met ? '100%' : '$pct%',
-                            style: tt.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: met ? color : cs.onSurface,
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: met
+                                  ? color.withValues(alpha: 0.15)
+                                  : cs.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              met ? '100%' : '$pct%',
+                              style: tt.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: met ? color : cs.onSurface,
+                              ),
                             ),
                           ),
                         ],

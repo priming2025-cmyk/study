@@ -3,6 +3,7 @@ import '../../data/custom_subject_store.dart';
 import '../../data/plan_models.dart';
 import '../../data/plan_repeat_config.dart';
 import 'minute_scroll_picker.dart';
+import 'plan_subject_chip.dart';
 
 /// 과목 · 시작시간 · 계획시간 · 반복 — 4탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
@@ -363,43 +364,39 @@ class _SubjectTab extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: subjects.map((s) {
-            final isSel = selected == s.name;
-            return InputChip(
-              label: Text(s.name),
-              selected: isSel,
-              showCheckmark: true,
-              avatar: CircleAvatar(
-                radius: 6,
-                backgroundColor: s.color,
-              ),
-              deleteIcon: Icon(Icons.delete_outline, size: 18, color: cs.error),
-              onDeleted: () => onDeleteSubject(s.name),
-              onPressed: () => onSelect(s),
+            return PlanSubjectChip(
+              subject: s,
+              selected: selected == s.name,
+              onTap: () => onSelect(s),
+              onDelete: () => onDeleteSubject(s.name),
             );
           }).toList(),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Expanded(
               child: TextField(
                 controller: nameCtrl,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   isDense: true,
                   hintText: '새 과목',
-                  prefixIcon: Icon(Icons.add, size: 20, color: cs.onSurfaceVariant),
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: const OutlineInputBorder(),
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(),
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
             FilledButton.tonal(
               onPressed: onAddCustom,
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 visualDensity: VisualDensity.compact,
               ),
               child: const Text('저장'),
