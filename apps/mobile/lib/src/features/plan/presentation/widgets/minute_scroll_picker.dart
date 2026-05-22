@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 스크롤 + 위·아래 버튼 시간 선택. 간격(5·10·15분) 변경 가능.
+/// 스크롤 휠 시간 선택 + 간격(5·10·15분) 변경.
 class MinuteScrollPicker extends StatefulWidget {
   final int valueMinutes;
   final int minMinutes;
@@ -130,7 +130,7 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     final next = (_ctrl.selectedItem + delta).clamp(0, _values.length - 1);
     _ctrl.animateToItem(
       next,
-      duration: const Duration(milliseconds: 180),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
   }
@@ -139,9 +139,6 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final current = _ctrl.hasClients
-        ? _values[_ctrl.selectedItem.clamp(0, _values.length - 1)]
-        : _clamp(widget.valueMinutes);
 
     return Column(
       children: [
@@ -160,103 +157,114 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
               },
             ),
           ),
-        SizedBox(
-          height: 200,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: _steps.map((s) {
-                  final sel = _step == s;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Material(
-                      color: sel
-                          ? cs.primaryContainer
-                          : cs.surfaceContainerHighest,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 간격 선택 (유지)
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: _steps.map((s) {
+                final sel = _step == s;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Material(
+                    color: sel
+                        ? cs.surfaceContainerHigh
+                        : cs.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(8),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: () => _setStep(s),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 6,
-                          ),
-                          child: Text(
-                            '${s}분',
-                            style: tt.labelSmall?.copyWith(
-                              fontWeight:
-                                  sel ? FontWeight.w800 : FontWeight.w500,
-                              color: sel ? cs.primary : cs.onSurfaceVariant,
-                            ),
+                      onTap: () => _setStep(s),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        child: Text(
+                          '${s}분',
+                          style: tt.labelSmall?.copyWith(
+                            fontWeight:
+                                sel ? FontWeight.w700 : FontWeight.w500,
+                            color: sel
+                                ? cs.onSurface
+                                : cs.onSurfaceVariant,
                           ),
                         ),
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(width: 4),
-              IconButton(
-                iconSize: 36,
-                tooltip: '이전',
-                onPressed: () => _nudge(-1),
-                icon: Icon(Icons.keyboard_arrow_up_rounded, color: cs.primary),
-              ),
-              Expanded(
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(width: 8),
+            // 예전 스타일 휠 (스와이프 + 주변 시간 미리보기)
+            Expanded(
+              child: SizedBox(
+                height: 160,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      height: 56,
+                      height: 44,
                       margin: const EdgeInsets.symmetric(horizontal: 8),
                       decoration: BoxDecoration(
-                        color: cs.primaryContainer.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: cs.primary.withValues(alpha: 0.35),
-                        ),
+                        color: cs.surfaceContainerHigh.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    Text(
-                      _label(current),
-                      style: tt.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: cs.primary,
-                        fontSize: 28,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    IgnorePointer(
-                      child: ListWheelScrollView.useDelegate(
-                        controller: _ctrl,
-                        itemExtent: 56,
-                        perspective: 0.002,
-                        diameterRatio: 1.2,
-                        physics: const FixedExtentScrollPhysics(),
-                        onSelectedItemChanged: (i) {
-                          HapticFeedback.selectionClick();
-                          widget.onChanged(_values[i]);
+                    ListWheelScrollView.useDelegate(
+                      controller: _ctrl,
+                      itemExtent: 44,
+                      perspective: 0.003,
+                      diameterRatio: 1.4,
+                      physics: const FixedExtentScrollPhysics(),
+                      onSelectedItemChanged: (i) {
+                        HapticFeedback.selectionClick();
+                        widget.onChanged(_values[i]);
+                      },
+                      childDelegate: ListWheelChildBuilderDelegate(
+                        childCount: _values.length,
+                        builder: (context, i) {
+                          final sel =
+                              _ctrl.hasClients && _ctrl.selectedItem == i;
+                          return Center(
+                            child: Text(
+                              _label(_values[i]),
+                              style: (sel ? tt.titleMedium : tt.bodyMedium)
+                                  ?.copyWith(
+                                fontWeight:
+                                    sel ? FontWeight.w800 : FontWeight.w400,
+                                color: sel
+                                    ? cs.onSurface
+                                    : cs.onSurfaceVariant,
+                              ),
+                            ),
+                          );
                         },
-                        childDelegate: ListWheelChildBuilderDelegate(
-                          childCount: _values.length,
-                          builder: (context, i) => const SizedBox.shrink(),
-                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                iconSize: 36,
-                tooltip: '다음',
-                onPressed: () => _nudge(1),
-                icon: Icon(Icons.keyboard_arrow_down_rounded, color: cs.primary),
-              ),
-            ],
-          ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_up_rounded),
+              color: cs.onSurfaceVariant,
+              onPressed: () => _nudge(-1),
+            ),
+            const SizedBox(width: 48),
+            IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              color: cs.onSurfaceVariant,
+              onPressed: () => _nudge(1),
+            ),
+          ],
         ),
       ],
     );
