@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
+import 'widgets/plan_time_utils.dart';
 
 /// 월별 계획 핵심 오버뷰 바텀시트.
 /// 이번 달 달력 그리드를 보여주고, 계획이 있는 날은 점 표시 + 탭하면 해당 날짜로 이동.
@@ -57,6 +58,8 @@ class _MonthlyPlanOverviewSheetState
             count: plan.items.length,
             targetMinutes: (plan.totalTargetSeconds / 60).round(),
             doneCount: plan.items.where((e) => e.isDone).length,
+            subjects: plan.items.map((e) => e.subject).toList(),
+            completionRate: plan.completionRate,
           );
         }
       }
@@ -218,16 +221,18 @@ class _MonthlyPlanOverviewSheetState
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 150),
                                   margin: const EdgeInsets.all(2),
-                                  height: 52,
+                                  height: 58,
                                   decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? cs.primary
-                                        : isToday
-                                            ? cs.primaryContainer
-                                            : summary != null
-                                                ? cs.surfaceContainerHigh
-                                                : Colors.transparent,
+                                    color: _cellBackground(
+                                      cs: cs,
+                                      summary: summary,
+                                      isSelected: isSelected,
+                                      isToday: isToday,
+                                    ),
                                     borderRadius: BorderRadius.circular(10),
+                                    border: isSelected
+                                        ? Border.all(color: cs.primary, width: 1.5)
+                                        : null,
                                   ),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
@@ -235,8 +240,8 @@ class _MonthlyPlanOverviewSheetState
                                       Text(
                                         '$dayNum',
                                         style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
                                           color: isSelected
                                               ? cs.onPrimary
                                               : isToday
@@ -250,8 +255,21 @@ class _MonthlyPlanOverviewSheetState
                                       ),
                                       if (summary != null) ...[
                                         const SizedBox(height: 2),
-                                        _PlanDots(
-                                          summary: summary,
+                                        Text(
+                                          subjectsAbbrevLine(summary.subjects),
+                                          style: TextStyle(
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.w600,
+                                            color: isSelected
+                                                ? cs.onPrimary.withValues(alpha: 0.85)
+                                                : cs.onSurfaceVariant,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        _CompletionMiniBar(
+                                          rate: summary.completionRate,
                                           isSelected: isSelected,
                                           cs: cs,
                                         ),
@@ -282,51 +300,72 @@ class _DaySummary {
   final int count;
   final int targetMinutes;
   final int doneCount;
+  final List<String> subjects;
+  final double completionRate;
 
   const _DaySummary({
     required this.count,
     required this.targetMinutes,
     required this.doneCount,
+    required this.subjects,
+    required this.completionRate,
   });
 
   bool get allDone => doneCount == count && count > 0;
-  double get completionRate => count == 0 ? 0 : doneCount / count;
 }
 
-class _PlanDots extends StatelessWidget {
-  final _DaySummary summary;
+Color _cellBackground({
+  required ColorScheme cs,
+  required _DaySummary? summary,
+  required bool isSelected,
+  required bool isToday,
+}) {
+  if (isSelected) return cs.primary;
+  if (summary == null) {
+    return isToday ? cs.primaryContainer.withValues(alpha: 0.35) : Colors.transparent;
+  }
+  final rate = summary.completionRate;
+  if (summary.allDone) return Colors.green.shade50;
+  if (rate > 0) {
+    return Color.lerp(
+      cs.surfaceContainerHigh,
+      cs.primaryContainer,
+      rate.clamp(0.0, 1.0),
+    )!;
+  }
+  return cs.surfaceContainerHigh;
+}
+
+class _CompletionMiniBar extends StatelessWidget {
+  final double rate;
   final bool isSelected;
   final ColorScheme cs;
 
-  const _PlanDots({
-    required this.summary,
+  const _CompletionMiniBar({
+    required this.rate,
     required this.isSelected,
     required this.cs,
   });
 
   @override
   Widget build(BuildContext context) {
-    final dotColor = isSelected
-        ? cs.onPrimary.withValues(alpha: 0.7)
-        : summary.allDone
-            ? Colors.green.shade400
-            : cs.primary;
-
-    final dots = summary.count.clamp(1, 3);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(dots, (i) {
-        return Container(
-          width: 4,
-          height: 4,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: BoxDecoration(
-            color: dotColor,
-            shape: BoxShape.circle,
-          ),
-        );
-      }),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(99),
+        child: LinearProgressIndicator(
+          value: rate.clamp(0.0, 1.0),
+          minHeight: 3,
+          backgroundColor: isSelected
+              ? cs.onPrimary.withValues(alpha: 0.25)
+              : cs.outlineVariant.withValues(alpha: 0.4),
+          color: isSelected
+              ? cs.onPrimary
+              : rate >= 1
+                  ? Colors.green.shade400
+                  : cs.primary,
+        ),
+      ),
     );
   }
 }

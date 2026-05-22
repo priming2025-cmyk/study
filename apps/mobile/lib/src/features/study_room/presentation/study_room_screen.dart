@@ -12,11 +12,11 @@ import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
 import '../../session/infra/web_shared_camera.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
-import 'widgets/study_room_ambient_sheet.dart';
+import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
+import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
-import 'widgets/study_room_lobby_view.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
   final bool quickJoin;
@@ -153,6 +153,35 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
+  Future<void> _showJoinByIdDialog(BuildContext context) async {
+    final id = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('ID로 참여'),
+          content: TextField(
+            controller: _roomIdCtrl,
+            decoration: const InputDecoration(hintText: '셋 ID'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, _roomIdCtrl.text.trim()),
+              child: const Text('참여'),
+            ),
+          ],
+        );
+      },
+    );
+    if (id == null || id.isEmpty || !mounted) return;
+    _roomIdCtrl.text = id;
+    if (kIsWeb) WebSharedCamera.instance.openFromUserGesture();
+    await _joinRoom();
+  }
+
   Future<void> _leave() async {
     await _controller.leave();
   }
@@ -183,37 +212,65 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     return Scaffold(
       // 키보드가 올라와도 본문(2×2·카메라) 높이를 줄이지 않음 → 채팅 입력 시 레이아웃이 덜 흔들림
       resizeToAvoidBottomInset: !inRoom,
-      appBar: AppBar(
-        title: Text(inRoom ? '셋터디방' : '셋터디방 참여'),
-        actions: [
-          if (inRoom) ...[
-            IconButton(
-              tooltip: '집중민감도',
-              icon: const Icon(Icons.tune_rounded),
-              onPressed: _openSensitivitySheet,
-            ),
-            IconButton(
-              tooltip: '집중 배경음',
-              icon: const Icon(Icons.graphic_eq_rounded),
-              onPressed: () => showStudyRoomAmbientSheet(
-                context,
-                player: _controller.ambient,
+      appBar: inRoom
+          ? AppBar(
+              title: const Text('셋터디'),
+              actions: [
+                IconButton(
+                  tooltip: '집중민감도',
+                  icon: const Icon(Icons.tune_rounded),
+                  onPressed: _openSensitivitySheet,
+                ),
+                IconButton(
+                  tooltip: '집중 배경음',
+                  icon: const Icon(Icons.graphic_eq_rounded),
+                  onPressed: () => showStudyRoomAmbientSheet(
+                    context,
+                    player: _controller.ambient,
+                  ),
+                ),
+                if (_controller.isRoomHost)
+                  IconButton(
+                    tooltip: '방장 넘기기',
+                    icon: const Icon(Icons.swap_horiz_rounded),
+                    onPressed: () =>
+                        showStudyRoomHostActionsSheet(context, _controller),
+                  ),
+                IconButton(
+                  tooltip: '셋 ID 복사',
+                  icon: const Icon(Icons.copy_rounded),
+                  onPressed: _copyRoomId,
+                ),
+              ],
+            )
+          : null,
+      floatingActionButton: !inRoom
+          ? GestureDetector(
+              onLongPress: _controller.joining
+                  ? null
+                  : () => _showJoinByIdDialog(context),
+              child: FloatingActionButton(
+                onPressed: _controller.joining
+                    ? null
+                    : () {
+                        if (kIsWeb) {
+                          WebSharedCamera.instance.openFromUserGesture();
+                        }
+                        unawaited(_createRoom());
+                      },
+                child: _controller.joining
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.add),
               ),
-            ),
-            if (_controller.isRoomHost)
-              IconButton(
-                tooltip: '방장 넘기기',
-                icon: const Icon(Icons.swap_horiz_rounded),
-                onPressed: () => showStudyRoomHostActionsSheet(context, _controller),
-              ),
-            IconButton(
-              tooltip: '셋 ID 복사',
-              icon: const Icon(Icons.copy_rounded),
-              onPressed: _copyRoomId,
-            ),
-          ],
-        ],
-      ),
+            )
+          : null,
       body: inRoom
           ? StudyRoomActiveView(
               controller: _controller,
@@ -224,22 +281,13 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               future: _recentFuture,
               builder: (context, snap) {
                 final recentId = snap.data?.$1;
-                return StudyRoomLobbyView(
-                  roomNameCtrl: _roomNameCtrl,
-                  roomIdCtrl: _roomIdCtrl,
+                return SettudySocialView(
                   joining: _controller.joining,
-                  userDisplayName: null,
-                  onCreate: () {
+                  onCreateRoom: () {
                     if (kIsWeb) {
                       WebSharedCamera.instance.openFromUserGesture();
                     }
                     unawaited(_createRoom());
-                  },
-                  onJoin: () {
-                    if (kIsWeb) {
-                      WebSharedCamera.instance.openFromUserGesture();
-                    }
-                    unawaited(_joinRoom());
                   },
                   recentRoomId: recentId,
                   onQuickJoinRecent: recentId == null

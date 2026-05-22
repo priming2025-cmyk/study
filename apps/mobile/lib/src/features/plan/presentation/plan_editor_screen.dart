@@ -6,8 +6,9 @@ import '../../../core/providers/core_providers.dart';
 import '../data/plan_models.dart';
 import 'monthly_plan_overview_sheet.dart';
 import 'plan_editor_controller.dart';
-import 'widgets/plan_item_card.dart';
 import 'widgets/plan_add_item_sheet.dart';
+import 'widgets/plan_item_card.dart';
+import 'widgets/plan_time_utils.dart';
 import 'widgets/plan_week_bar.dart';
 
 class PlanEditorScreen extends ConsumerStatefulWidget {
@@ -87,16 +88,6 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
-    }
-  }
-
-  Future<void> _setActualMinutes(PlanItem item, int minutes) async {
-    try {
-      await _c.setActualMinutes(item, minutes);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('실제시간 저장 실패: $e')));
     }
   }
 
@@ -182,7 +173,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(viewingToday ? '오늘의 계획' : '계획'),
+        title: const Text('공부 계획'),
         centerTitle: false,
         actions: [
           if (_c.loading)
@@ -201,10 +192,9 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _openAddSheet,
-        icon: const Icon(Icons.add),
-        label: const Text('과목 추가'),
+        child: const Icon(Icons.add),
       ),
       body: _c.loading && plan == null
           ? const Center(child: CircularProgressIndicator())
@@ -297,8 +287,6 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                             onEdit: () => _openEditSheet(item),
                             onDelete: () => _deleteItem(item),
                             onDoneChanged: (v) => _toggleDone(item, v),
-                            onActualMinutesChanged: (m) =>
-                                _setActualMinutes(item, m),
                             showDragHandle: items.length > 1,
                           ),
                         );
@@ -362,129 +350,57 @@ class _ProgressRing extends StatelessWidget {
     required this.totalCount,
   });
 
-  String _fmt(int s) {
-    final h = s ~/ 3600;
-    final m = (s % 3600) ~/ 60;
-    if (h > 0) return '${h}h ${m}m';
-    return '${m}m';
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final pct = (completionRate * 100).round();
+    final actualMin = (totalActualSeconds / 60).round();
+    final targetMin = (totalTargetSeconds / 60).round();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: cs.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 88,
-              height: 88,
-              child: CustomPaint(
-                painter: _RingPainter(
-                  progress: completionRate,
-                  color: cs.primary,
-                  background: cs.surfaceContainerHigh,
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$pct%',
-                        style: tt.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.primary,
-                        ),
-                      ),
-                      Text(
-                        '달성',
-                        style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: CustomPaint(
+              painter: _RingPainter(
+                progress: completionRate,
+                color: cs.primary,
+                background: cs.surfaceContainerHigh,
               ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _StatRow(
-                    icon: Icons.check_circle_outline,
-                    label: '완료한 과목',
-                    value: '$doneCount / $totalCount개',
-                    color: cs.secondary,
-                  ),
-                  const SizedBox(height: 10),
-                  _StatRow(
-                    icon: Icons.timer_outlined,
-                    label: '실제 공부',
-                    value: _fmt(totalActualSeconds),
+              child: Center(
+                child: Text(
+                  '$pct%',
+                  style: tt.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
                     color: cs.primary,
                   ),
-                  const SizedBox(height: 10),
-                  _StatRow(
-                    icon: Icons.flag_outlined,
-                    label: '목표 시간',
-                    value: totalTargetSeconds > 0
-                        ? _fmt(totalTargetSeconds)
-                        : '계획 없음',
-                    color: cs.onSurfaceVariant,
-                  ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '공부 ${formatPlanMinutes(actualMin)} / 목표 ${targetMin > 0 ? formatPlanMinutes(targetMin) : '—'}',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  totalCount > 0 ? '완료 $doneCount/$totalCount과목' : '과목을 추가해 보세요',
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _StatRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _StatRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 15, color: color),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  )),
-        ),
-        Text(value,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: color,
-                )),
-      ],
     );
   }
 }
@@ -502,7 +418,7 @@ class _RingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const strokeWidth = 8.0;
+    const strokeWidth = 5.0;
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (math.min(size.width, size.height) - strokeWidth) / 2;
 
@@ -554,27 +470,16 @@ class _EmptyState extends StatelessWidget {
               size: 52, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
           Text(
-            viewingToday ? '오늘의 계획을 세워보세요' : '이 날짜의 계획을 세워보세요',
+            '과목을 추가해 보세요',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            viewingToday
-                ? '과목과 목표 시간을 추가하면\n달성률을 실시간으로 확인할 수 있어요.'
-                : '위에서 주를 바꿔 다른 날도 미리 계획할 수 있어요.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-          ),
           const SizedBox(height: 20),
-          FilledButton.icon(
+          FloatingActionButton.small(
             onPressed: onAdd,
-            icon: const Icon(Icons.add),
-            label: const Text('첫 과목 추가하기'),
+            child: const Icon(Icons.add),
           ),
         ],
       ),

@@ -18,7 +18,7 @@ class SubjectPickerCard extends StatefulWidget {
     required int targetMinutes,
   }) onQuickAdd;
   final VoidCallback onOpenAdvancedAdd;
-  final void Function(PlanItem item) onEditItem;
+  final void Function(PlanItem item) onScheduleItem;
   final Future<void> Function(PlanItem item) onDeleteItem;
 
   const SubjectPickerCard({
@@ -29,7 +29,7 @@ class SubjectPickerCard extends StatefulWidget {
     required this.recentSubjects,
     required this.onQuickAdd,
     required this.onOpenAdvancedAdd,
-    required this.onEditItem,
+    required this.onScheduleItem,
     required this.onDeleteItem,
   });
 
@@ -89,7 +89,7 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
         items: items,
         selectedPlanItemId: widget.selectedPlanItemId,
         onSelected: widget.onSelected,
-        onEditItem: widget.onEditItem,
+        onScheduleItem: widget.onScheduleItem,
         onDeleteItem: widget.onDeleteItem,
         onOpenAdvancedAdd: widget.onOpenAdvancedAdd,
         cs: cs,
@@ -122,7 +122,7 @@ class _PlanSection extends StatelessWidget {
   final List<PlanItem> items;
   final String? selectedPlanItemId;
   final ValueChanged<PlanItem> onSelected;
-  final void Function(PlanItem) onEditItem;
+  final void Function(PlanItem) onScheduleItem;
   final Future<void> Function(PlanItem) onDeleteItem;
   final VoidCallback onOpenAdvancedAdd;
   final ColorScheme cs;
@@ -132,7 +132,7 @@ class _PlanSection extends StatelessWidget {
     required this.items,
     required this.selectedPlanItemId,
     required this.onSelected,
-    required this.onEditItem,
+    required this.onScheduleItem,
     required this.onDeleteItem,
     required this.onOpenAdvancedAdd,
     required this.cs,
@@ -209,7 +209,7 @@ class _PlanSection extends StatelessWidget {
               item: e,
               selected: e.id == selectedPlanItemId,
               onTap: () => onSelected(e),
-              onEdit: () => onEditItem(e),
+              onSchedule: () => onScheduleItem(e),
               onDelete: () => onDeleteItem(e),
             )),
       ],
