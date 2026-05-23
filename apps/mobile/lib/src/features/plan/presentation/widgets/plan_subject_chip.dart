@@ -50,8 +50,10 @@ class PlanSubjectChip extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: '목록에서 삭제',
                 onPressed: onDelete,
-                icon: Icon(Icons.delete_outline, size: 18, color: cs.error),
+                icon: Icon(Icons.delete_outline_rounded,
+                    size: 18, color: cs.error.withValues(alpha: 0.9)),
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),

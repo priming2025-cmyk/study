@@ -36,7 +36,8 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
 
   static const _steps = [5, 10, 15];
   static const _wheelHeight = 168.0;
-  static const _arrowColWidth = 52.0;
+  static const _wheelWidth = 200.0;
+  static const _arrowColWidth = 44.0;
 
   @override
   void initState() {
@@ -178,75 +179,99 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
           }).toList(),
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: _wheelHeight,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: _arrowColWidth,
-                child: Center(
-                  child: IconButton(
-                    iconSize: 36,
-                    onPressed: () => _nudge(-1),
-                    icon: Icon(Icons.keyboard_arrow_up_rounded,
-                        color: cs.onSurfaceVariant),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      height: 44,
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHigh.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(12),
+        Center(
+          child: SizedBox(
+            height: _wheelHeight,
+            width: _wheelWidth + _arrowColWidth * 2,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _arrowColWidth,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: IconButton(
+                      iconSize: 32,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: _arrowColWidth,
+                        minHeight: _arrowColWidth,
+                      ),
+                      onPressed: () => _nudge(-1),
+                      icon: Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
-                    ListWheelScrollView.useDelegate(
-                      controller: _ctrl,
-                      itemExtent: 44,
-                      perspective: 0.003,
-                      diameterRatio: 1.4,
-                      physics: const FixedExtentScrollPhysics(),
-                      onSelectedItemChanged: (i) {
-                        HapticFeedback.selectionClick();
-                        widget.onChanged(_values[i]);
-                      },
-                      childDelegate: ListWheelChildBuilderDelegate(
-                        childCount: _values.length,
-                        builder: (context, i) {
-                          final sel = _ctrl.hasClients && _ctrl.selectedItem == i;
-                          return Center(
-                            child: Text(
-                              _label(_values[i]),
-                              style: (sel ? tt.titleMedium : tt.bodyMedium)?.copyWith(
-                                fontWeight: sel ? FontWeight.w800 : FontWeight.w400,
-                                color: sel ? cs.onSurface : cs.onSurfaceVariant,
-                              ),
-                            ),
-                          );
+                  ),
+                ),
+                SizedBox(
+                  width: _wheelWidth,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        height: 44,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHigh.withValues(alpha: 0.85),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      ListWheelScrollView.useDelegate(
+                        controller: _ctrl,
+                        itemExtent: 44,
+                        perspective: 0.003,
+                        diameterRatio: 1.4,
+                        physics: const FixedExtentScrollPhysics(),
+                        onSelectedItemChanged: (i) {
+                          HapticFeedback.selectionClick();
+                          widget.onChanged(_values[i]);
                         },
+                        childDelegate: ListWheelChildBuilderDelegate(
+                          childCount: _values.length,
+                          builder: (context, i) {
+                            final sel =
+                                _ctrl.hasClients && _ctrl.selectedItem == i;
+                            return Center(
+                              child: Text(
+                                _label(_values[i]),
+                                style: (sel ? tt.titleMedium : tt.bodyMedium)
+                                    ?.copyWith(
+                                  fontWeight:
+                                      sel ? FontWeight.w800 : FontWeight.w400,
+                                  color: sel
+                                      ? cs.onSurface
+                                      : cs.onSurfaceVariant,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: _arrowColWidth,
-                child: Center(
-                  child: IconButton(
-                    iconSize: 36,
-                    onPressed: () => _nudge(1),
-                    icon: Icon(Icons.keyboard_arrow_down_rounded,
-                        color: cs.onSurfaceVariant),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  width: _arrowColWidth,
+                  child: Align(
+                    alignment: Alignment.center,
+                    child: IconButton(
+                      iconSize: 32,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: _arrowColWidth,
+                        minHeight: _arrowColWidth,
+                      ),
+                      onPressed: () => _nudge(1),
+                      icon: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

@@ -322,7 +322,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   }
 }
 
-class _SubjectTab extends StatelessWidget {
+class _SubjectTab extends StatefulWidget {
   final List<CustomSubject> subjects;
   final String? selected;
   final TextEditingController nameCtrl;
@@ -343,6 +343,13 @@ class _SubjectTab extends StatelessWidget {
     required this.onDeleteSubject,
   });
 
+  @override
+  State<_SubjectTab> createState() => _SubjectTabState();
+}
+
+class _SubjectTabState extends State<_SubjectTab> {
+  bool _showNewSubjectForm = false;
+
   static const _palette = [
     0xFFEF4444,
     0xFFF59E0B,
@@ -354,77 +361,114 @@ class _SubjectTab extends StatelessWidget {
     0xFF64748B,
   ];
 
+  void _openNewSubjectForm() {
+    widget.nameCtrl.clear();
+    setState(() => _showNewSubjectForm = true);
+  }
+
+  void _closeNewSubjectForm({bool clearName = true}) {
+    if (clearName) widget.nameCtrl.clear();
+    setState(() => _showNewSubjectForm = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: subjects.map((s) {
-            return PlanSubjectChip(
-              subject: s,
-              selected: selected == s.name,
-              onTap: () => onSelect(s),
-              onDelete: () => onDeleteSubject(s.name),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Expanded(
-              child: TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                  isDense: true,
-                  hintText: '새 과목',
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(),
+            ...widget.subjects.map((s) {
+              return PlanSubjectChip(
+                subject: s,
+                selected: widget.selected == s.name,
+                onTap: () => widget.onSelect(s),
+                onDelete: () => widget.onDeleteSubject(s.name),
+              );
+            }),
+            ActionChip(
+              avatar: Icon(Icons.add_rounded, size: 18, color: cs.primary),
+              label: Text(
+                '새과목',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
-            FilledButton.tonal(
-              onPressed: onAddCustom,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                visualDensity: VisualDensity.compact,
-              ),
-              child: const Text('저장'),
+              backgroundColor: cs.primaryContainer.withValues(alpha: 0.35),
+              side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+              onPressed: _openNewSubjectForm,
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _palette.map((c) {
-            final sel = color == c;
-            return GestureDetector(
-              onTap: () => onColor(c),
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Color(c),
-                  shape: BoxShape.circle,
-                  border: sel
-                      ? Border.all(color: cs.onSurface, width: 3)
-                      : null,
+        if (_showNewSubjectForm) ...[
+          const SizedBox(height: 16),
+          Text('새 과목 만들기', style: tt.titleSmall),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Flexible(
+                flex: 3,
+                child: TextField(
+                  controller: widget.nameCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    hintText: '새 과목 이름',
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ),
-            );
-          }).toList(),
-        ),
+              IconButton(
+                tooltip: '닫기',
+                icon: const Icon(Icons.close),
+                onPressed: _closeNewSubjectForm,
+              ),
+              FilledButton.tonal(
+                onPressed: () {
+                  widget.onAddCustom();
+                  _closeNewSubjectForm(clearName: false);
+                },
+                style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('저장'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _palette.map((c) {
+              final sel = widget.color == c;
+              return GestureDetector(
+                onTap: () => widget.onColor(c),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Color(c),
+                    shape: BoxShape.circle,
+                    border: sel
+                        ? Border.all(color: cs.onSurface, width: 3)
+                        : null,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
   }

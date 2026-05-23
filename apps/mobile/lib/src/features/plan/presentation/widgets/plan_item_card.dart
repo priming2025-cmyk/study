@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../data/plan_models.dart';
 import 'plan_time_utils.dart';
@@ -25,11 +24,11 @@ class PlanItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final targetMin = (item.targetSeconds / 60).round();
-    final actualMin = (item.actualSeconds / 60).round();
     final rate = item.completionRate.clamp(0.0, 1.0);
     final color = subjectColor(item.subject);
     final met = item.focusGoalMet;
+    final timeRange = formatPlanTimeRange(item);
+    final pct = planFocusPercent(item);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -108,29 +107,36 @@ class PlanItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (item.scheduledStartAt != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      DateFormat('HH:mm', 'ko')
-                          .format(item.scheduledStartAt!.toLocal()),
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: Row(
                   children: [
                     Text(
-                      '${formatPlanMinutes(actualMin)}/${formatPlanMinutes(targetMin)}',
+                      timeRange,
                       style: tt.labelMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: met ? color : cs.onSurface,
+                        letterSpacing: -0.2,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: met
+                            ? color.withValues(alpha: 0.15)
+                            : cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        met ? '100%' : '$pct%',
+                        style: tt.labelMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: met ? color : cs.onSurface,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -143,14 +149,6 @@ class PlanItemCard extends StatelessWidget {
                           color: color,
                           backgroundColor: color.withValues(alpha: 0.12),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      met ? '달성' : '${(rate * 100).round()}%',
-                      style: tt.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: met ? color : cs.onSurfaceVariant,
                       ),
                     ),
                   ],
