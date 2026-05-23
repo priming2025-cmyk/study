@@ -58,7 +58,7 @@ class _DreamCityIsometricViewState extends State<DreamCityIsometricView>
       width: double.infinity,
       child: CustomPaint(
         painter: DreamCityPainter(state: state, time: _time),
-        const SizedBox.shrink(),
+        child: const SizedBox.shrink(),
       ),
     );
   }
