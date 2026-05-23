@@ -4,6 +4,7 @@ import '../../data/plan_models.dart';
 import '../../data/plan_repeat_config.dart';
 import 'minute_scroll_picker.dart';
 import 'plan_subject_chip.dart';
+import 'plan_time_utils.dart';
 
 /// 과목 · 시작시간 · 계획시간 · 반복 — 4탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
@@ -39,7 +40,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   String? _selectedName;
   int _selectedColor = 0xFF3B82F6;
 
-  int _startMin = 9 * 60; // 09:00
+  int _startMin = nearestFiveMinuteOfDay(DateTime.now());
   int _durationMin = 50;
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
@@ -49,10 +50,24 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
 
   bool get _editing => widget.editItem != null;
 
+  String get _sheetTitle {
+    if (_editing) return '계획 수정';
+    return switch (_tab.index) {
+      0 => '과목',
+      1 => '시작시간',
+      2 => '계획시간',
+      3 => '반복',
+      _ => '새 계획',
+    };
+  }
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(length: 4, vsync: this)
+      ..addListener(() {
+        if (!_tab.indexIsChanging) setState(() {});
+      });
     _weekdays = {widget.planDay.weekday};
     _loadSubjects();
     final e = widget.editItem;
@@ -192,7 +207,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                 children: [
                   Expanded(
                     child: Text(
-                      _editing ? '계획 수정' : '새 계획',
+                      _sheetTitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -223,12 +238,10 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                     onColor: (c) => setState(() => _selectedColor = c),
                     onAddCustom: () async {
                       final n = _nameCtrl.text.trim();
-                      if (n.isEmpty) return;
-                      await CustomSubjectStore.upsert(n, _selectedColor);
                       await _loadSubjects();
-                      setState(() {
-                        _selectedName = n;
-                      });
+                      if (mounted && n.isNotEmpty) {
+                        setState(() => _selectedName = n);
+                      }
                     },
                     onDeleteSubject: _deleteSubjectFromList,
                   ),
@@ -349,6 +362,7 @@ class _SubjectTab extends StatefulWidget {
 
 class _SubjectTabState extends State<_SubjectTab> {
   bool _showNewSubjectForm = false;
+  String? _editingSubjectName;
 
   static const _palette = [
     0xFFEF4444,
@@ -363,12 +377,39 @@ class _SubjectTabState extends State<_SubjectTab> {
 
   void _openNewSubjectForm() {
     widget.nameCtrl.clear();
-    setState(() => _showNewSubjectForm = true);
+    setState(() {
+      _editingSubjectName = null;
+      _showNewSubjectForm = true;
+    });
+  }
+
+  void _openEditSubjectForm(CustomSubject s) {
+    widget.nameCtrl.text = s.name;
+    widget.onColor(s.colorValue);
+    setState(() {
+      _editingSubjectName = s.name;
+      _showNewSubjectForm = true;
+    });
   }
 
   void _closeNewSubjectForm({bool clearName = true}) {
     if (clearName) widget.nameCtrl.clear();
-    setState(() => _showNewSubjectForm = false);
+    setState(() {
+      _showNewSubjectForm = false;
+      _editingSubjectName = null;
+    });
+  }
+
+  Future<void> _saveSubjectForm() async {
+    final n = widget.nameCtrl.text.trim();
+    if (n.isEmpty) return;
+    if (_editingSubjectName != null) {
+      await CustomSubjectStore.rename(_editingSubjectName!, n, widget.color);
+    } else {
+      await CustomSubjectStore.upsert(n, widget.color);
+    }
+    widget.onAddCustom();
+    _closeNewSubjectForm(clearName: false);
   }
 
   @override
@@ -379,36 +420,50 @@ class _SubjectTabState extends State<_SubjectTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            ...widget.subjects.map((s) {
-              return PlanSubjectChip(
-                subject: s,
-                selected: widget.selected == s.name,
-                onTap: () => widget.onSelect(s),
-                onDelete: () => widget.onDeleteSubject(s.name),
-              );
-            }),
-            ActionChip(
-              avatar: Icon(Icons.add_rounded, size: 18, color: cs.primary),
-              label: Text(
-                '새과목',
-                style: TextStyle(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.35,
+          ),
+          itemCount: widget.subjects.length,
+          itemBuilder: (context, i) {
+            final s = widget.subjects[i];
+            return PlanSubjectChip(
+              subject: s,
+              selected: widget.selected == s.name,
+              onTap: () => widget.onSelect(s),
+              onEdit: () => _openEditSubjectForm(s),
+              onDelete: () => widget.onDeleteSubject(s.name),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ActionChip(
+            avatar: Icon(Icons.add_rounded, size: 18, color: cs.primary),
+            label: Text(
+              '새과목',
+              style: TextStyle(
+                color: cs.primary,
+                fontWeight: FontWeight.w600,
               ),
-              backgroundColor: cs.primaryContainer.withValues(alpha: 0.35),
-              side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
-              onPressed: _openNewSubjectForm,
             ),
-          ],
+            backgroundColor: cs.primaryContainer.withValues(alpha: 0.35),
+            side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
+            onPressed: _openNewSubjectForm,
+          ),
         ),
         if (_showNewSubjectForm) ...[
           const SizedBox(height: 16),
-          Text('새 과목 만들기', style: tt.titleSmall),
+          Text(
+            _editingSubjectName != null ? '과목 편집' : '새 과목 만들기',
+            style: tt.titleSmall,
+          ),
           const SizedBox(height: 8),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -433,10 +488,7 @@ class _SubjectTabState extends State<_SubjectTab> {
                 onPressed: _closeNewSubjectForm,
               ),
               FilledButton.tonal(
-                onPressed: () {
-                  widget.onAddCustom();
-                  _closeNewSubjectForm(clearName: false);
-                },
+                onPressed: _saveSubjectForm,
                 style: FilledButton.styleFrom(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

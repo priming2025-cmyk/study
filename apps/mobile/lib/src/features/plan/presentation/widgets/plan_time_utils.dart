@@ -1,5 +1,11 @@
 import '../../data/plan_models.dart';
 
+/// 현재 시각에서 가장 가까운 5분 단위 (당일 분, 05:00~23:55).
+int nearestFiveMinuteOfDay(DateTime time) {
+  final total = time.hour * 60 + time.minute;
+  return ((total / 5).round() * 5).clamp(5 * 60, 23 * 60 + 55);
+}
+
 /// 계획·공부 화면 공통 시간/과목 표시 유틸.
 String formatPlanMinutes(int minutes) {
   if (minutes <= 0) return '0m';

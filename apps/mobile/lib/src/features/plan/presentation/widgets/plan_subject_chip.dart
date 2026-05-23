@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../data/custom_subject_store.dart';
 
-/// 과목 선택 칩 — 휴지통으로 목록에서 삭제.
+/// 과목 선택 칩 — ⋮ 메뉴에서 편집·삭제.
 class PlanSubjectChip extends StatelessWidget {
   final CustomSubject subject;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const PlanSubjectChip({
@@ -14,6 +15,7 @@ class PlanSubjectChip extends StatelessWidget {
     required this.subject,
     required this.selected,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -24,39 +26,68 @@ class PlanSubjectChip extends StatelessWidget {
 
     return Material(
       color: selected ? color.withValues(alpha: 0.14) : cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+          padding: const EdgeInsets.fromLTRB(6, 6, 0, 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? color : cs.outlineVariant.withValues(alpha: 0.5),
               width: selected ? 1.5 : 1,
             ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(radius: 7, backgroundColor: color),
-              const SizedBox(width: 8),
-              Text(
-                subject.name,
-                style: TextStyle(
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: selected ? color : cs.onSurface,
+              CircleAvatar(radius: 6, backgroundColor: color),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  subject.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? color : cs.onSurface,
+                  ),
                 ),
               ),
-              IconButton(
-                tooltip: '목록에서 삭제',
-                onPressed: onDelete,
-                icon: Icon(Icons.delete_outline_rounded,
-                    size: 18, color: cs.error.withValues(alpha: 0.9)),
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                icon: Icon(
+                  Icons.more_vert,
+                  size: 18,
+                  color: cs.onSurfaceVariant,
+                ),
+                onSelected: (v) {
+                  if (v == 'edit') onEdit();
+                  if (v == 'delete') onDelete();
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.edit_outlined, size: 20),
+                      title: Text('편집'),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.delete_outline_rounded,
+                          size: 20, color: cs.error),
+                      title: Text('삭제', style: TextStyle(color: cs.error)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

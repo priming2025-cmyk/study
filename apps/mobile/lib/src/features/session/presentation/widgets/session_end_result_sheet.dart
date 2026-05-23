@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../domain/session_reward_result.dart';
 
@@ -25,7 +24,7 @@ class SessionEndResultSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+        padding: const EdgeInsets.fromLTRB(16, 10, 8, 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -37,19 +36,34 @@ class SessionEndResultSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              '공부 완료',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Text(
+                        '공부 완료',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '집중 ${_fmtMin(focusedSeconds)} · 평균 점수 $averageScore점',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
                   ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '집중 ${_fmtMin(focusedSeconds)} · 평균 점수 $averageScore점',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
+                ),
+                IconButton(
+                  tooltip: '닫기',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
             const SizedBox(height: 14),
             Card(
@@ -70,38 +84,6 @@ class SessionEndResultSheet extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      context.push('/coins');
-                    },
-                    child: const Text('내역 보기'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      context.go('/session/quick');
-                    },
-                    child: const Text('다음 공부'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                context.go('/plan');
-              },
-              child: const Text('계획짜기'),
             ),
           ],
         ),
@@ -129,4 +111,3 @@ class SessionEndResultSheet extends StatelessWidget {
     );
   }
 }
-

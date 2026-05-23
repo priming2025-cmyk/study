@@ -38,6 +38,7 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   static const _wheelHeight = 168.0;
   static const _wheelWidth = 200.0;
   static const _arrowColWidth = 44.0;
+  static const _stepColWidth = 52.0;
 
   @override
   void initState() {
@@ -152,43 +153,52 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
               },
             ),
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: _steps.map((s) {
-            final sel = _step == s;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Material(
-                color: sel ? cs.surfaceContainerHigh : cs.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () => _setStep(s),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(
-                      '${s}분',
-                      style: tt.labelSmall?.copyWith(
-                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 12),
         Center(
           child: SizedBox(
             height: _wheelHeight,
-            width: _wheelWidth + _arrowColWidth * 2,
+            width: _stepColWidth + _arrowColWidth * 2 + _wheelWidth,
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                SizedBox(
+                  width: _stepColWidth,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: _steps.map((s) {
+                      final sel = _step == s;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Material(
+                          color: sel
+                              ? cs.surfaceContainerHigh
+                              : cs.surfaceContainerLowest,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => _setStep(s),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              child: Text(
+                                '${s}분',
+                                style: tt.labelSmall?.copyWith(
+                                  fontWeight:
+                                      sel ? FontWeight.w700 : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
                 SizedBox(
                   width: _arrowColWidth,
                   child: Align(
-                    alignment: Alignment.center,
+                    alignment: Alignment.topCenter,
                     child: IconButton(
                       iconSize: 32,
                       padding: EdgeInsets.zero,

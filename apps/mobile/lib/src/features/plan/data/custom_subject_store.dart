@@ -67,6 +67,19 @@ class CustomSubjectStore {
     return true;
   }
 
+  static Future<void> rename(String oldName, String newName, int colorValue) async {
+    final list = await load();
+    list.removeWhere((s) => s.name == oldName);
+    final i = list.indexWhere((s) => s.name == newName);
+    final updated = CustomSubject(name: newName, colorValue: colorValue);
+    if (i >= 0) {
+      list[i] = updated;
+    } else {
+      list.add(updated);
+    }
+    await save(list);
+  }
+
   static Future<void> upsert(String name, int colorValue) async {
     final list = await load();
     final i = list.indexWhere((s) => s.name == name);
