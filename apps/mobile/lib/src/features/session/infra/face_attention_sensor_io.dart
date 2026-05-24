@@ -11,9 +11,9 @@ import 'ios_attention_face_pipeline.dart';
 
 /// iOS·Android·macOS 얼굴 집중 센서.
 ///
-/// - **Android / macOS**: YUV(BGRA) + [startImageStream] + [rotationForFrame].
-/// - **iOS**: **프리뷰만** + 주기 [takePicture] JPEG 검출.
-///   (스트림+프리뷰 동시 사용 시 검은 화면·2회차 실패·빈 화면 오검이 잦음)
+/// - **Android / macOS / iOS**: YUV(BGRA) + [startImageStream] + [rotationForFrame].
+///   iOS는 [takePicture] 대신 스트림을 쓰며 1.2초 간격으로만 검출합니다.
+///   (takePicture는 CameraPreview가 정지된 사진처럼 보이는 문제가 있음)
 ///
 /// ### iOS 오검 방어 레이어 (4단계)
 ///
@@ -27,7 +27,6 @@ class FaceAttentionSensor {
   FaceDetector? _detector;
   CameraController? _controller;
   StreamController<AttentionSignals>? _signals;
-  Timer? _iosSampleTimer;
   Timer? _heartbeatTimer;
   bool _running = false;
   bool _busy = false;
@@ -134,15 +133,20 @@ class FaceAttentionSensor {
     ));
     _startHeartbeat(appInForeground);
 
-    if (isIOS) {
-      _iosSampleTimer?.cancel();
-      // periodic 대신 "끝나면 다음 예약" 방식으로 busy 충돌을 방지합니다.
-      unawaited(_iosScheduleNext(cam, appInForeground, gen));
-      return;
-    }
-
+    DateTime? lastIosDetectAt;
     await _controller!.startImageStream((image) async {
-      if (!_running || _busy || gen != _streamGeneration) return;
+      if (!_running || gen != _streamGeneration) return;
+
+      if (isIOS) {
+        if (!IosAttentionFacePipeline.frameLooksLikeLiveCamera(image)) return;
+        final now = DateTime.now();
+        if (lastIosDetectAt != null &&
+            now.difference(lastIosDetectAt!) < _iosSampleInterval) {
+          return;
+        }
+      }
+
+      if (_busy) return;
       _busy = true;
       try {
         final controller = _controller;
@@ -153,86 +157,24 @@ class FaceAttentionSensor {
           deviceOrientation: controller.value.deviceOrientation,
           isMacOS: isMacOS,
         );
-        final sig = _toSignals(faces, appInForeground());
+        var sig = _toSignals(faces, appInForeground());
+        if (isIOS) {
+          lastIosDetectAt = DateTime.now();
+          sig = _iosStabilizeFacePresent(sig);
+        }
         if (sig.facePresent) _lastValidSampleAt = DateTime.now();
         _emitSignal(sig);
       } catch (e) {
         debugPrint('FaceAttentionSensor: 감지 오류 → $e');
-        _emitNoFace(appInForeground());
+        if (isIOS) {
+          _emitIosStabilizedNoFace(appInForeground());
+        } else {
+          _emitNoFace(appInForeground());
+        }
       } finally {
         _busy = false;
       }
     });
-  }
-
-  /// iOS 샘플을 직렬(순서대로) 처리합니다.
-  /// Timer.periodic과 달리 이전 샘플이 끝나야 다음이 시작되므로 _busy 경합이 없습니다.
-  Future<void> _iosScheduleNext(
-    CameraDescription cam,
-    bool Function() appInForeground,
-    int gen,
-  ) async {
-    while (_running && gen == _streamGeneration) {
-      await _iosSampleOnce(cam, appInForeground, gen);
-      if (_running && gen == _streamGeneration) {
-        await Future<void>.delayed(_iosSampleInterval);
-      }
-    }
-  }
-
-  Future<void> _iosSampleOnce(
-    CameraDescription cam,
-    bool Function() appInForeground,
-    int gen,
-  ) async {
-    if (!_running || gen != _streamGeneration) return;
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
-
-    try {
-      final file = await c.takePicture();
-      final bytes = await File(file.path).readAsBytes();
-      try {
-        await File(file.path).delete();
-      } catch (_) {}
-
-      if (!_running || gen != _streamGeneration) return;
-
-      final faces = await _detectIOSFromJpeg(bytes);
-      var sig = _toSignals(faces, appInForeground());
-      sig = _iosStabilizeFacePresent(sig);
-      if (sig.facePresent) {
-        _lastValidSampleAt = DateTime.now();
-      }
-      _emitSignal(sig);
-    } catch (e) {
-      debugPrint('FaceAttentionSensor[iOS]: 샘플 실패 → $e');
-      _emitIosStabilizedNoFace(appInForeground());
-    }
-  }
-
-  Future<List<Face>> _detectIOSFromJpeg(List<int> bytes) async {
-    final data =
-        bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
-    if (!IosAttentionFacePipeline.jpegLooksLikePhoto(data)) {
-      return const [];
-    }
-
-    final fast = await _detector!
-        .detectFaces(data, mode: FaceDetectionMode.fast)
-        .timeout(const Duration(milliseconds: 1500));
-    final fastOk =
-        fast.where(IosAttentionFacePipeline.passesFastGate).toList();
-    if (fastOk.isEmpty) return const [];
-
-    final full = await _detector!
-        .detectFaces(data, mode: FaceDetectionMode.full)
-        .timeout(const Duration(milliseconds: 2000));
-
-    return IosAttentionFacePipeline.filterTrustworthy(
-      full,
-      requireFastOverlap: fastOk,
-    );
   }
 
   Future<List<Face>> _detectFrame({
@@ -412,8 +354,6 @@ class FaceAttentionSensor {
   Future<void> _stopInternal() async {
     _running = false;
     _streamGeneration++;
-    _iosSampleTimer?.cancel();
-    _iosSampleTimer = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _lastValidSampleAt = null;

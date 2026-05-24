@@ -36,7 +36,6 @@ final class WebSharedCamera {
 
   /// `공부 시작`·방 입장 등 버튼 핸들러 **맨 앞**에서 동기 호출 (Safari 필수).
   void openFromUserGesture() {
-    _refs++;
     _disposeTimer?.cancel();
     _disposeTimer = null;
     if (_stream != null && isStreamReady) return;
@@ -86,9 +85,12 @@ final class WebSharedCamera {
     _teardown();
   }
 
+  /// 연속 공부 사이에는 스트림을 잠시 유지(재허용·재연결 부담 감소).
+  static const _idleDisposeDelay = Duration(minutes: 10);
+
   void _scheduleDispose() {
     _disposeTimer?.cancel();
-    _disposeTimer = Timer(const Duration(seconds: 45), () {
+    _disposeTimer = Timer(_idleDisposeDelay, () {
       if (_refs > 0) return;
       _teardown();
     });
@@ -160,6 +162,12 @@ final class WebSharedCamera {
       if (isStreamReady) {
         unawaited(WebFaceDetectorHolder.instance.warmUp());
         return _stream;
+      }
+      // Safari: 트랙은 살아 있는데 readyState가 늦게 오르는 경우 재생 재시도
+      if (i == 20 || i == 40) {
+        try {
+          await _video!.play();
+        } catch (_) {}
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }

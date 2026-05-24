@@ -90,9 +90,13 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void _attachVideo() {
     final video = WebSharedCamera.instance.video;
     if (video == null) return;
-    if (_host.contains(video)) return;
+    if (_host.contains(video)) {
+      unawaited(video.play());
+      return;
+    }
     _host.nodes.clear();
     _host.nodes.add(video);
+    unawaited(video.play());
   }
 
   Future<void> _boot() async {
@@ -255,6 +259,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _analysisTimer?.cancel();
     _detectorRetryTimer?.cancel();
     _pipeline.reset();
+    WebSharedCamera.instance.release();
     super.dispose();
   }
 

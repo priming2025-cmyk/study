@@ -114,6 +114,9 @@ class SessionController extends ChangeNotifier {
   Future<void> init() async {
     _engagedMinScore = await loadEngagedMinScore();
     notifyListeners();
+    if (!kIsWeb) {
+      unawaited(SessionCameraCache.getFrontOrDefault());
+    }
     await _loadTodayPlan();
   }
 
