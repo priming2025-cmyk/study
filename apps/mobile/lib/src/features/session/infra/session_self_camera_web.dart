@@ -14,9 +14,6 @@ import 'web_face_detector_holder.dart';
 import 'web_shared_camera.dart';
 
 /// 브라우저 공유 카메라 + [FaceDetector] 분석 → [onAttentionSignals].
-///
-/// [detectFacesFromVideo] 대신 JPEG 캡처 → [FaceDetector.detectFaces] 경로를
-/// 사용합니다. dart:html ↔ package:web 타입 불일치를 피하고 Safari 호환성을 높입니다.
 class SessionSelfCameraSurface extends StatefulWidget {
   final double width;
   final double height;
@@ -48,6 +45,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   bool _viewRegistered = false;
   String? _cameraError;
   String? _analysisStatus;
+  bool _analysisFailed = false;
   bool _streamReady = false;
 
   Timer? _analysisTimer;
@@ -55,6 +53,10 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   bool _busy = false;
   int _retryCount = 0;
   final WebAttentionFacePipeline _pipeline = WebAttentionFacePipeline();
+
+  bool get _isMobileSafari => WebFaceDetectorHolder.isMobileSafari;
+
+  int get _maxDetectorRetries => _isMobileSafari ? 24 : 10;
 
   @override
   void initState() {
@@ -122,7 +124,10 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         setState(() {
           _cameraError = null;
           _streamReady = true;
-          _analysisStatus = '얼굴 분석 준비 중…';
+          _analysisFailed = false;
+          _analysisStatus = _isMobileSafari
+              ? '얼굴 분석 준비 중… (iPhone 최초 1~2분 걸릴 수 있어요)'
+              : '얼굴 분석 준비 중…';
         });
       }
 
@@ -130,7 +135,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 800),
+        Duration(milliseconds: _isMobileSafari ? 900 : 800),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -162,21 +167,45 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _retryCount = 0;
     _detectorRetryTimer?.cancel();
     if (mounted) {
-      setState(() => _analysisStatus = null);
+      setState(() {
+        _analysisStatus = null;
+        _analysisFailed = false;
+      });
     }
   }
 
+  Future<void> _retryDetectorNow() async {
+    _retryCount = 0;
+    _analysisFailed = false;
+    if (mounted) {
+      setState(() {
+        _analysisStatus = _isMobileSafari
+            ? '분석 엔진 다시 불러오는 중…'
+            : '얼굴 분석 준비 중…';
+      });
+    }
+    WebFaceDetectorHolder.instance.scheduleRetry();
+    unawaited(WebFaceDetectorHolder.instance.warmUp());
+    await _ensureDetector();
+  }
+
   void _scheduleDetectorRetry() {
-    if (_retryCount >= 6) {
+    if (_retryCount >= _maxDetectorRetries) {
       if (mounted) {
-        setState(() => _analysisStatus =
-            '분석 엔진 로딩이 느립니다. Wi‑Fi 확인 후 새로고침해 주세요.');
+        setState(() {
+          _analysisFailed = true;
+          _analysisStatus =
+              '분석을 시작하지 못했어요. Wi‑Fi가 안정적인 곳에서 아래 버튼으로 다시 시도해 주세요.';
+        });
       }
       return;
     }
     _retryCount++;
+    final delaySec = _isMobileSafari
+        ? (4 + _retryCount).clamp(4, 12)
+        : (2 + _retryCount).clamp(2, 8);
     _detectorRetryTimer?.cancel();
-    _detectorRetryTimer = Timer(Duration(seconds: 3 + _retryCount * 2), () {
+    _detectorRetryTimer = Timer(Duration(seconds: delaySec), () {
       if (!mounted) return;
       WebFaceDetectorHolder.instance.scheduleRetry();
       unawaited(_ensureDetector());
@@ -207,8 +236,8 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _busy = true;
     try {
       final jpeg = await WebSharedCamera.instance.captureJpeg(
-        maxDim: 480,
-        quality: 0.82,
+        maxDim: _isMobileSafari ? 400 : 480,
+        quality: _isMobileSafari ? 0.78 : 0.82,
       );
 
       if (jpeg == null || !WebAttentionFacePipeline.jpegLooksLikePhoto(jpeg)) {
@@ -242,7 +271,10 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       );
 
       if (mounted && _analysisStatus != null) {
-        setState(() => _analysisStatus = null);
+        setState(() {
+          _analysisStatus = null;
+          _analysisFailed = false;
+        });
       }
 
       widget.onAttentionSignals(sig);
@@ -297,7 +329,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         fit: StackFit.expand,
         children: [
           HtmlElementView(viewType: _viewType),
-          if (_analysisStatus != null)
+          if (_analysisStatus != null || _analysisFailed)
             Positioned(
               left: 8,
               right: 8,
@@ -310,14 +342,30 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 6,
+                    vertical: 8,
                   ),
-                  child: Text(
-                    _analysisStatus!,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.white70,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _analysisStatus ?? '',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Colors.white70,
+                            ),
+                      ),
+                      if (_analysisFailed) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => unawaited(_retryDetectorNow()),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.white.withValues(alpha: 0.12),
+                          ),
+                          child: const Text('다시 시도'),
                         ),
+                      ],
+                    ],
                   ),
                 ),
               ),

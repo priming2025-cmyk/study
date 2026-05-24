@@ -6,7 +6,7 @@ import 'dart:html' as html;
 import 'package:face_detection_tflite/face_detection_tflite.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_litert/src/web/js_interop/litertjs_bindings.dart'
-    show isLiteRtReady, liteRtLoadError, waitForLiteRt;
+    show configureLiteRtLoader, isLiteRtReady, liteRtLoadError, waitForLiteRt;
 
 /// 웹(Safari·Chrome) 전역 [FaceDetector] — 한 번만 초기화하고 재사용.
 final class WebFaceDetectorHolder {
@@ -16,10 +16,20 @@ final class WebFaceDetectorHolder {
   FaceDetector? _detector;
   Future<FaceDetector?>? _initFuture;
 
+  static const _cdnBase = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0';
+
   FaceDetector? get detector =>
       (_detector != null && _detector!.isReady) ? _detector : null;
 
   bool get isReady => detector != null;
+
+  static bool get isMobileSafari {
+    final ua = html.window.navigator.userAgent.toLowerCase();
+    return ua.contains('iphone') ||
+        ua.contains('ipad') ||
+        ua.contains('ipod') ||
+        (ua.contains('mobile') && ua.contains('safari'));
+  }
 
   Future<void> warmUp() => _getOrCreate();
 
@@ -39,6 +49,11 @@ final class WebFaceDetectorHolder {
 
   void scheduleRetry() {
     _initFuture = null;
+    final d = _detector;
+    _detector = null;
+    if (d != null) {
+      unawaited(d.dispose().catchError((_) {}));
+    }
   }
 
   Future<void> disposeAll() async {
@@ -54,63 +69,85 @@ final class WebFaceDetectorHolder {
     }
   }
 
-  static bool get _isMobileSafari {
-    final ua = html.window.navigator.userAgent.toLowerCase();
-    return ua.contains('iphone') ||
-        ua.contains('ipad') ||
-        ua.contains('ipod') ||
-        (ua.contains('mobile') && ua.contains('safari'));
+  Future<void> _waitLiteRtReady({required Duration timeout}) async {
+    if (isLiteRtReady()) return;
+
+    configureLiteRtLoader(
+      moduleUrl: '$_cdnBase/+esm',
+      wasmUrl: '$_cdnBase/wasm/litert_wasm_internal.js',
+      autoLoad: true,
+    );
+
+    try {
+      await waitForLiteRt(timeout: timeout);
+      if (isLiteRtReady()) return;
+    } catch (e) {
+      debugPrint('[WebFaceDetector] waitForLiteRt: $e');
+      final err = liteRtLoadError();
+      if (err != null) debugPrint('[WebFaceDetector] LiteRT page error: $err');
+    }
+
+    final completer = Completer<void>();
+    void onEvent(html.Event _) {
+      if (!completer.isCompleted) completer.complete();
+    }
+
+    html.window.addEventListener('litert-ready', onEvent);
+    try {
+      await completer.future.timeout(timeout);
+    } on TimeoutException {
+      debugPrint('[WebFaceDetector] litert-ready event timeout');
+    } finally {
+      html.window.removeEventListener('litert-ready', onEvent);
+    }
+  }
+
+  Future<FaceDetector?> _tryCreate(String accel) async {
+    final d = await FaceDetector.create(
+      model: FaceDetectionModel.frontCamera,
+      liteRtAccelerator: accel,
+    );
+    if (d.isReady) return d;
+    try {
+      await d.dispose();
+    } catch (_) {}
+    return null;
   }
 
   Future<FaceDetector?> _initWithRetry() async {
-    try {
-      await waitForLiteRt(timeout: const Duration(seconds: 60));
-    } catch (e) {
-      debugPrint('[WebFaceDetector] LiteRT wait: $e');
-      final err = liteRtLoadError();
-      if (err != null) debugPrint('[WebFaceDetector] LiteRT error: $err');
-    }
+    final mobile = isMobileSafari;
+    final liteRtTimeout =
+        mobile ? const Duration(seconds: 120) : const Duration(seconds: 50);
+
+    await _waitLiteRtReady(timeout: liteRtTimeout);
 
     if (!isLiteRtReady()) {
       debugPrint('[WebFaceDetector] LiteRT not ready after wait');
     }
 
-    final attempts = _isMobileSafari
-        ? [
-            ('wasm', 0),
-            ('wasm', 2000),
-          ]
-        : [
-            ('wasm', 0),
-            ('auto', 600),
-          ];
+    final accelerators = mobile
+        ? <String>['wasm', 'wasm', 'webgl', 'cpu', 'auto', 'wasm']
+        : <String>['wasm', 'webgl', 'auto', 'wasm'];
 
-    for (var i = 0; i < attempts.length; i++) {
-      final accel = attempts[i].$1;
-      final delayMs = attempts[i].$2;
-      if (delayMs > 0) {
-        await Future<void>.delayed(Duration(milliseconds: delayMs));
+    for (var i = 0; i < accelerators.length; i++) {
+      final accel = accelerators[i];
+      if (i > 0) {
+        await Future<void>.delayed(
+          Duration(milliseconds: mobile ? 1200 : 350),
+        );
       }
       try {
-        final d = await FaceDetector.create(
-          model: FaceDetectionModel.frontCamera,
-          liteRtAccelerator: accel,
-        );
-        if (!d.isReady) {
-          await d.dispose();
-          continue;
+        final d = await _tryCreate(accel);
+        if (d != null) {
+          _detector = d;
+          debugPrint('[WebFaceDetector] ready ($accel, mobile=$mobile)');
+          return d;
         }
-        _detector = d;
-        debugPrint('[WebFaceDetector] ready ($accel)');
-        return d;
       } catch (e, st) {
         debugPrint('[WebFaceDetector] init #$i ($accel): $e\n$st');
-        try {
-          await _detector?.dispose();
-        } catch (_) {}
-        _detector = null;
       }
     }
+
     return null;
   }
 }

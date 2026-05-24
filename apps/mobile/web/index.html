@@ -17,26 +17,42 @@
   <title>study_up</title>
   <link rel="manifest" href="manifest.json">
 
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://unpkg.com">
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+
   <!--
-    LiteRT.js: 얼굴 분석 WASM 엔진.
-    Flutter 앱 시작 전에 미리 로드해 Safari에서 "준비 중" 지연을 최소화합니다.
+    LiteRT.js: 얼굴 분석 WASM (iPhone Safari는 최초 로드가 1~2분 걸릴 수 있음).
+    Flutter 시작 전에 로드해 두고 litert-ready 이벤트로 Dart에 알립니다.
   -->
   <script type="module">
     (async () => {
-      const CDN = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0';
-      try {
-        const mod = await import(CDN + '/+esm');
-        await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
-        window.LiteRt = mod;
-        window.LiteRtReady = true;
-      } catch (e) {
-        console.warn('[setudy] LiteRT preload failed:', e && e.message ? e.message : e);
-        window.LiteRtReady = false;
-        window.LiteRtLoadError = e && e.message ? e.message : String(e);
-      } finally {
-        window.dispatchEvent(new Event('litert-ready'));
+      const CDNS = [
+        'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0',
+        'https://unpkg.com/@litertjs/core@2.4.0',
+      ];
+      let lastErr = null;
+      for (const CDN of CDNS) {
+        try {
+          const mod = await import(CDN + '/+esm');
+          await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
+          window.LiteRt = mod;
+          window.LiteRtReady = true;
+          window.LiteRtLoadError = null;
+          console.info('[setudy] LiteRT ready via', CDN);
+          return;
+        } catch (e) {
+          lastErr = e;
+          console.warn('[setudy] LiteRT preload failed (' + CDN + '):',
+            e && e.message ? e.message : e);
+        }
       }
-    })();
+      window.LiteRtReady = false;
+      window.LiteRtLoadError = lastErr && lastErr.message ? lastErr.message : String(lastErr);
+    })().finally(() => {
+      window.dispatchEvent(new Event('litert-ready'));
+    });
   </script>
 </head>
 <body>
