@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb, debugPrint;
@@ -55,7 +54,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     appInForeground: true,
   );
   bool _appInForeground = true;
-  DateTime? _cameraLiveAt;
   DateTime? _lastSignalAt;
   bool _ownsCamera = false;
 
@@ -77,18 +75,11 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   int _engagedMinScoreForTick() => widget.engagedMinListenable.value;
 
-  bool get _isIOS => !kIsWeb && Platform.isIOS;
-
   bool get _cameraActive => kIsWeb
       ? (WebSharedCamera.instance.isStreamReady || _hasRecentSignal)
       : _camera.hasActiveCamera;
 
-  bool get _sensorReadyForUi {
-    if (kIsWeb || !_isIOS) return _cameraActive;
-    final t = _cameraLiveAt;
-    if (t == null || !_cameraActive) return false;
-    return DateTime.now().difference(t) >= const Duration(seconds: 2);
-  }
+  bool get _sensorReadyForUi => _cameraActive;
 
   /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
   bool get _hasRecentSignal {
@@ -128,7 +119,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     _tick = null;
     await _sub?.cancel();
     _sub = null;
-    _cameraLiveAt = null;
     _lastSignalAt = null;
     if (_ownsCamera) {
       await _camera.release();
@@ -172,7 +162,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
           _ownsCamera = false;
           return;
         }
-        _cameraLiveAt = DateTime.now();
         _sub = _camera.stream.listen((s) {
           _signals = s;
           _lastSignalAt = DateTime.now();
@@ -191,7 +180,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
           await _camera.release();
           _ownsCamera = false;
         }
-        _cameraLiveAt = null;
       }
     }
 

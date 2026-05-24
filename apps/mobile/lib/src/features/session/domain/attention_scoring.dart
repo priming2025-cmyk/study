@@ -166,8 +166,8 @@ class AttentionScoring {
 
   /// mesh 기반 EAR가 비정상이면 ‘얼굴 있음’ 플래그를 무시합니다(오검 mesh 차단).
   static bool _faceSignalsCredible(AttentionSignals s) {
-    if (s.earLeft < 0.14 || s.earRight < 0.14) return false;
-    if (s.earLeft > 0.45 || s.earRight > 0.45) return false;
+    if (s.earLeft < 0.12 || s.earRight < 0.12) return false;
+    if (s.earLeft > 0.50 || s.earRight > 0.50) return false;
     return true;
   }
 

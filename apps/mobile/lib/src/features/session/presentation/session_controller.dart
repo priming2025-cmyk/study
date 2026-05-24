@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
@@ -53,28 +52,21 @@ class SessionController extends ChangeNotifier {
   CameraDescription? frontCamera;
   bool appInForeground = true;
 
-  DateTime? _cameraLiveAt;
   DateTime? _lastSignalAt;
   Timer? _cameraStartWatchdog;
 
   /// 카메라 시작 watchdog이 실패로 판정한 경우의 메시지.
   String? cameraStartError;
 
-  bool get _isIOS => !kIsWeb && Platform.isIOS;
-
   /// 카메라가 실제로 준비됐는지 (프리뷰·검출 가능).
   bool get cameraActive => kIsWeb
       ? (WebSharedCamera.instance.isStreamReady || hasRecentSignal)
       : _camera.hasActiveCamera;
 
-  /// iOS: 카메라가 붙은 뒤 2초 전에는 ‘집중’ 표시·집중 초 누적 안 함.
+  /// 카메라가 준비되면 Android·iOS 동일 (오검 방지는 센서 라치·점수층에서 처리).
   bool get attentionSensorReady {
     if (kIsWeb) return true;
-    if (!_camera.hasActiveCamera) return false;
-    if (!_isIOS) return true;
-    final t = _cameraLiveAt;
-    if (t == null) return false;
-    return DateTime.now().difference(t) >= const Duration(seconds: 2);
+    return _camera.hasActiveCamera;
   }
 
   /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
@@ -357,7 +349,6 @@ class SessionController extends ChangeNotifier {
     running = true;
     starting = false;
     // 카메라 붙기 전·재시작 직후 이전 세션 signals가 남으면 ‘집중’으로 보이는 문제 방지
-    _cameraLiveAt = null;
     _lastSignalAt = null;
     cameraStartError = null;
     signals = const AttentionSignals(
@@ -418,7 +409,6 @@ class SessionController extends ChangeNotifier {
           await _releaseCamera();
           return;
         }
-        _cameraLiveAt = DateTime.now();
         _sub = _camera.stream.listen((s) {
           signals = s;
           _lastSignalAt = DateTime.now();
@@ -466,7 +456,6 @@ class SessionController extends ChangeNotifier {
     if (!_cameraAcquired) return;
     await _camera.release();
     _cameraAcquired = false;
-    _cameraLiveAt = null;
   }
 
   void _attachCameraStream() {
@@ -490,7 +479,6 @@ class SessionController extends ChangeNotifier {
   Future<void> resumeCameraAfterShellNavigation() async {
     if (kIsWeb || !running) return;
     if (_camera.hasActiveCamera && _cameraAcquired) {
-      _cameraLiveAt = DateTime.now();
       _attachCameraStream();
       notifyListeners();
       return;
