@@ -593,35 +593,7 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<SessionRewardResult> uploadAndApply(SessionSummary summary) async {
-    final sessionId = await _sessionRepo.uploadSummary(summary);
-    if (summary.planItemId != null) {
-      await _sessionRepo.applyFocusedToPlanItem(
-        planItemId: summary.planItemId!,
-        focusedSeconds: summary.focusedSeconds,
-      );
-    }
-    final blocksFromFocus = await _sessionRepo.awardCoinsForSession(
-      sessionId: sessionId,
-      focusedSeconds: summary.focusedSeconds,
-    );
-    await _sessionRepo.applySessionProgress(
-      sessionId: sessionId,
-      focusedSeconds: summary.focusedSeconds,
-    );
-    await _sessionRepo.applySquadSessionContribution(
-      sessionId: sessionId,
-      focusedSeconds: summary.focusedSeconds,
-    );
-    // Award daily plan bonus if eligible (>= 80% completion)
-    final planBonus = await _sessionRepo.awardPlanBonusForToday();
-    // Award streak bonus (+50) if yesterday+today both achieved plan bonus
-    final streakBonus = await _sessionRepo.awardStreakBonusForToday();
-
-    return SessionRewardResult(
-      blocksFromFocus: blocksFromFocus,
-      planBonus: planBonus,
-      streakBonus: streakBonus,
-    );
+    return _sessionRepo.applyRewardsForSummary(summary);
   }
 
   @override

@@ -10,11 +10,14 @@ import '../../../session/infra/attention_camera_service.dart';
 import '../../../session/infra/session_camera_cache.dart';
 import '../../../session/infra/session_self_camera.dart';
 import '../../../session/infra/web_camera.dart';
+import '../../infra/study_room_controller.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
 
-/// 스터디방 전용: 단일 [AttentionCameraService]로 실시간 집중도 표시.
+/// 스터디방 본인 실시간 프리뷰 — [AttentionCameraService] 단일 인스턴스 공유.
+/// 다른 탭으로 나갈 때는 카메라를 **끄지 않고** 구독만 끊습니다(공부 탭과 동일).
 class StudyRoomSelfLivePanel extends StatefulWidget {
+  final StudyRoomController controller;
   final double width;
   final double height;
   final bool cameraSlotActive;
@@ -22,6 +25,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
 
   const StudyRoomSelfLivePanel({
     super.key,
+    required this.controller,
     required this.width,
     required this.height,
     required this.cameraSlotActive,
@@ -45,14 +49,6 @@ class _StudyRoomSelfLifecycle extends WidgetsBindingObserver {
 class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   final AttentionCameraService _camera = AttentionCameraService.instance;
   StreamSubscription<AttentionSignals>? _sub;
-  Timer? _tick;
-
-  AttentionScoringState? _scoreState;
-  AttentionSignals _signals = const AttentionSignals(
-    facePresent: false,
-    multiFace: false,
-    appInForeground: true,
-  );
   bool _appInForeground = true;
   DateTime? _lastSignalAt;
   bool _ownsCamera = false;
@@ -60,15 +56,17 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   late final _StudyRoomSelfLifecycle _life = _StudyRoomSelfLifecycle(
     onForeground: (v) {
       _appInForeground = v;
-      _signals = AttentionSignals(
-        facePresent: _signals.facePresent,
-        multiFace: _signals.multiFace,
-        appInForeground: v,
-        earLeft: _signals.earLeft,
-        earRight: _signals.earRight,
-        headYaw: _signals.headYaw,
-        headPitch: _signals.headPitch,
-        blinkFrame: _signals.blinkFrame,
+      widget.controller.feedFocusSignals(
+        AttentionSignals(
+          facePresent: widget.controller.focusSignals.facePresent,
+          multiFace: widget.controller.focusSignals.multiFace,
+          appInForeground: v,
+          earLeft: widget.controller.focusSignals.earLeft,
+          earRight: widget.controller.focusSignals.earRight,
+          headYaw: widget.controller.focusSignals.headYaw,
+          headPitch: widget.controller.focusSignals.headPitch,
+          blinkFrame: widget.controller.focusSignals.blinkFrame,
+        ),
       );
     },
   );
@@ -81,7 +79,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   bool get _sensorReadyForUi => _cameraActive;
 
-  /// 최근 3초 안에 센서 신호가 흘러들어왔는지.
   bool get _hasRecentSignal {
     final t = _lastSignalAt;
     if (t == null) return false;
@@ -109,38 +106,69 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
       if (widget.cameraSlotActive) {
         unawaited(_boot());
       } else {
-        unawaited(_releaseSlot());
+        unawaited(_suspendForTab());
       }
     }
   }
 
-  Future<void> _releaseSlot() async {
-    _tick?.cancel();
-    _tick = null;
+  /// 탭 전환: 스트림 구독만 해제 (카메라 세션 유지 → 공부 탭·복귀 시 프리즈 방지).
+  Future<void> _suspendForTab() async {
     await _sub?.cancel();
     _sub = null;
-    _lastSignalAt = null;
+    if (mounted) setState(() {});
+  }
+
+  /// 방 퇴장·위젯 dispose: 카메라 점유 해제.
+  Future<void> _releaseCameraFully() async {
+    await _suspendForTab();
     if (_ownsCamera) {
       await _camera.release();
       _ownsCamera = false;
     }
+    _lastSignalAt = null;
     if (mounted) setState(() {});
+  }
+
+  Future<void> _attachStream() async {
+    await _sub?.cancel();
+    _sub = _camera.stream.listen((s) {
+      _lastSignalAt = DateTime.now();
+      widget.controller.feedFocusSignals(s);
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _boot() async {
     if (!widget.cameraSlotActive) return;
-    await _releaseSlot();
-    if (!kIsWeb) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    if (!mounted || !widget.cameraSlotActive) return;
 
     if (kIsWeb) {
-      _scoreState = AttentionScoringState.started(DateTime.now());
-      _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
       if (mounted) setState(() {});
       return;
     }
+
+    if (_camera.hasActiveCamera) {
+      if (!_ownsCamera) {
+        final frontCam = await SessionCameraCache.getFrontOrDefault();
+        if (frontCam != null) {
+          try {
+            await _camera.acquire(
+              camera: frontCam,
+              appInForeground: () => _appInForeground,
+            );
+            _ownsCamera = true;
+          } catch (e) {
+            debugPrint('[StudyRoomSelfLivePanel] re-acquire: $e');
+          }
+        }
+      }
+      await _attachStream();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    await _releaseCameraFully();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted || !widget.cameraSlotActive) return;
 
     CameraDescription? frontCam;
     try {
@@ -162,15 +190,13 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
           _ownsCamera = false;
           return;
         }
-        _sub = _camera.stream.listen((s) {
-          _signals = s;
-          _lastSignalAt = DateTime.now();
-          if (mounted) setState(() {});
-        });
-        _signals = const AttentionSignals(
-          facePresent: false,
-          multiFace: false,
-          appInForeground: true,
+        await _attachStream();
+        widget.controller.feedFocusSignals(
+          const AttentionSignals(
+            facePresent: false,
+            multiFace: false,
+            appInForeground: true,
+          ),
         );
       } catch (e, st) {
         debugPrint('[StudyRoomSelfLivePanel] sensor: $e\n$st');
@@ -183,38 +209,12 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
       }
     }
 
-    if (!mounted) return;
-    _scoreState = AttentionScoringState.started(DateTime.now());
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) => _onTick());
-    setState(() {});
-  }
-
-  void _onTick() {
-    final st = _scoreState;
-    if (st == null) return;
-    // 카메라 미준비 또는 신호가 끊긴 경우 점수 누적이 ‘얼굴 있음’으로 흐르지 않게 강제 차단.
-    final ok = kIsWeb
-        ? _hasRecentSignal
-        : (_sensorReadyForUi && _hasRecentSignal);
-    final tickSignals = ok
-        ? _signals
-        : const AttentionSignals(
-            facePresent: false,
-            multiFace: false,
-            appInForeground: true,
-          );
-    _scoreState = AttentionScoring.tick(
-      state: st,
-      now: DateTime.now(),
-      signals: tickSignals,
-      engagedMinScore: _engagedMinScoreForTick(),
-    );
     if (mounted) setState(() {});
   }
 
   void _applyWebSignals(AttentionSignals s) {
-    _signals = s;
     _lastSignalAt = DateTime.now();
+    widget.controller.feedFocusSignals(s);
     if (mounted) setState(() {});
   }
 
@@ -222,67 +222,71 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   void dispose() {
     widget.engagedMinListenable.removeListener(_onEngagedChanged);
     WidgetsBinding.instance.removeObserver(_life);
-    _tick?.cancel();
-    unawaited(_releaseSlot());
+    unawaited(_releaseCameraFully());
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final score = _scoreState?.averageScore ?? 0;
-    final status = AttentionScoring.liveStatusFor(
-      _signals,
-      _engagedMinScoreForTick(),
-      sensorReady: _sensorReadyForUi,
-      cameraActive: _cameraActive,
-    );
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) {
+        final score = widget.controller.focusAverageScore;
+        final status = AttentionScoring.liveStatusFor(
+          widget.controller.focusSignals,
+          _engagedMinScoreForTick(),
+          sensorReady: _sensorReadyForUi,
+          cameraActive: _cameraActive,
+        );
 
-    if (!widget.cameraSlotActive) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: ColoredBox(
-          color: Colors.black,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Center(
-                child: Icon(
-                  Icons.videocam_off_outlined,
-                  color: Colors.white.withAlpha(70),
-                  size: 28,
-                ),
+        if (!widget.cameraSlotActive) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: ColoredBox(
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Center(
+                    child: Icon(
+                      Icons.videocam_off_outlined,
+                      color: Colors.white.withAlpha(70),
+                      size: 28,
+                    ),
+                  ),
+                  StudyRoomSelfFocusBadge(score: score, status: status),
+                ],
               ),
-              StudyRoomSelfFocusBadge(score: score, status: status),
-            ],
+            ),
+          );
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: ColoredBox(
+            color: Colors.black,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (kIsWeb)
+                  SessionSelfCameraSurface(
+                    width: widget.width,
+                    height: widget.height,
+                    appInForeground: () => _appInForeground,
+                    onAttentionSignals: _applyWebSignals,
+                  )
+                else
+                  StudyRoomSelfCameraPreviewBox(
+                    key: ValueKey<int>(_camera.previewGeneration),
+                    width: widget.width,
+                    height: widget.height,
+                  ),
+                StudyRoomSelfFocusBadge(score: score, status: status),
+              ],
+            ),
           ),
-        ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: ColoredBox(
-        color: Colors.black,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (kIsWeb)
-              SessionSelfCameraSurface(
-                width: widget.width,
-                height: widget.height,
-                appInForeground: () => _appInForeground,
-                onAttentionSignals: _applyWebSignals,
-              )
-            else
-              StudyRoomSelfCameraPreviewBox(
-                key: ValueKey<int>(_camera.previewGeneration),
-                width: widget.width,
-                height: widget.height,
-              ),
-            StudyRoomSelfFocusBadge(score: score, status: status),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

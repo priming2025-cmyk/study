@@ -70,6 +70,7 @@ class StudyRoomMainStage extends StatelessWidget {
                 children: [
                   cell(
                     StudyRoomSelfLivePanel(
+                      controller: controller,
                       width: cellW,
                       height: cellH,
                       cameraSlotActive: studyCameraSlotActive,

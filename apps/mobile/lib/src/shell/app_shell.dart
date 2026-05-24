@@ -81,10 +81,9 @@ class _AppShellState extends ConsumerState<AppShell> {
               context: context,
               barrierDismissible: false,
               builder: (ctx) => AlertDialog(
-                title: const Text('셋터디방에 있어요'),
+                title: const Text('셋터디방 나가기'),
                 content: const Text(
-                  '다른 탭으로 이동하려면 셋터디방에서 나가야 해요.\n'
-                  '셋을 나가고 이동할까요?',
+                  '다른 탭으로 가려면 방을 나가야 해요.\n나가고 이동할까요?',
                 ),
                 actions: [
                   TextButton(

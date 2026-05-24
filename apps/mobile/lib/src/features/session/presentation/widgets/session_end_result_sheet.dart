@@ -76,6 +76,8 @@ class SessionEndResultSheet extends StatelessWidget {
                     _row(context, label: '집중 공부', value: '+${reward.blocksFromFocus} 블럭'),
                     _row(context, label: '계획 달성 보너스', value: reward.planBonus > 0 ? '+${reward.planBonus} 블럭' : '0'),
                     _row(context, label: '연속 달성 보너스', value: reward.streakBonus > 0 ? '+${reward.streakBonus} 블럭' : '0'),
+                    if (reward.setudyBonus > 0)
+                      _row(context, label: '셋터디 보너스', value: '+${reward.setudyBonus} 블럭'),
                     const Divider(height: 18),
                     _row(
                       context,

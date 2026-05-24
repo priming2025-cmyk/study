@@ -3,14 +3,17 @@ class SessionRewardResult {
   final int blocksFromFocus;
   final int planBonus;
   final int streakBonus;
+  final int setudyBonus;
 
   const SessionRewardResult({
     required this.blocksFromFocus,
     required this.planBonus,
     required this.streakBonus,
+    this.setudyBonus = 0,
   });
 
   /// 총 **블럭** (앱 내 보상 단위).
-  int get totalBlocks => blocksFromFocus + planBonus + streakBonus;
+  int get totalBlocks =>
+      blocksFromFocus + planBonus + streakBonus + setudyBonus;
 }
 

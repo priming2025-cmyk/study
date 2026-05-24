@@ -7,9 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
-import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
 import '../../session/infra/web_shared_camera.dart';
+import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
+import '../../session/presentation/widgets/session_end_result_sheet.dart';
+import '../domain/study_room_reward_config.dart';
 import '../infra/study_room_controller.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
@@ -103,6 +106,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       final roomId = await _controller.createRoom(name: _roomNameCtrl.text);
       await _controller.joinRoom(roomId: roomId, goalText: goal);
       if (_controller.roomId != null) {
+        _controller.startFocusTracking(_engagedMinScoreN.value);
         await saveRecentStudyRoom(roomId: roomId, goalText: goal);
         _recentFuture = loadRecentStudyRoom();
       }
@@ -122,6 +126,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (!mounted || goal == null) return;
     await _controller.joinRoom(roomId: id, goalText: goal);
     if (_controller.roomId != null) {
+      _controller.startFocusTracking(_engagedMinScoreN.value);
       await saveRecentStudyRoom(roomId: id, goalText: goal);
       _recentFuture = loadRecentStudyRoom();
     }
@@ -143,6 +148,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (goal.isEmpty) return;
     await _controller.joinRoom(roomId: rid, goalText: goal);
     if (_controller.roomId != null) {
+      _controller.startFocusTracking(_engagedMinScoreN.value);
       await saveRecentStudyRoom(roomId: rid, goalText: goal);
     }
     if (_controller.error != null && mounted) {
@@ -182,8 +188,40 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await _joinRoom();
   }
 
-  Future<void> _leave() async {
+  Future<void> _leaveAndSettle() async {
+    if (_controller.roomId == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final summary = _controller.endFocusTracking();
     await _controller.leave();
+    if (!mounted) return;
+
+    if (summary == null) return;
+
+    try {
+      final repo = SessionRepository();
+      final setudyBlocks =
+          StudyRoomRewardConfig.blocksToAward(summary.focusedSeconds);
+      final reward = await repo.applyRewardsForSummary(
+        summary,
+        setudyBonusBlocks: setudyBlocks,
+      );
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: false,
+        builder: (_) => SessionEndResultSheet(
+          reward: reward,
+          averageScore: summary.concentrationScore,
+          focusedSeconds: summary.focusedSeconds,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnacks.showWithMessenger(messenger, '저장 실패: $e');
+      }
+    }
   }
 
   void _copyRoomId() {
@@ -205,7 +243,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     ref.listen<int>(studyRoomLeaveForTabSwitchProvider, (prev, next) {
       if (prev == null || next <= prev) return;
       if (_controller.roomId != null) {
-        unawaited(_leave());
+        unawaited(_leaveAndSettle());
       }
     });
 
@@ -309,7 +347,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                   backgroundColor: Theme.of(context).colorScheme.error,
                   foregroundColor: Theme.of(context).colorScheme.onError,
                 ),
-                onPressed: _leave,
+                onPressed: () => unawaited(_leaveAndSettle()),
                 icon: const Icon(Icons.exit_to_app_rounded),
                 label: const Text('셋 나가기'),
               ),

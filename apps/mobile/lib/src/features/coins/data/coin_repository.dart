@@ -43,6 +43,8 @@ class CoinRepository {
         return '계획 달성 보너스';
       case 'streak_bonus_50':
         return '연속 달성 보너스';
+      case 'study_room_bonus':
+        return '셋터디 보너스';
       case 'gacha_spend':
         return '뽑기 사용';
       case 'gacha_refund':

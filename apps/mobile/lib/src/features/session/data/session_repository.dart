@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../stats/data/daily_focus_stat.dart';
+import '../domain/session_reward_result.dart';
 import '../domain/session_summary.dart';
 import '../domain/wallet_balances.dart';
 
@@ -156,6 +157,66 @@ class SessionRepository {
       params: {'p_user_id': userId},
     );
     return (coins as num).toInt();
+  }
+
+  Future<int> awardStudyRoomBonusForSession({
+    required String sessionId,
+    required int blocks,
+  }) async {
+    if (blocks <= 0) return 0;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw const AuthException('Not authenticated');
+
+    final awarded = await supabase.rpc(
+      'award_study_room_bonus_for_session',
+      params: {
+        'p_user_id': userId,
+        'p_session_id': sessionId,
+        'p_blocks': blocks,
+      },
+    );
+    return (awarded as num).toInt();
+  }
+
+  /// 집중 세션·셋터디 퇴장 공통 보상 적용.
+  Future<SessionRewardResult> applyRewardsForSummary(
+    SessionSummary summary, {
+    int setudyBonusBlocks = 0,
+  }) async {
+    final sessionId = await uploadSummary(summary);
+    final blocksFromFocus = await awardCoinsForSession(
+      sessionId: sessionId,
+      focusedSeconds: summary.focusedSeconds,
+    );
+    if (summary.planItemId != null) {
+      await applyFocusedToPlanItem(
+        planItemId: summary.planItemId!,
+        focusedSeconds: summary.focusedSeconds,
+      );
+    }
+    await applySessionProgress(
+      sessionId: sessionId,
+      focusedSeconds: summary.focusedSeconds,
+    );
+    await applySquadSessionContribution(
+      sessionId: sessionId,
+      focusedSeconds: summary.focusedSeconds,
+    );
+    final planBonus = await awardPlanBonusForToday();
+    final streakBonus = await awardStreakBonusForToday();
+    final setudyBonus = setudyBonusBlocks > 0
+        ? await awardStudyRoomBonusForSession(
+            sessionId: sessionId,
+            blocks: setudyBonusBlocks,
+          )
+        : 0;
+
+    return SessionRewardResult(
+      blocksFromFocus: blocksFromFocus,
+      planBonus: planBonus,
+      streakBonus: streakBonus,
+      setudyBonus: setudyBonus,
+    );
   }
 
   Future<int> awardStreakBonusForToday() async {

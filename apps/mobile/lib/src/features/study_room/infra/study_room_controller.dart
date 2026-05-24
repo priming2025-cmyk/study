@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import '../../session/domain/attention_scoring.dart';
+import '../../session/domain/attention_signals.dart';
+import '../../session/domain/session_summary.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'study_room_ambient_player.dart';
@@ -57,7 +60,22 @@ class StudyRoomController extends ChangeNotifier {
 
   final Map<String, _ReactionEntry> _reactions = {};
 
+  AttentionScoringState? _focusState;
+  Timer? _focusTimer;
+  AttentionSignals _focusSignals = const AttentionSignals(
+    facePresent: false,
+    multiFace: false,
+    appInForeground: true,
+  );
+  DateTime? _lastFocusSignalAt;
+  int _engagedMinScore = 50;
+
   StudyRoomAmbientPlayer get ambient => _ambient;
+
+  String get goalText => _selfGoalText;
+  bool get isFocusTracking => _focusState != null;
+  int get focusAverageScore => _focusState?.averageScore ?? 0;
+  AttentionSignals get focusSignals => _focusSignals;
 
   StudyRoomMember? get hostMember {
     final oid = roomOwnerId;
@@ -69,6 +87,73 @@ class StudyRoomController extends ChangeNotifier {
   }
 
   String? reactionEmojiFor(String userId) => _reactions[userId]?.overlay.emoji;
+
+  // ── 집중 추적 (공부 탭과 동일 AttentionScoring) ───────────────────────────
+
+  void startFocusTracking(int engagedMinScore) {
+    cancelFocusTracking();
+    _engagedMinScore = engagedMinScore;
+    _focusSignals = const AttentionSignals(
+      facePresent: false,
+      multiFace: false,
+      appInForeground: true,
+    );
+    _lastFocusSignalAt = null;
+    _focusState = AttentionScoringState.started(DateTime.now());
+    _focusTimer = Timer.periodic(const Duration(seconds: 1), (_) => _onFocusTick());
+    _onFocusTick();
+    notifyListeners();
+  }
+
+  void feedFocusSignals(AttentionSignals signals) {
+    _focusSignals = signals;
+    _lastFocusSignalAt = DateTime.now();
+  }
+
+  void cancelFocusTracking() {
+    _focusTimer?.cancel();
+    _focusTimer = null;
+    _focusState = null;
+    _lastFocusSignalAt = null;
+  }
+
+  SessionSummary? endFocusTracking() {
+    _focusTimer?.cancel();
+    _focusTimer = null;
+    final st = _focusState;
+    _focusState = null;
+    _lastFocusSignalAt = null;
+    if (st == null) return null;
+    final subject = _selfGoalText.trim().isEmpty ? '셋터디' : _selfGoalText.trim();
+    return AttentionScoring.finalize(
+      st,
+      DateTime.now(),
+      subject: subject,
+      planItemId: null,
+    );
+  }
+
+  void _onFocusTick() {
+    final st = _focusState;
+    if (st == null) return;
+    final last = _lastFocusSignalAt;
+    final ok = last != null &&
+        DateTime.now().difference(last) < const Duration(seconds: 3);
+    final tickSignals = ok
+        ? _focusSignals
+        : const AttentionSignals(
+            facePresent: false,
+            multiFace: false,
+            appInForeground: true,
+          );
+    _focusState = AttentionScoring.tick(
+      state: st,
+      now: DateTime.now(),
+      signals: tickSignals,
+      engagedMinScore: _engagedMinScore,
+    );
+    notifyListeners();
+  }
 
   // ── 방 만들기 ──────────────────────────────────────────────────────────────
 
@@ -189,6 +274,7 @@ class StudyRoomController extends ChangeNotifier {
   }
 
   Future<void> leave() async {
+    cancelFocusTracking();
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
 
