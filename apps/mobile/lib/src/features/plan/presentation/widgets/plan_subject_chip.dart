@@ -31,7 +31,7 @@ class PlanSubjectChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(6, 6, 2, 6),
+          padding: const EdgeInsets.fromLTRB(8, 8, 2, 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
@@ -42,7 +42,7 @@ class PlanSubjectChip extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(radius: 6, backgroundColor: color),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   subject.name,
@@ -55,11 +55,14 @@ class PlanSubjectChip extends StatelessWidget {
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: PopupMenuButton<String>(
+              PopupMenuButton<String>(
                 padding: EdgeInsets.zero,
                 iconSize: 18,
+                splashRadius: 18,
+                constraints: const BoxConstraints(
+                  minWidth: 28,
+                  minHeight: 28,
+                ),
                 icon: Icon(
                   Icons.more_vert,
                   size: 18,
@@ -90,7 +93,6 @@ class PlanSubjectChip extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
               ),
             ],
           ),

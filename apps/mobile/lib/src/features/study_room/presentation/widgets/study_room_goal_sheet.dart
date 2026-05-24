@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 방 입장 전 오늘의 목표 한 줄을 입력받습니다. 취소 시 `null`.
+/// 방 입장 전 스터디 그룹 목표 한 줄을 입력받습니다. 취소 시 `null`.
 ///
 /// [TextEditingController]는 시트 State가 소유해, 모달이 완전히 내려간 뒤
 /// dispose 되도록 합니다. (시트 밖에서 즉시 dispose 하면 `_dependents.isEmpty`
@@ -49,21 +49,14 @@ class _StudyRoomGoalSheetBodyState extends State<_StudyRoomGoalSheetBody> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('오늘의 목표', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Text(
-            '스터디방 친구들에게 보여줄 한 줄 목표를 적어 주세요.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
+          Text('스터디 그룹의 목표', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           TextField(
             controller: _text,
             autofocus: true,
             textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
-              hintText: '예: 수학 단원정리 2개',
+              hintText: '2시간 함께공부',
               border: OutlineInputBorder(),
             ),
             onSubmitted: (_) => _submit(),

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
 
 import '../domain/attention_signals.dart';
@@ -60,6 +62,16 @@ final class AttentionCameraService {
       _holders = 0;
       await _sensor.stop();
     });
+  }
+
+  /// 스터디방 친구 공유용 JPEG (실시간 프리뷰와 동일 카메라, 별도 세션 없음).
+  Future<Uint8List?> captureSnapshotJpeg() {
+    final fut = _op.then((_) async {
+      if (!hasActiveCamera) return null;
+      return _sensor.captureSnapshotJpeg();
+    });
+    _op = fut.then((_) {});
+    return fut;
   }
 
   Future<void> _enqueue(Future<void> Function() action) {

@@ -45,7 +45,8 @@ class CustomSubjectStore {
           .map((e) => CustomSubject.fromJson(e as Map<String, dynamic>))
           .toList();
       if (list.isEmpty) return List.from(defaultSubjects);
-      return list
+      final merged = _mergeWithDefaults(list);
+      return merged
           .map(
             (s) => s.name == '국어'
                 ? CustomSubject(name: s.name, colorValue: _koreanRed)
@@ -55,6 +56,16 @@ class CustomSubjectStore {
     } catch (_) {
       return List.from(defaultSubjects);
     }
+  }
+
+  /// 저장된 목록에 기본 과목(국어·영어 등)이 빠져 있으면 다시 붙입니다.
+  static List<CustomSubject> _mergeWithDefaults(List<CustomSubject> stored) {
+    final names = stored.map((s) => s.name.trim()).where((n) => n.isNotEmpty).toSet();
+    final merged = stored.where((s) => s.name.trim().isNotEmpty).toList();
+    for (final d in defaultSubjects) {
+      if (!names.contains(d.name)) merged.add(d);
+    }
+    return merged.isEmpty ? List.from(defaultSubjects) : merged;
   }
 
   static Future<void> save(List<CustomSubject> subjects) async {

@@ -128,34 +128,9 @@ class StudyRoomController extends ChangeNotifier {
       await _fetchMessages(roomId);
       await _joinMessageChannel(roomId);
 
-      if (kIsWeb) {
-        // 웹: presence 먼저(빠른 입장) → 스냅샷은 백그라운드 (카메라/WASM과 경합 방지)
-        await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: '');
-        unawaited(_webFinishJoinSnapshot(roomId: roomId, userId: userId));
-      } else {
-        if (!_snapshotInitialized) {
-          await _snapshot.initialize();
-          _snapshotInitialized = true;
-        }
-
-        final url = await _uploadSnapshot(roomId: roomId, userId: userId);
-        selfSnapshotUrl = url;
-
-        await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: url);
-
-        _snapshotTimer?.cancel();
-        _snapshotTimer = Timer.periodic(_snapshotInterval, (_) async {
-          final rid = this.roomId;
-          final uid = _selfId;
-          if (rid == null || uid == null) return;
-          final newUrl = await _uploadSnapshot(roomId: rid, userId: uid);
-          if (newUrl != null) {
-            selfSnapshotUrl = newUrl;
-            await _trackSelfFull(snapshotUrl: newUrl);
-            notifyListeners();
-          }
-        });
-      }
+      // presence 먼저 입장 → 스냅샷은 백그라운드(실시간 카메라 준비 후 1분 주기 업로드)
+      await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: '');
+      unawaited(_finishJoinSnapshot(roomId: roomId, userId: userId));
     } catch (e) {
       error = '방 입장 실패: $e';
       debugPrint('[StudyRoomController] joinRoom error: $e');
@@ -167,8 +142,8 @@ class StudyRoomController extends ChangeNotifier {
 
   // ── 나가기 ────────────────────────────────────────────────────────────────
 
-  /// 웹: 방 입장 후 스냅샷·주기 업로드를 백그라운드에서 처리합니다.
-  Future<void> _webFinishJoinSnapshot({
+  /// 방 입장 후 스냅샷·주기 업로드를 백그라운드에서 처리합니다.
+  Future<void> _finishJoinSnapshot({
     required String roomId,
     required String userId,
   }) async {
@@ -177,12 +152,7 @@ class StudyRoomController extends ChangeNotifier {
         await _snapshot.initialize();
         _snapshotInitialized = true;
       }
-      final url = await _uploadSnapshot(roomId: roomId, userId: userId);
-      if (url != null) {
-        selfSnapshotUrl = url;
-        await _trackSelfFull(snapshotUrl: url);
-        notifyListeners();
-      }
+      await _uploadSnapshotWhenCameraReady(roomId: roomId, userId: userId);
       _snapshotTimer?.cancel();
       _snapshotTimer = Timer.periodic(_snapshotInterval, (_) async {
         final rid = this.roomId;
@@ -196,7 +166,25 @@ class StudyRoomController extends ChangeNotifier {
         }
       });
     } catch (e) {
-      debugPrint('[StudyRoomController] web snapshot: $e');
+      debugPrint('[StudyRoomController] snapshot: $e');
+    }
+  }
+
+  /// 실시간 카메라([AttentionCameraService])가 켜질 때까지 재시도 후 첫 스냅샷을 올립니다.
+  Future<void> _uploadSnapshotWhenCameraReady({
+    required String roomId,
+    required String userId,
+  }) async {
+    for (var i = 0; i < 30; i++) {
+      if (this.roomId != roomId || _selfId != userId) return;
+      final url = await _uploadSnapshot(roomId: roomId, userId: userId);
+      if (url != null) {
+        selfSnapshotUrl = url;
+        await _trackSelfFull(snapshotUrl: url);
+        notifyListeners();
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
     }
   }
 

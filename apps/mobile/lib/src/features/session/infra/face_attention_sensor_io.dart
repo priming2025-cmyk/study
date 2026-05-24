@@ -43,6 +43,11 @@ class FaceAttentionSensor {
 
   DateTime? _lastValidSampleAt;
   DateTime? _lastEmitAt;
+  DateTime? _lastIosDetectAt;
+
+  CameraDescription? _activeCam;
+  bool Function()? _activeAppInForeground;
+  int _activeStreamGeneration = 0;
 
   static const _eyeL = [362, 385, 387, 263, 373, 380];
   static const _eyeR = [33, 160, 158, 133, 153, 144];
@@ -110,7 +115,6 @@ class FaceAttentionSensor {
     );
 
     final isMacOS = Platform.isMacOS;
-    final isIOS = Platform.isIOS;
 
     _controller = CameraController(
       cam,
@@ -133,15 +137,33 @@ class FaceAttentionSensor {
     ));
     _startHeartbeat(appInForeground);
 
-    DateTime? lastIosDetectAt;
-    await _controller!.startImageStream((image) async {
+    _activeCam = cam;
+    _activeAppInForeground = appInForeground;
+    _activeStreamGeneration = gen;
+    await _bindImageStream(cam: cam, appInForeground: appInForeground, gen: gen);
+  }
+
+  Future<void> _bindImageStream({
+    required CameraDescription cam,
+    required bool Function() appInForeground,
+    required int gen,
+  }) async {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized || !_running || gen != _streamGeneration) {
+      return;
+    }
+
+    final isMacOS = Platform.isMacOS;
+    final isIOS = Platform.isIOS;
+
+    await c.startImageStream((image) async {
       if (!_running || gen != _streamGeneration) return;
 
       if (isIOS) {
         if (!IosAttentionFacePipeline.frameLooksLikeLiveCamera(image)) return;
         final now = DateTime.now();
-        if (lastIosDetectAt != null &&
-            now.difference(lastIosDetectAt!) < _iosSampleInterval) {
+        if (_lastIosDetectAt != null &&
+            now.difference(_lastIosDetectAt!) < _iosSampleInterval) {
           return;
         }
       }
@@ -159,7 +181,7 @@ class FaceAttentionSensor {
         );
         var sig = _toSignals(faces, appInForeground());
         if (isIOS) {
-          lastIosDetectAt = DateTime.now();
+          _lastIosDetectAt = DateTime.now();
           sig = _iosStabilizeFacePresent(sig);
         }
         if (sig.facePresent) _lastValidSampleAt = DateTime.now();
@@ -175,6 +197,41 @@ class FaceAttentionSensor {
         _busy = false;
       }
     });
+  }
+
+  /// 스터디방 1분 스냅샷: 이미지 스트림을 잠시 멈추고 JPEG 캡처 후 재개합니다.
+  Future<Uint8List?> captureSnapshotJpeg() async {
+    if (!_running) return null;
+    final c = _controller;
+    final cam = _activeCam;
+    final appFg = _activeAppInForeground;
+    final gen = _activeStreamGeneration;
+    if (c == null || cam == null || appFg == null || !c.value.isInitialized) {
+      return null;
+    }
+
+    final wasStreaming = c.value.isStreamingImages;
+    try {
+      if (wasStreaming) {
+        await c.stopImageStream();
+        if (Platform.isIOS) {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        }
+      }
+      final xfile = await c.takePicture();
+      return await xfile.readAsBytes();
+    } catch (e) {
+      debugPrint('FaceAttentionSensor: captureSnapshotJpeg → $e');
+      return null;
+    } finally {
+      if (wasStreaming && _running && gen == _streamGeneration && c == _controller) {
+        try {
+          await _bindImageStream(cam: cam, appInForeground: appFg, gen: gen);
+        } catch (e) {
+          debugPrint('FaceAttentionSensor: resume stream → $e');
+        }
+      }
+    }
   }
 
   Future<List<Face>> _detectFrame({
@@ -358,6 +415,10 @@ class FaceAttentionSensor {
     _heartbeatTimer = null;
     _lastValidSampleAt = null;
     _lastEmitAt = null;
+    _lastIosDetectAt = null;
+    _activeCam = null;
+    _activeAppInForeground = null;
+    _activeStreamGeneration = 0;
     _resetIosState();
 
     await _tearDownCameraOnly();
