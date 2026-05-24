@@ -6,6 +6,44 @@ int nearestFiveMinuteOfDay(DateTime time) {
   return ((total / 5).round() * 5).clamp(5 * 60, 23 * 60 + 55);
 }
 
+/// 새 계획 시작시간: 기존 계획이 있으면 마지막 종료 시각, 없으면 현재 시각 기준.
+int suggestPlanStartMinutes(List<PlanItem> items, DateTime now) {
+  if (items.isEmpty) return nearestFiveMinuteOfDay(now);
+
+  var latestEnd = 0;
+  for (final item in items) {
+    final startAt = item.scheduledStartAt?.toLocal();
+    if (startAt == null) continue;
+    final startMin = startAt.hour * 60 + startAt.minute;
+    final endMin = startMin + (item.targetSeconds / 60).round();
+    if (endMin > latestEnd) latestEnd = endMin;
+  }
+
+  if (latestEnd == 0) return nearestFiveMinuteOfDay(now);
+  return ((latestEnd / 5).round() * 5).clamp(5 * 60, 23 * 60 + 55);
+}
+
+/// 직전 계획과 같은 계획시간(분)을 제안.
+int? suggestPlanDurationMinutes(List<PlanItem> items) {
+  if (items.isEmpty) return null;
+
+  PlanItem? last;
+  var latestEnd = 0;
+  for (final item in items) {
+    final startAt = item.scheduledStartAt?.toLocal();
+    if (startAt == null) continue;
+    final startMin = startAt.hour * 60 + startAt.minute;
+    final endMin = startMin + (item.targetSeconds / 60).round();
+    if (endMin >= latestEnd) {
+      latestEnd = endMin;
+      last = item;
+    }
+  }
+
+  if (last == null) return null;
+  return (last.targetSeconds / 60).round().clamp(5, 240);
+}
+
 /// 계획·공부 화면 공통 시간/과목 표시 유틸.
 String formatPlanMinutes(int minutes) {
   if (minutes <= 0) return '0m';

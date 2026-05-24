@@ -124,6 +124,7 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
       ),
       builder: (_) => PlanAddItemSheet(
         planDay: _c.planDay,
+        existingItems: _c.todayPlan?.items ?? const [],
         onAdd: ({
           required String subject,
           required int targetMinutes,

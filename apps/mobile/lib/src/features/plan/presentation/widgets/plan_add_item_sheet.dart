@@ -9,6 +9,7 @@ import 'plan_time_utils.dart';
 /// 과목 · 시작시간 · 계획시간 · 반복 — 4탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
   final DateTime planDay;
+  final List<PlanItem> existingItems;
   final PlanItem? editItem;
   final Future<bool> Function()? onDelete;
   final Future<void> Function({
@@ -23,6 +24,7 @@ class PlanAddItemSheet extends StatefulWidget {
     super.key,
     required this.planDay,
     required this.onAdd,
+    this.existingItems = const [],
     this.editItem,
     this.onDelete,
   });
@@ -40,8 +42,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   String? _selectedName;
   int _selectedColor = 0xFF3B82F6;
 
-  int _startMin = nearestFiveMinuteOfDay(DateTime.now());
-  int _durationMin = 50;
+  late int _startMin;
+  late int _durationMin;
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
   late Set<int> _weekdays;
@@ -78,8 +80,13 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
       final sched = e.scheduledStartAt?.toLocal();
       if (sched != null) {
         _startMin = sched.hour * 60 + sched.minute;
+      } else {
+        _startMin = suggestPlanStartMinutes(widget.existingItems, DateTime.now());
       }
       _repeatNone = true;
+    } else {
+      _startMin = suggestPlanStartMinutes(widget.existingItems, DateTime.now());
+      _durationMin = suggestPlanDurationMinutes(widget.existingItems) ?? 50;
     }
   }
 

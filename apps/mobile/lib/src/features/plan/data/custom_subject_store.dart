@@ -25,8 +25,10 @@ class CustomSubject {
 
 const _key = 'setudy_custom_subjects_v1';
 
+const _koreanRed = 0xFFEF4444;
+
 const defaultSubjects = [
-  CustomSubject(name: '국어', colorValue: 0xFFEF4444),
+  CustomSubject(name: '국어', colorValue: _koreanRed),
   CustomSubject(name: '영어', colorValue: 0xFF3B82F6),
   CustomSubject(name: '수학', colorValue: 0xFFF59E0B),
   CustomSubject(name: '과학', colorValue: 0xFF10B981),
@@ -42,7 +44,14 @@ class CustomSubjectStore {
       final list = (jsonDecode(raw) as List)
           .map((e) => CustomSubject.fromJson(e as Map<String, dynamic>))
           .toList();
-      return list.isEmpty ? List.from(defaultSubjects) : list;
+      if (list.isEmpty) return List.from(defaultSubjects);
+      return list
+          .map(
+            (s) => s.name == '국어'
+                ? CustomSubject(name: s.name, colorValue: _koreanRed)
+                : s,
+          )
+          .toList();
     } catch (_) {
       return List.from(defaultSubjects);
     }

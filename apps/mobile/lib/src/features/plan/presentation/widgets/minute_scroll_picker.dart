@@ -156,9 +156,9 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
         Center(
           child: SizedBox(
             height: _wheelHeight,
-            width: _stepColWidth + _arrowColWidth * 2 + _wheelWidth,
+            width: _stepColWidth + _arrowColWidth + _wheelWidth,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
                   width: _stepColWidth,
@@ -182,7 +182,7 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                                 vertical: 5,
                               ),
                               child: Text(
-                                '${s}분',
+                                '$s분',
                                 style: tt.labelSmall?.copyWith(
                                   fontWeight:
                                       sel ? FontWeight.w700 : FontWeight.w500,
@@ -197,21 +197,36 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                 ),
                 SizedBox(
                   width: _arrowColWidth,
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: IconButton(
-                      iconSize: 32,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: _arrowColWidth,
-                        minHeight: _arrowColWidth,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        iconSize: 32,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: _arrowColWidth,
+                          minHeight: _arrowColWidth,
+                        ),
+                        onPressed: () => _nudge(-1),
+                        icon: Icon(
+                          Icons.keyboard_arrow_up_rounded,
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
-                      onPressed: () => _nudge(-1),
-                      icon: Icon(
-                        Icons.keyboard_arrow_up_rounded,
-                        color: cs.onSurfaceVariant,
+                      IconButton(
+                        iconSize: 32,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: _arrowColWidth,
+                          minHeight: _arrowColWidth,
+                        ),
+                        onPressed: () => _nudge(1),
+                        icon: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
                 SizedBox(
@@ -259,25 +274,6 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                         ),
                       ),
                     ],
-                  ),
-                ),
-                SizedBox(
-                  width: _arrowColWidth,
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: IconButton(
-                      iconSize: 32,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: _arrowColWidth,
-                        minHeight: _arrowColWidth,
-                      ),
-                      onPressed: () => _nudge(1),
-                      icon: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
                   ),
                 ),
               ],

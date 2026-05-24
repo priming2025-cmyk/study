@@ -116,6 +116,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       ),
       builder: (ctx) => PlanAddItemSheet(
         planDay: DateTime.now(),
+        existingItems: _c.todayPlan?.items ?? const [],
         onAdd: ({
           required String subject,
           required int targetMinutes,

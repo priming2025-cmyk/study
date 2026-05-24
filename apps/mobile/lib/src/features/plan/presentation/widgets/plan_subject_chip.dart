@@ -31,7 +31,7 @@ class PlanSubjectChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(6, 6, 0, 6),
+          padding: const EdgeInsets.fromLTRB(6, 6, 2, 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
@@ -55,7 +55,9 @@ class PlanSubjectChip extends StatelessWidget {
                   ),
                 ),
               ),
-              PopupMenuButton<String>(
+              Padding(
+                padding: const EdgeInsets.only(left: 6),
+                child: PopupMenuButton<String>(
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 icon: Icon(
@@ -88,6 +90,7 @@ class PlanSubjectChip extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               ),
             ],
           ),
