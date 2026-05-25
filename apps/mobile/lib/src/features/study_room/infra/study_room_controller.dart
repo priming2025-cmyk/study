@@ -330,7 +330,7 @@ class StudyRoomController extends ChangeNotifier {
       await _snapshot.dispose();
     } catch (_) {}
     _snapshotInitialized = false;
-    await teardownSharedCameraMedia();
+    await releaseSharedCameraMedia();
     webSelfCamEpoch++;
     notifyListeners();
   }

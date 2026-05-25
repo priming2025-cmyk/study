@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../data/custom_subject_store.dart';
 import 'plan_subject_chip.dart';
 
-/// 3열·최대 [maxRows]줄 과목 그리드. 넘치면 세로 스크롤.
+/// 과목 3열 그리드.
+///
+/// [maxRows]가 null이면 전체 나열(계획 탭).
+/// [maxRows]가 있으면 해당 줄 수만 보이고 스크롤(공부 탭), [pinAddButton] 시 새과목은 항상 아래 고정.
 class CompactSubjectGrid extends StatelessWidget {
   final List<CustomSubject> subjects;
   final String? selectedName;
@@ -11,8 +14,12 @@ class CompactSubjectGrid extends StatelessWidget {
   final VoidCallback onAddNew;
   final void Function(CustomSubject subject)? onEdit;
   final Future<void> Function(String name)? onDelete;
-  final int maxRows;
-  final bool showNewSubjectChip;
+
+  /// null = 높이 제한 없이 전체 표시.
+  final int? maxRows;
+
+  /// true면 스크롤 영역 밖에 「새과목」 버튼 고정.
+  final bool pinAddButton;
 
   const CompactSubjectGrid({
     super.key,
@@ -22,14 +29,24 @@ class CompactSubjectGrid extends StatelessWidget {
     required this.onAddNew,
     this.onEdit,
     this.onDelete,
-    this.maxRows = 2,
-    this.showNewSubjectChip = true,
+    this.maxRows,
+    this.pinAddButton = false,
   });
 
   static const _rowH = 44.0;
   static const _gap = 8.0;
 
-  double get _maxHeight => maxRows * _rowH + (maxRows - 1) * _gap;
+  static const _gridDelegate = SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: 3,
+    mainAxisSpacing: _gap,
+    crossAxisSpacing: _gap,
+    childAspectRatio: 2.35,
+  );
+
+  double? get _scrollHeight {
+    if (maxRows == null) return null;
+    return maxRows! * _rowH + (maxRows! - 1) * _gap;
+  }
 
   List<CustomSubject> sortedSubjects() {
     final defaultNames = defaultSubjects.map((s) => s.name).toList();
@@ -44,124 +61,111 @@ class CompactSubjectGrid extends StatelessWidget {
     return [...ordered, ...rest];
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final sorted = sortedSubjects();
-    final itemCount = sorted.length + (showNewSubjectChip ? 1 : 0);
-
-    return SizedBox(
-      height: _maxHeight,
-      child: GridView.builder(
-        padding: EdgeInsets.zero,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: _gap,
-          crossAxisSpacing: _gap,
-          childAspectRatio: 2.35,
-        ),
-        itemCount: itemCount,
-        itemBuilder: (context, i) {
-          if (showNewSubjectChip && i == itemCount - 1) {
-            return Material(
-              color: cs.primaryContainer.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                onTap: onAddNew,
-                borderRadius: BorderRadius.circular(12),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_rounded, size: 18, color: cs.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        '새과목',
-                        style: TextStyle(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }
-          final s = sorted[i];
-          final selected = selectedName == s.name;
-          if (onEdit != null && onDelete != null) {
-            return PlanSubjectChip(
-              subject: s,
-              selected: selected,
-              onTap: () => onSelect(s),
-              onEdit: () => onEdit!(s),
-              onDelete: () => onDelete!(s.name),
-            );
-          }
-          return _SimpleSubjectChip(
-            subject: s,
-            selected: selected,
-            onTap: () => onSelect(s),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SimpleSubjectChip extends StatelessWidget {
-  final CustomSubject subject;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _SimpleSubjectChip({
-    required this.subject,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = subject.color;
+  Widget _newSubjectChip(ColorScheme cs) {
     return Material(
-      color: selected ? color.withValues(alpha: 0.14) : cs.surfaceContainerLow,
+      color: cs.primaryContainer.withValues(alpha: 0.35),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: onTap,
+        onTap: onAddNew,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? color : cs.outlineVariant.withValues(alpha: 0.5),
-              width: selected ? 1.5 : 1,
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Center(
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(radius: 5, backgroundColor: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  subject.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? color : cs.onSurface,
-                  ),
+              Icon(Icons.add_rounded, size: 18, color: cs.primary),
+              const SizedBox(width: 4),
+              Text(
+                '새과목',
+                style: TextStyle(
+                  color: cs.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _subjectCell(CustomSubject s, bool selected) {
+    return PlanSubjectChip(
+      subject: s,
+      selected: selected,
+      onTap: () => onSelect(s),
+      onEdit: () => onEdit?.call(s),
+      onDelete: () => onDelete?.call(s.name) ?? Future.value(),
+    );
+  }
+
+  Widget _buildGrid({
+    required List<CustomSubject> sorted,
+    required int itemCount,
+    required bool Function(int index) isAddSlot,
+    required ScrollPhysics physics,
+    required bool shrinkWrap,
+  }) {
+    return GridView.builder(
+      padding: EdgeInsets.zero,
+      shrinkWrap: shrinkWrap,
+      physics: physics,
+      gridDelegate: _gridDelegate,
+      itemCount: itemCount,
+      itemBuilder: (context, i) {
+        if (isAddSlot(i)) {
+          return _newSubjectChip(Theme.of(context).colorScheme);
+        }
+        final s = sorted[i];
+        return _subjectCell(s, selectedName == s.name);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sorted = sortedSubjects();
+    final usePinnedAdd = pinAddButton && maxRows != null;
+    final subjectOnly = usePinnedAdd;
+    final itemCount =
+        sorted.length + (subjectOnly ? 0 : 1);
+    final scrollH = _scrollHeight;
+
+    if (maxRows == null) {
+      return _buildGrid(
+        sorted: sorted,
+        itemCount: itemCount,
+        isAddSlot: (i) => i == itemCount - 1,
+        physics: const NeverScrollableScrollPhysics(),
+        shrinkWrap: true,
+      );
+    }
+
+    final grid = _buildGrid(
+      sorted: sorted,
+      itemCount: subjectOnly ? sorted.length : itemCount,
+      isAddSlot: (i) => !subjectOnly && i == itemCount - 1,
+      physics: const ClampingScrollPhysics(),
+      shrinkWrap: false,
+    );
+
+    if (!usePinnedAdd) {
+      return SizedBox(height: scrollH, child: grid);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(height: scrollH, child: grid),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: _rowH,
+          child: _newSubjectChip(cs),
+        ),
+      ],
     );
   }
 }

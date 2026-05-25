@@ -459,7 +459,6 @@ class _SubjectTabState extends State<_SubjectTab> {
           onAddNew: _openNewSubjectForm,
           onEdit: _openEditSubjectForm,
           onDelete: widget.onDeleteSubject,
-          maxRows: 2,
         ),
         if (_showNewSubjectForm) ...[
           const SizedBox(height: 16),

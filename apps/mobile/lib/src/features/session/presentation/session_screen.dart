@@ -38,6 +38,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   final _ambientPlayer = StudyRoomAmbientPlayer();
   bool _autoStarted = false;
   bool _autoStartOpenedAddSheet = false;
+  int _subjectReloadToken = 0;
 
   @override
   void initState() {
@@ -284,15 +285,15 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       if (prev == kShellBranchSession && next != kShellBranchSession) {
         unawaited(_c.suspendCameraForShellNavigation());
       }
-      if (next == kShellBranchSession &&
-          prev != kShellBranchSession &&
-          _c.running &&
-          !kIsWeb) {
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          await Future<void>.delayed(const Duration(milliseconds: 120));
-          if (!mounted) return;
-          await _c.resumeCameraAfterShellNavigation();
-        });
+      if (next == kShellBranchSession && prev != kShellBranchSession) {
+        setState(() => _subjectReloadToken++);
+        if (_c.running && !kIsWeb) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await Future<void>.delayed(const Duration(milliseconds: 120));
+            if (!mounted) return;
+            await _c.resumeCameraAfterShellNavigation();
+          });
+        }
       }
     });
 
@@ -462,6 +463,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                       SubjectPickerCard(
                         todayPlan: _c.todayPlan,
                         selectedPlanItemId: _c.selectedPlanItemId,
+                        reloadToken: _subjectReloadToken,
                         draftSubject: _c.selectedSubjectLabel.isEmpty
                             ? null
                             : _c.selectedSubjectLabel,
@@ -469,13 +471,6 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                         onSelected: _c.selectPlanItem,
                         onDraftSubject: _c.setDraftSubject,
                         onDraftMinutes: _c.setDraftTargetMinutes,
-                        recentSubjects: _c.recentSubjects,
-                        onQuickAdd:
-                            ({required String subject, required int targetMinutes}) =>
-                                _c.addItemAndSelect(
-                                  subject: subject,
-                                  targetMinutes: targetMinutes,
-                                ),
                         onOpenAdvancedAdd: _openSessionAddSheet,
                         onEditItem: _openEditSheet,
                         onDeleteItem: _onDeleteSessionPlanItem,
