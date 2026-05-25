@@ -574,14 +574,11 @@ class _TimePlanTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tt = Theme.of(context).textTheme;
-
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
-        Text('시작 시간', style: tt.titleSmall),
-        const SizedBox(height: 4),
         MinuteScrollPicker(
+          sectionLabel: '시작 시간',
           valueMinutes: startMin,
           minMinutes: 5 * 60,
           maxMinutes: 23 * 60 + 55,
@@ -589,10 +586,9 @@ class _TimePlanTab extends StatelessWidget {
           compact: true,
           onChanged: onStartChanged,
         ),
-        const SizedBox(height: 8),
-        Text('계획 시간', style: tt.titleSmall),
-        const SizedBox(height: 4),
+        const SizedBox(height: 10),
         MinuteScrollPicker(
+          sectionLabel: '계획 시간',
           valueMinutes: durationMin,
           minMinutes: 5,
           maxMinutes: 240,

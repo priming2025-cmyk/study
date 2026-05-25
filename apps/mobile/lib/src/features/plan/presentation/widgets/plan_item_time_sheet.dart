@@ -87,9 +87,9 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
         children: [
           Text(widget.item.subject, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
           Text('시간 설정', style: tt.bodySmall),
-          const SizedBox(height: 16),
-          Text('시작', style: tt.labelLarge),
+          const SizedBox(height: 12),
           MinuteScrollPicker(
+            sectionLabel: '시작',
             valueMinutes: _startMin,
             minMinutes: 5 * 60,
             maxMinutes: 23 * 60 + 55,
@@ -97,9 +97,9 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
             compact: true,
             onChanged: (m) => setState(() => _startMin = m),
           ),
-          const SizedBox(height: 8),
-          Text('계획시간', style: tt.labelLarge),
+          const SizedBox(height: 10),
           MinuteScrollPicker(
+            sectionLabel: '계획시간',
             valueMinutes: _durationMin,
             minMinutes: 5,
             maxMinutes: 240,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 스크롤 휠 시간 선택. [compact] 시 5·10·15분 칩이 휠 위, 세로 4줄 높이.
+/// 스크롤 휠 시간 선택.
+///
+/// [compact] 시 왼쪽(5·10·15분) · 가운데(↑↓) · 오른쪽(휠) 가로 배치, 휠 영역 4줄 높이.
 class MinuteScrollPicker extends StatefulWidget {
   final int valueMinutes;
   final int minMinutes;
@@ -12,8 +14,11 @@ class MinuteScrollPicker extends StatefulWidget {
   final bool showAmPmToggle;
   final bool isDuration;
 
-  /// 시간계획 탭용: 세로·가로 최소화 (휠 약 4줄 높이).
+  /// 시간계획 탭용: 4줄 높이 가로 3열 레이아웃.
   final bool compact;
+
+  /// [compact]일 때 왼쪽 분 칩 열 위에 표시 (예: 시작 시간, 계획 시간).
+  final String? sectionLabel;
 
   const MinuteScrollPicker({
     super.key,
@@ -26,6 +31,7 @@ class MinuteScrollPicker extends StatefulWidget {
     this.showAmPmToggle = false,
     this.isDuration = false,
     this.compact = false,
+    this.sectionLabel,
   });
 
   @override
@@ -44,8 +50,9 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   static const _lineH = 28.0;
   static const _compactLines = 4;
   static const _compactWheelH = _lineH * _compactLines;
-  static const _compactWheelW = 128.0;
-  static const _compactArrowW = 32.0;
+  static const _compactWheelW = 140.0;
+  static const _compactArrowW = 28.0;
+  static const _compactStepColW = 46.0;
 
   // 기본(시간 설정 시트 등)
   static const _wheelHeight = 168.0;
@@ -164,37 +171,68 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     );
   }
 
-  Widget _stepChipsRow(ColorScheme cs, TextTheme tt, {bool dense = false}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: _steps.map((s) {
-        final sel = _step == s;
-        return Padding(
-          padding: EdgeInsets.symmetric(horizontal: dense ? 3 : 4),
-          child: Material(
-            color: sel ? cs.surfaceContainerHigh : cs.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => _setStep(s),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: dense ? 10 : 8,
-                  vertical: dense ? 4 : 5,
-                ),
-                child: Text(
-                  '$s분',
-                  style: tt.labelSmall?.copyWith(
-                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                    fontSize: dense ? 12 : null,
-                  ),
-                ),
-              ),
+  Widget _stepChip(
+    ColorScheme cs,
+    TextTheme tt,
+    int step, {
+    bool dense = false,
+  }) {
+    final sel = _step == step;
+    return Material(
+      color: sel ? cs.surfaceContainerHigh : cs.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => _setStep(step),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: dense ? 6 : 8,
+            vertical: dense ? 2 : 5,
+          ),
+          child: Text(
+            '$step분',
+            style: tt.labelSmall?.copyWith(
+              fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+              fontSize: dense ? 11 : null,
             ),
           ),
-        );
-      }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _compactStepColumn(ColorScheme cs, TextTheme tt) {
+    return SizedBox(
+      width: _compactStepColW,
+      height: _compactWheelH,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: _steps.map((s) => _stepChip(cs, tt, s, dense: true)).toList(),
+      ),
+    );
+  }
+
+  Widget _compactArrowColumn(ColorScheme cs) {
+    return SizedBox(
+      width: _compactArrowW,
+      height: _compactWheelH,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _arrowBtn(
+            icon: Icons.keyboard_arrow_up_rounded,
+            onPressed: () => _nudge(-1),
+            cs: cs,
+            size: _lineH,
+          ),
+          _arrowBtn(
+            icon: Icons.keyboard_arrow_down_rounded,
+            onPressed: () => _nudge(1),
+            cs: cs,
+            size: _lineH,
+          ),
+        ],
+      ),
     );
   }
 
@@ -276,44 +314,32 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   Widget _buildCompact(ColorScheme cs, TextTheme tt) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _stepChipsRow(cs, tt, dense: true),
-        const SizedBox(height: 4),
+        if (widget.sectionLabel != null) ...[
+          Text(
+            widget.sectionLabel!,
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 2),
+        ],
         SizedBox(
-          width: _compactWheelW + _compactArrowW * 2,
-          child: Column(
+          height: _compactWheelH,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _arrowBtn(
-                icon: Icons.keyboard_arrow_up_rounded,
-                onPressed: () => _nudge(-1),
-                cs: cs,
-                size: _lineH,
-              ),
-              SizedBox(
+              _compactStepColumn(cs, tt),
+              const SizedBox(width: 4),
+              _compactArrowColumn(cs),
+              const SizedBox(width: 2),
+              _wheelStack(
+                cs,
+                tt,
                 height: _compactWheelH,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(width: _compactArrowW),
-                    _wheelStack(
-                      cs,
-                      tt,
-                      height: _compactWheelH,
-                      width: _compactWheelW,
-                      itemExtent: _lineH,
-                      highlightH: _lineH,
-                    ),
-                    SizedBox(width: _compactArrowW),
-                  ],
-                ),
-              ),
-              _arrowBtn(
-                icon: Icons.keyboard_arrow_down_rounded,
-                onPressed: () => _nudge(1),
-                cs: cs,
-                size: _lineH,
+                width: _compactWheelW,
+                itemExtent: _lineH,
+                highlightH: _lineH,
               ),
             ],
           ),
