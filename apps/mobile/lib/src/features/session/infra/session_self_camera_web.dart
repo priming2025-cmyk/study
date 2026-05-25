@@ -372,6 +372,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
   @override
   void dispose() {
+    _host.nodes.clear();
     unawaited(_shutdown());
     super.dispose();
   }

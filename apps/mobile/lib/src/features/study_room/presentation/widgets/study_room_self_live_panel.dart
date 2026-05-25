@@ -258,7 +258,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                 if (kIsWeb)
                   SessionSelfCameraSurface(
                     key: ValueKey<String>(
-                      'study-self-cam-${widget.controller.roomId}',
+                      'study-self-cam-${widget.controller.roomId}-${widget.controller.webSelfCamEpoch}',
                     ),
                     width: widget.width,
                     height: widget.height,

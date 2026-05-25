@@ -91,13 +91,13 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
           Text('시작', style: tt.labelLarge),
           MinuteScrollPicker(
             valueMinutes: _startMin,
-            minMinutes: 5 * 60, // 05:00
+            minMinutes: 5 * 60,
             maxMinutes: 23 * 60 + 55,
             initialStepMinutes: 5,
-            showAmPmToggle: true,
+            compact: true,
             onChanged: (m) => setState(() => _startMin = m),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Text('계획시간', style: tt.labelLarge),
           MinuteScrollPicker(
             valueMinutes: _durationMin,
@@ -105,6 +105,7 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
             maxMinutes: 240,
             initialStepMinutes: 5,
             isDuration: true,
+            compact: true,
             onChanged: (m) => setState(() => _durationMin = m),
           ),
           const SizedBox(height: 16),

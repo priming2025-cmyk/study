@@ -278,11 +278,10 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _stepChipsRow(cs, tt, dense: true),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         SizedBox(
-          height: _compactWheelH,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          width: _compactWheelW + _compactArrowW * 2,
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _arrowBtn(
@@ -291,13 +290,24 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                 cs: cs,
                 size: _lineH,
               ),
-              _wheelStack(
-                cs,
-                tt,
+              SizedBox(
                 height: _compactWheelH,
-                width: _compactWheelW,
-                itemExtent: _lineH,
-                highlightH: _lineH,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(width: _compactArrowW),
+                    _wheelStack(
+                      cs,
+                      tt,
+                      height: _compactWheelH,
+                      width: _compactWheelW,
+                      itemExtent: _lineH,
+                      highlightH: _lineH,
+                    ),
+                    SizedBox(width: _compactArrowW),
+                  ],
+                ),
               ),
               _arrowBtn(
                 icon: Icons.keyboard_arrow_down_rounded,

@@ -46,6 +46,9 @@ class StudyRoomController extends ChangeNotifier {
   bool joining = false;
   String? error;
 
+  /// 웹 본인 카메라 위젯 재마운트용 (방 퇴장·재입장 시 정지 화면 방지).
+  int webSelfCamEpoch = 0;
+
   RealtimeChannel? _presenceChannel;
   RealtimeChannel? _messageChannel;
   Timer? _snapshotTimer;
@@ -217,6 +220,7 @@ class StudyRoomController extends ChangeNotifier {
       // presence 먼저 입장 → 스냅샷은 백그라운드(실시간 카메라 준비 후 1분 주기 업로드)
       await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: '');
       unawaited(_finishJoinSnapshot(roomId: roomId, userId: userId));
+      webSelfCamEpoch++;
     } catch (e) {
       error = '방 입장 실패: $e';
       debugPrint('[StudyRoomController] joinRoom error: $e');
@@ -313,6 +317,7 @@ class StudyRoomController extends ChangeNotifier {
     } catch (_) {}
     _snapshotInitialized = false;
     await teardownSharedCameraMedia();
+    webSelfCamEpoch++;
     notifyListeners();
   }
 

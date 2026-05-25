@@ -9,6 +9,12 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# VM analyze(CI)에서는 dart:js_util 이 없어 웹 전용 파일을 제외합니다.
+analyzer:
+  exclude:
+    - lib/src/features/session/infra/web_mediapipe_face_detector.dart
+    - lib/src/features/session/infra/web_face_detector_holder.dart
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

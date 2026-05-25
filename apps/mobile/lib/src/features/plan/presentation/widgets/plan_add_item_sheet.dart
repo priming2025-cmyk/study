@@ -589,7 +589,7 @@ class _TimePlanTab extends StatelessWidget {
           compact: true,
           onChanged: onStartChanged,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 8),
         Text('계획 시간', style: tt.titleSmall),
         const SizedBox(height: 4),
         MinuteScrollPicker(
