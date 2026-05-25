@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/custom_subject_store.dart';
 
-/// 과목 선택 칩 — ⋮ 메뉴에서 편집·삭제.
+/// 과목 선택 칩 — 탭은 왼쪽(이름), ⋮ 메뉴는 **네모 오른쪽 끝** (편집·삭제).
 class PlanSubjectChip extends StatelessWidget {
   final CustomSubject subject;
   final bool selected;
@@ -27,45 +27,64 @@ class PlanSubjectChip extends StatelessWidget {
     return Material(
       color: selected ? color.withValues(alpha: 0.14) : cs.surfaceContainerLow,
       borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(8, 8, 2, 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? color : cs.outlineVariant.withValues(alpha: 0.5),
-              width: selected ? 1.5 : 1,
-            ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? color : cs.outlineVariant.withValues(alpha: 0.5),
+            width: selected ? 1.5 : 1,
           ),
-          child: Row(
-            children: [
-              CircleAvatar(radius: 6, backgroundColor: color),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  subject.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? color : cs.onSurface,
+        ),
+        child: Row(
+          children: [
+            // ── 선택 영역 (과목명) — ⋮과 터치 분리 ─────────────────────
+            Expanded(
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(11),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
+                  child: Row(
+                    children: [
+                      CircleAvatar(radius: 6, backgroundColor: color),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          subject.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight:
+                                selected ? FontWeight.w700 : FontWeight.w500,
+                            color: selected ? color : cs.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              PopupMenuButton<String>(
+            ),
+            // ── ⋮ 메뉴 — 오른쪽 끝 고정 폭, 선택 탭과 겹치지 않음 ───────
+            SizedBox(
+              width: 36,
+              height: double.infinity,
+              child: PopupMenuButton<String>(
                 padding: EdgeInsets.zero,
-                iconSize: 18,
+                iconSize: 20,
                 splashRadius: 18,
+                tooltip: '편집·삭제',
                 constraints: const BoxConstraints(
-                  minWidth: 28,
-                  minHeight: 28,
+                  minWidth: 36,
+                  minHeight: 36,
                 ),
+                position: PopupMenuPosition.under,
                 icon: Icon(
                   Icons.more_vert,
-                  size: 18,
+                  size: 20,
                   color: cs.onSurfaceVariant,
                 ),
                 onSelected: (v) {
@@ -94,8 +113,8 @@ class PlanSubjectChip extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

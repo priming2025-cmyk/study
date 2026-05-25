@@ -119,6 +119,9 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     }
     final h24 = minutes ~/ 60;
     final mm = minutes % 60;
+    if (!widget.showAmPmToggle) {
+      return '${h24.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}';
+    }
     final h12 = h24 == 0 ? 12 : (h24 > 12 ? h24 - 12 : h24);
     final ap = h24 < 12 ? '오전' : '오후';
     return '$ap $h12:${mm.toString().padLeft(2, '0')}';

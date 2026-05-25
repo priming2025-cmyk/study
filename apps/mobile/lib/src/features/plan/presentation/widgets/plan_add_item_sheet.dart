@@ -6,7 +6,7 @@ import 'minute_scroll_picker.dart';
 import 'plan_subject_chip.dart';
 import 'plan_time_utils.dart';
 
-/// 과목 · 시작시간 · 계획시간 · 반복 — 4탭 계획 추가 시트.
+/// 과목 · 시간계획 · 반복 — 3탭 계획 추가 시트.
 class PlanAddItemSheet extends StatefulWidget {
   final DateTime planDay;
   final List<PlanItem> existingItems;
@@ -56,9 +56,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     if (_editing) return '계획 수정';
     return switch (_tab.index) {
       0 => '과목',
-      1 => '시작시간',
-      2 => '계획시간',
-      3 => '반복',
+      1 => '시간계획',
+      2 => '반복',
       _ => '새 계획',
     };
   }
@@ -66,7 +65,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this)
+    _tab = TabController(length: 3, vsync: this)
       ..addListener(() {
         if (!_tab.indexIsChanging) setState(() {});
       });
@@ -252,29 +251,39 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                     },
                     onDeleteSubject: _deleteSubjectFromList,
                   ),
-                  _StartTab(
+                  _TimePlanTab(
                     startMin: _startMin,
-                    onChanged: (m) => setState(() => _startMin = m),
-                  ),
-                  _DurationTab(
                     durationMin: _durationMin,
-                    onChanged: (m) => setState(() => _durationMin = m),
+                    onStartChanged: (m) => setState(() => _startMin = m),
+                    onDurationChanged: (m) => setState(() => _durationMin = m),
                   ),
                   _RepeatTab(
+                    repeatNone: _repeatNone,
                     unit: _repeatUnit,
                     interval: _repeatInterval,
                     weekdays: _weekdays,
-                    onUnit: (u) => setState(() {
-                      _repeatUnit = u;
-                      _repeatNone = false;
-                    }),
-                    onInterval: (n) => setState(() => _repeatInterval = n),
+                    onPickInterval: () async {
+                      final picked = await _RepeatIntervalSheet.show(
+                        context,
+                        interval: _repeatInterval,
+                        unit: _repeatUnit,
+                      );
+                      if (picked == null || !mounted) return;
+                      setState(() {
+                        _repeatInterval = picked.$1;
+                        _repeatUnit = picked.$2;
+                        _repeatNone = false;
+                      });
+                    },
                     onWeekdayToggle: (d) => setState(() {
                       if (_weekdays.contains(d)) {
-                        _weekdays = Set.from(_weekdays)..remove(d);
+                        if (_weekdays.length > 1) {
+                          _weekdays = Set.from(_weekdays)..remove(d);
+                        }
                       } else {
                         _weekdays = Set.from(_weekdays)..add(d);
                       }
+                      _repeatNone = false;
                     }),
                     onNone: () => setState(() => _repeatNone = true),
                   ),
@@ -295,8 +304,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                     labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                     tabs: const [
                       Tab(text: '과목'),
-                      Tab(text: '시작시간'),
-                      Tab(text: '계획시간'),
+                      Tab(text: '시간계획'),
                       Tab(text: '반복'),
                     ],
                   ),
@@ -419,10 +427,28 @@ class _SubjectTabState extends State<_SubjectTab> {
     _closeNewSubjectForm(clearName: false);
   }
 
+  /// 국어·영어·수학·과학·사회를 항상 앞에 두고, 나머지는 이름순.
+  List<CustomSubject> _sortedSubjects() {
+    final defaultNames = defaultSubjects.map((s) => s.name).toList();
+    final byName = {for (final s in widget.subjects) s.name: s};
+    final ordered = <CustomSubject>[];
+    for (final name in defaultNames) {
+      final s = byName.remove(name);
+      if (s != null) ordered.add(s);
+    }
+    final rest = byName.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return [...ordered, ...rest];
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final sorted = _sortedSubjects();
+    final screenW = MediaQuery.sizeOf(context).width;
+    // 좁은 화면은 2열 → 과목명·⋮이 한 줄에 들어갈 폭 확보
+    final crossAxisCount = screenW >= 520 ? 3 : 2;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -430,15 +456,15 @@ class _SubjectTabState extends State<_SubjectTab> {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
             mainAxisSpacing: 8,
             crossAxisSpacing: 8,
-            childAspectRatio: 2.1,
+            childAspectRatio: crossAxisCount == 3 ? 2.55 : 3.0,
           ),
-          itemCount: widget.subjects.length,
+          itemCount: sorted.length,
           itemBuilder: (context, i) {
-            final s = widget.subjects[i];
+            final s = sorted[i];
             return PlanSubjectChip(
               subject: s,
               selected: widget.selected == s.name,
@@ -533,124 +559,159 @@ class _SubjectTabState extends State<_SubjectTab> {
   }
 }
 
-class _StartTab extends StatelessWidget {
+class _TimePlanTab extends StatelessWidget {
   final int startMin;
-  final ValueChanged<int> onChanged;
-
-  const _StartTab({required this.startMin, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: MinuteScrollPicker(
-        valueMinutes: startMin,
-        minMinutes: 5 * 60,
-        maxMinutes: 23 * 60 + 55,
-        initialStepMinutes: 5,
-        showAmPmToggle: true,
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _DurationTab extends StatelessWidget {
   final int durationMin;
-  final ValueChanged<int> onChanged;
+  final ValueChanged<int> onStartChanged;
+  final ValueChanged<int> onDurationChanged;
 
-  const _DurationTab({required this.durationMin, required this.onChanged});
+  const _TimePlanTab({
+    required this.startMin,
+    required this.durationMin,
+    required this.onStartChanged,
+    required this.onDurationChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final tt = Theme.of(context).textTheme;
+
+    return ListView(
       padding: const EdgeInsets.all(16),
-      child: MinuteScrollPicker(
-        valueMinutes: durationMin,
-        minMinutes: 5,
-        maxMinutes: 240,
-        initialStepMinutes: 5,
-        isDuration: true,
-        onChanged: onChanged,
-      ),
+      children: [
+        Text('시작 시간', style: tt.titleSmall),
+        const SizedBox(height: 8),
+        MinuteScrollPicker(
+          valueMinutes: startMin,
+          minMinutes: 5 * 60,
+          maxMinutes: 23 * 60 + 55,
+          initialStepMinutes: 5,
+          onChanged: onStartChanged,
+        ),
+        const SizedBox(height: 28),
+        Text('계획 시간', style: tt.titleSmall),
+        const SizedBox(height: 8),
+        MinuteScrollPicker(
+          valueMinutes: durationMin,
+          minMinutes: 5,
+          maxMinutes: 240,
+          initialStepMinutes: 5,
+          isDuration: true,
+          onChanged: onDurationChanged,
+        ),
+      ],
     );
   }
 }
 
 class _RepeatTab extends StatelessWidget {
+  final bool repeatNone;
   final PlanRepeatUnit unit;
   final int interval;
   final Set<int> weekdays;
-  final ValueChanged<PlanRepeatUnit> onUnit;
-  final ValueChanged<int> onInterval;
+  final VoidCallback onPickInterval;
   final ValueChanged<int> onWeekdayToggle;
   final VoidCallback onNone;
 
   const _RepeatTab({
+    required this.repeatNone,
     required this.unit,
     required this.interval,
     required this.weekdays,
-    required this.onUnit,
-    required this.onInterval,
+    required this.onPickInterval,
     required this.onWeekdayToggle,
     required this.onNone,
   });
 
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
 
+  String get _intervalLabel => switch (unit) {
+        PlanRepeatUnit.week => '$interval주마다',
+        PlanRepeatUnit.day => '$interval일마다',
+        _ => '1주마다',
+      };
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final showWeekdays = !repeatNone && unit == PlanRepeatUnit.week;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('반복 주기', style: tt.titleSmall),
-        const SizedBox(height: 8),
-        SegmentedButton<PlanRepeatUnit>(
-          segments: const [
-            ButtonSegment(value: PlanRepeatUnit.day, label: Text('일')),
-            ButtonSegment(value: PlanRepeatUnit.week, label: Text('주')),
-          ],
-          selected: {unit},
-          onSelectionChanged: (s) => onUnit(s.first),
-        ),
-        const SizedBox(height: 16),
         Row(
           children: [
-            IconButton(
-              onPressed: interval > 1 ? () => onInterval(interval - 1) : null,
-              icon: const Icon(Icons.remove_circle_outline),
-            ),
-            Expanded(
-              child: Text(
-                unit == PlanRepeatUnit.week
-                    ? '$interval주마다'
-                    : '$interval일마다',
-                textAlign: TextAlign.center,
-                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            Text('반복 주기', style: tt.titleSmall),
+            const Spacer(),
+            Material(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(10),
+              child: InkWell(
+                onTap: onPickInterval,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        repeatNone ? '1주마다' : _intervalLabel,
+                        style: tt.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 20,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            IconButton(
-              onPressed: () => onInterval(interval + 1),
-              icon: const Icon(Icons.add_circle_outline),
             ),
           ],
         ),
-        if (unit == PlanRepeatUnit.week) ...[
-          const SizedBox(height: 12),
-          Text('요일', style: tt.labelLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
+        if (showWeekdays) ...[
+          const SizedBox(height: 16),
+          Row(
             children: List.generate(7, (i) {
               final d = i + 1;
               final sel = weekdays.contains(d);
-              return FilterChip(
-                label: Text(_days[i]),
-                selected: sel,
-                onSelected: (_) => onWeekdayToggle(d),
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
+                  child: Material(
+                    color: sel
+                        ? cs.surfaceContainerHigh
+                        : cs.surfaceContainerLowest,
+                    borderRadius: BorderRadius.circular(8),
+                    child: InkWell(
+                      onTap: () => onWeekdayToggle(d),
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        height: 34,
+                        child: Center(
+                          child: Text(
+                            _days[i],
+                            style: tt.labelMedium?.copyWith(
+                              fontWeight:
+                                  sel ? FontWeight.w700 : FontWeight.w500,
+                              color: sel
+                                  ? cs.onSurface
+                                  : cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               );
             }),
           ),
@@ -660,9 +721,199 @@ class _RepeatTab extends StatelessWidget {
           onPressed: onNone,
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
-            foregroundColor: cs.error,
+            foregroundColor: cs.onSurface,
+            side: BorderSide(color: cs.outlineVariant),
           ),
           child: const Text('반복 안 함'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 반복 주기 선택 (숫자 휠 + 일/주 단위).
+class _RepeatIntervalSheet extends StatefulWidget {
+  final int interval;
+  final PlanRepeatUnit unit;
+
+  const _RepeatIntervalSheet({
+    required this.interval,
+    required this.unit,
+  });
+
+  static Future<(int, PlanRepeatUnit)?> show(
+    BuildContext context, {
+    required int interval,
+    required PlanRepeatUnit unit,
+  }) {
+    return showModalBottomSheet<(int, PlanRepeatUnit)>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) => _RepeatIntervalSheet(interval: interval, unit: unit),
+    );
+  }
+
+  @override
+  State<_RepeatIntervalSheet> createState() => _RepeatIntervalSheetState();
+}
+
+class _RepeatIntervalSheetState extends State<_RepeatIntervalSheet> {
+  static const _maxInterval = 12;
+  late FixedExtentScrollController _numCtrl;
+  late FixedExtentScrollController _unitCtrl;
+  late int _interval;
+  late PlanRepeatUnit _unit;
+
+  @override
+  void initState() {
+    super.initState();
+    _interval = widget.interval.clamp(1, _maxInterval);
+    _unit = widget.unit == PlanRepeatUnit.day
+        ? PlanRepeatUnit.day
+        : PlanRepeatUnit.week;
+    _numCtrl = FixedExtentScrollController(initialItem: _interval - 1);
+    _unitCtrl = FixedExtentScrollController(
+      initialItem: _unit == PlanRepeatUnit.day ? 0 : 1,
+    );
+  }
+
+  @override
+  void dispose() {
+    _numCtrl.dispose();
+    _unitCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, bottom + 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '반복 주기',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _PickerColumn(
+                    controller: _numCtrl,
+                    labels: List.generate(
+                      _maxInterval,
+                      (i) => '${i + 1}',
+                    ),
+                    onSelected: (i) => _interval = i + 1,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _PickerColumn(
+                    controller: _unitCtrl,
+                    labels: const ['일', '주'],
+                    onSelected: (i) {
+                      _unit = i == 0
+                          ? PlanRepeatUnit.day
+                          : PlanRepeatUnit.week;
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                    foregroundColor: cs.onSurface,
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
+                  child: const Text('취소'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(context, (_interval, _unit)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 48),
+                  ),
+                  child: const Text('완료'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PickerColumn extends StatelessWidget {
+  final FixedExtentScrollController controller;
+  final List<String> labels;
+  final ValueChanged<int> onSelected;
+
+  const _PickerColumn({
+    required this.controller,
+    required this.labels,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Container(
+          height: 44,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        ListWheelScrollView.useDelegate(
+          controller: controller,
+          itemExtent: 44,
+          perspective: 0.003,
+          diameterRatio: 1.4,
+          physics: const FixedExtentScrollPhysics(),
+          onSelectedItemChanged: onSelected,
+          childDelegate: ListWheelChildBuilderDelegate(
+            childCount: labels.length,
+            builder: (context, i) {
+              final sel =
+                  controller.hasClients && controller.selectedItem == i;
+              return Center(
+                child: Text(
+                  labels[i],
+                  style: (sel ? tt.titleMedium : tt.bodyMedium)?.copyWith(
+                    fontWeight: sel ? FontWeight.w800 : FontWeight.w400,
+                    color: sel ? cs.onSurface : cs.onSurfaceVariant,
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ],
     );
