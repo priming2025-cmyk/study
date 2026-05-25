@@ -55,8 +55,19 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   final WebAttentionFacePipeline _pipeline = WebAttentionFacePipeline();
 
   bool get _isMobileSafari => WebFaceDetectorHolder.isMobileSafari;
+  bool get _hasGpu => WebFaceDetectorHolder.supportsWebGpu;
 
-  int get _maxDetectorRetries => _isMobileSafari ? 24 : 10;
+  /// WebGPU(최신 iPhone)는 빠르게 준비되므로 재시도 횟수를 줄임.
+  int get _maxDetectorRetries {
+    if (!_isMobileSafari) return 8;
+    return _hasGpu ? 12 : 20;
+  }
+
+  String get _preparingMsg {
+    if (!_isMobileSafari) return '얼굴 분석 준비 중…';
+    if (_hasGpu) return '얼굴 분석 준비 중…';
+    return '얼굴 분석 준비 중… (잠시만 기다려 주세요)';
+  }
 
   @override
   void initState() {
@@ -125,9 +136,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
           _cameraError = null;
           _streamReady = true;
           _analysisFailed = false;
-          _analysisStatus = _isMobileSafari
-              ? '얼굴 분석 준비 중… (iPhone 최초 1~2분 걸릴 수 있어요)'
-              : '얼굴 분석 준비 중…';
+          _analysisStatus = _preparingMsg;
         });
       }
 
@@ -135,7 +144,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        Duration(milliseconds: _isMobileSafari ? 900 : 800),
+        const Duration(milliseconds: 900),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -179,9 +188,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     _analysisFailed = false;
     if (mounted) {
       setState(() {
-        _analysisStatus = _isMobileSafari
-            ? '분석 엔진 다시 불러오는 중…'
-            : '얼굴 분석 준비 중…';
+        _analysisStatus = _preparingMsg;
       });
     }
     WebFaceDetectorHolder.instance.scheduleRetry();

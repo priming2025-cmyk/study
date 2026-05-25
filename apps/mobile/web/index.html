@@ -2,54 +2,52 @@
 <html>
 <head>
   <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-
+  <meta name="description" content="setudy">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="study_up">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
   <link rel="icon" type="image/png" href="favicon.png"/>
-
   <title>study_up</title>
   <link rel="manifest" href="manifest.json">
 
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="dns-prefetch" href="https://unpkg.com">
-  <link rel="preconnect" href="https://unpkg.com" crossorigin>
 
   <!--
-    LiteRT.js: 얼굴 분석 WASM (iPhone Safari는 최초 로드가 1~2분 걸릴 수 있음).
-    Flutter 시작 전에 로드해 두고 litert-ready 이벤트로 Dart에 알립니다.
+    LiteRT.js: 얼굴 분석 엔진.
+    iPhone Safari 17+(아이폰 13+ iOS 17+)은 WebGPU를 통해 빠르게 초기화됩니다.
+    구형 기기는 WASM 경로로 폴백합니다.
   -->
   <script type="module">
     (async () => {
-      const CDNS = [
-        'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0',
-        'https://unpkg.com/@litertjs/core@2.4.0',
-      ];
-      let lastErr = null;
-      for (const CDN of CDNS) {
+      const CDN = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0';
+      try {
+        const mod = await import(CDN + '/+esm');
+        // loadLiteRt: WASM 바이너리 로드 (WebGPU 백엔드가 있어도 부트스트랩에 필요)
+        await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
+        window.LiteRt = mod;
+        window.LiteRtReady = true;
+        window.LiteRtLoadError = null;
+        console.info('[setudy] LiteRT ready');
+      } catch (e) {
+        // CDN 실패 시 unpkg 폴백
         try {
-          const mod = await import(CDN + '/+esm');
-          await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
-          window.LiteRt = mod;
+          const CDN2 = 'https://unpkg.com/@litertjs/core@2.4.0';
+          const mod2 = await import(CDN2 + '/+esm');
+          await mod2.loadLiteRt(CDN2 + '/wasm/litert_wasm_internal.js');
+          window.LiteRt = mod2;
           window.LiteRtReady = true;
           window.LiteRtLoadError = null;
-          console.info('[setudy] LiteRT ready via', CDN);
-          return;
-        } catch (e) {
-          lastErr = e;
-          console.warn('[setudy] LiteRT preload failed (' + CDN + '):',
-            e && e.message ? e.message : e);
+          console.info('[setudy] LiteRT ready (unpkg fallback)');
+        } catch (e2) {
+          console.warn('[setudy] LiteRT load failed:', e2 && e2.message ? e2.message : e2);
+          window.LiteRtReady = false;
+          window.LiteRtLoadError = e2 && e2.message ? e2.message : String(e2);
         }
       }
-      window.LiteRtReady = false;
-      window.LiteRtLoadError = lastErr && lastErr.message ? lastErr.message : String(lastErr);
     })().finally(() => {
       window.dispatchEvent(new Event('litert-ready'));
     });
