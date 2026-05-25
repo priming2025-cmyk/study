@@ -577,26 +577,28 @@ class _TimePlanTab extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       children: [
         Text('시작 시간', style: tt.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         MinuteScrollPicker(
           valueMinutes: startMin,
           minMinutes: 5 * 60,
           maxMinutes: 23 * 60 + 55,
           initialStepMinutes: 5,
+          compact: true,
           onChanged: onStartChanged,
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 14),
         Text('계획 시간', style: tt.titleSmall),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         MinuteScrollPicker(
           valueMinutes: durationMin,
           minMinutes: 5,
           maxMinutes: 240,
           initialStepMinutes: 5,
           isDuration: true,
+          compact: true,
           onChanged: onDurationChanged,
         ),
       ],

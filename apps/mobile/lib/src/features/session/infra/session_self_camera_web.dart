@@ -18,6 +18,9 @@ import 'web_shared_camera.dart';
 class SessionSelfCameraSurface extends StatefulWidget {
   final double width;
   final double height;
+
+  /// false면 카메라 스트림을 놓아 다른 탭(셋터디)과 충돌하지 않게 합니다.
+  final bool active;
   final bool Function() appInForeground;
   final void Function(AttentionSignals) onAttentionSignals;
 
@@ -25,6 +28,7 @@ class SessionSelfCameraSurface extends StatefulWidget {
     super.key,
     required this.width,
     required this.height,
+    this.active = true,
     required this.appInForeground,
     required this.onAttentionSignals,
   });
@@ -48,6 +52,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   String? _analysisStatus;
   bool _analysisFailed = false;
   bool _streamReady = false;
+  bool _cameraRunning = false;
 
   Timer? _analysisTimer;
   Timer? _detectorRetryTimer;
@@ -66,7 +71,9 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void initState() {
     super.initState();
     _registerHost();
-    unawaited(_boot());
+    if (widget.active) {
+      unawaited(_boot());
+    }
   }
 
   void _registerHost() {
@@ -82,6 +89,13 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   void didUpdateWidget(SessionSelfCameraSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
     _applySize();
+    if (widget.active != oldWidget.active) {
+      if (widget.active) {
+        unawaited(_boot());
+      } else {
+        unawaited(_shutdown());
+      }
+    }
   }
 
   void _applySize() {
@@ -105,10 +119,39 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
     unawaited(video.play());
   }
 
+  Future<void> _shutdown() async {
+    if (!_cameraRunning) {
+      _analysisTimer?.cancel();
+      _analysisTimer = null;
+      return;
+    }
+    _analysisTimer?.cancel();
+    _analysisTimer = null;
+    _detectorRetryTimer?.cancel();
+    _detectorRetryTimer = null;
+    _busy = false;
+    _retryCount = 0;
+    _pipeline.reset();
+    WebSharedCamera.instance.release();
+    _cameraRunning = false;
+    if (mounted) {
+      setState(() {
+        _streamReady = false;
+        _cameraError = null;
+        _analysisStatus = null;
+        _analysisFailed = false;
+      });
+    }
+    _emitNoFace();
+  }
+
   Future<void> _boot() async {
+    if (!widget.active || _cameraRunning) return;
+    _cameraRunning = true;
     try {
       final stream = await WebSharedCamera.instance.acquire();
       if (stream == null) {
+        _cameraRunning = false;
         final err = WebSharedCamera.instance.lastOpenError;
         if (mounted) {
           setState(() {
@@ -143,6 +186,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       unawaited(_sampleFrame());
     } catch (e) {
       debugPrint('[SessionSelfCamera-Web] boot: $e');
+      _cameraRunning = false;
       if (mounted) {
         setState(() => _cameraError =
             '카메라를 열 수 없어요. 주소창에서 카메라를 허용했는지 확인해 주세요.');
@@ -328,10 +372,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
   @override
   void dispose() {
-    _analysisTimer?.cancel();
-    _detectorRetryTimer?.cancel();
-    _pipeline.reset();
-    WebSharedCamera.instance.release();
+    unawaited(_shutdown());
     super.dispose();
   }
 

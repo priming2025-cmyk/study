@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 스크롤 휠 시간 선택. 5·10·15분 간격 + 휠 좌우 ▲▼.
+/// 스크롤 휠 시간 선택. [compact] 시 5·10·15분 칩이 휠 위, 세로 4줄 높이.
 class MinuteScrollPicker extends StatefulWidget {
   final int valueMinutes;
   final int minMinutes;
@@ -11,6 +11,9 @@ class MinuteScrollPicker extends StatefulWidget {
   final String Function(int minutes)? labelBuilder;
   final bool showAmPmToggle;
   final bool isDuration;
+
+  /// 시간계획 탭용: 세로·가로 최소화 (휠 약 4줄 높이).
+  final bool compact;
 
   const MinuteScrollPicker({
     super.key,
@@ -22,6 +25,7 @@ class MinuteScrollPicker extends StatefulWidget {
     this.labelBuilder,
     this.showAmPmToggle = false,
     this.isDuration = false,
+    this.compact = false,
   });
 
   @override
@@ -35,6 +39,15 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   bool _isPm = false;
 
   static const _steps = [5, 10, 15];
+
+  // 컴팩트: 한 줄 높이 28px × 4줄 = 휠 영역 전체 높이
+  static const _lineH = 28.0;
+  static const _compactLines = 4;
+  static const _compactWheelH = _lineH * _compactLines;
+  static const _compactWheelW = 128.0;
+  static const _compactArrowW = 32.0;
+
+  // 기본(시간 설정 시트 등)
   static const _wheelHeight = 168.0;
   static const _wheelWidth = 200.0;
   static const _arrowColWidth = 44.0;
@@ -45,7 +58,9 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     super.initState();
     _step = widget.initialStepMinutes;
     _values = _buildValues();
-    _ctrl = FixedExtentScrollController(initialItem: _indexFor(_clamp(widget.valueMinutes)));
+    _ctrl = FixedExtentScrollController(
+      initialItem: _indexFor(_clamp(widget.valueMinutes)),
+    );
     if (widget.showAmPmToggle && !widget.isDuration) {
       _isPm = widget.valueMinutes ~/ 60 >= 12;
     }
@@ -77,7 +92,8 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
   int _clamp(int m) {
     if (m < widget.minMinutes) return widget.minMinutes;
     if (m > widget.maxMinutes) return widget.maxMinutes;
-    return ((m / _step).round() * _step).clamp(widget.minMinutes, widget.maxMinutes);
+    return ((m / _step).round() * _step)
+        .clamp(widget.minMinutes, widget.maxMinutes);
   }
 
   int _indexFor(int m) {
@@ -108,6 +124,17 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     HapticFeedback.selectionClick();
   }
 
+  /// 13:00 → 오후 1시, 01:00 → 오전 1시
+  static String _koreanClockLabel(int minutes) {
+    final h24 = minutes ~/ 60;
+    final mm = minutes % 60;
+    final ap = h24 < 12 ? '오전' : '오후';
+    var h12 = h24 % 12;
+    if (h12 == 0) h12 = 12;
+    if (mm == 0) return '$ap $h12시';
+    return '$ap $h12시 $mm분';
+  }
+
   String _label(int minutes) {
     if (widget.labelBuilder != null) return widget.labelBuilder!(minutes);
     if (widget.isDuration) {
@@ -117,28 +144,175 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
       if (h > 0) return '$h시간';
       return '$mm분';
     }
-    final h24 = minutes ~/ 60;
-    final mm = minutes % 60;
-    if (!widget.showAmPmToggle) {
-      return '${h24.toString().padLeft(2, '0')}:${mm.toString().padLeft(2, '0')}';
+    if (widget.showAmPmToggle) {
+      final h24 = minutes ~/ 60;
+      final mm = minutes % 60;
+      final h12 = h24 == 0 ? 12 : (h24 > 12 ? h24 - 12 : h24);
+      final ap = h24 < 12 ? '오전' : '오후';
+      return '$ap $h12:${mm.toString().padLeft(2, '0')}';
     }
-    final h12 = h24 == 0 ? 12 : (h24 > 12 ? h24 - 12 : h24);
-    final ap = h24 < 12 ? '오전' : '오후';
-    return '$ap $h12:${mm.toString().padLeft(2, '0')}';
+    return _koreanClockLabel(minutes);
   }
 
   void _nudge(int delta) {
     if (!_ctrl.hasClients) return;
     final next = (_ctrl.selectedItem + delta).clamp(0, _values.length - 1);
-    _ctrl.animateToItem(next,
-        duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+    _ctrl.animateToItem(
+      next,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+  Widget _stepChipsRow(ColorScheme cs, TextTheme tt, {bool dense = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: _steps.map((s) {
+        final sel = _step == s;
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: dense ? 3 : 4),
+          child: Material(
+            color: sel ? cs.surfaceContainerHigh : cs.surfaceContainerLowest,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _setStep(s),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: dense ? 10 : 8,
+                  vertical: dense ? 4 : 5,
+                ),
+                child: Text(
+                  '$s분',
+                  style: tt.labelSmall?.copyWith(
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: dense ? 12 : null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
+  Widget _wheelStack(
+    ColorScheme cs,
+    TextTheme tt, {
+    required double height,
+    required double width,
+    required double itemExtent,
+    required double highlightH,
+  }) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            height: highlightH,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          ListWheelScrollView.useDelegate(
+            controller: _ctrl,
+            itemExtent: itemExtent,
+            perspective: 0.004,
+            diameterRatio: 1.15,
+            physics: const FixedExtentScrollPhysics(),
+            onSelectedItemChanged: (i) {
+              HapticFeedback.selectionClick();
+              widget.onChanged(_values[i]);
+            },
+            childDelegate: ListWheelChildBuilderDelegate(
+              childCount: _values.length,
+              builder: (context, i) {
+                final sel = _ctrl.hasClients && _ctrl.selectedItem == i;
+                return Center(
+                  child: Text(
+                    _label(_values[i]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: (sel ? tt.titleSmall : tt.bodySmall)?.copyWith(
+                      fontWeight: sel ? FontWeight.w800 : FontWeight.w400,
+                      fontSize: widget.compact ? 13 : null,
+                      color: sel ? cs.onSurface : cs.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _arrowBtn({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required ColorScheme cs,
+    required double size,
+  }) {
+    return SizedBox(
+      width: _compactArrowW,
+      height: size,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        iconSize: 22,
+        constraints: BoxConstraints(minWidth: size, minHeight: size),
+        onPressed: onPressed,
+        icon: Icon(icon, color: cs.onSurfaceVariant),
+      ),
+    );
+  }
+
+  Widget _buildCompact(ColorScheme cs, TextTheme tt) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _stepChipsRow(cs, tt, dense: true),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: _compactWheelH,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _arrowBtn(
+                icon: Icons.keyboard_arrow_up_rounded,
+                onPressed: () => _nudge(-1),
+                cs: cs,
+                size: _lineH,
+              ),
+              _wheelStack(
+                cs,
+                tt,
+                height: _compactWheelH,
+                width: _compactWheelW,
+                itemExtent: _lineH,
+                highlightH: _lineH,
+              ),
+              _arrowBtn(
+                icon: Icons.keyboard_arrow_down_rounded,
+                onPressed: () => _nudge(1),
+                cs: cs,
+                size: _lineH,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClassic(ColorScheme cs, TextTheme tt) {
     return Column(
       children: [
         if (widget.showAmPmToggle && !widget.isDuration)
@@ -187,8 +361,9 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                               child: Text(
                                 '$s분',
                                 style: tt.labelSmall?.copyWith(
-                                  fontWeight:
-                                      sel ? FontWeight.w700 : FontWeight.w500,
+                                  fontWeight: sel
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -232,52 +407,13 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
                     ],
                   ),
                 ),
-                SizedBox(
+                _wheelStack(
+                  cs,
+                  tt,
+                  height: _wheelHeight,
                   width: _wheelWidth,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        height: 44,
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHigh.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      ListWheelScrollView.useDelegate(
-                        controller: _ctrl,
-                        itemExtent: 44,
-                        perspective: 0.003,
-                        diameterRatio: 1.4,
-                        physics: const FixedExtentScrollPhysics(),
-                        onSelectedItemChanged: (i) {
-                          HapticFeedback.selectionClick();
-                          widget.onChanged(_values[i]);
-                        },
-                        childDelegate: ListWheelChildBuilderDelegate(
-                          childCount: _values.length,
-                          builder: (context, i) {
-                            final sel =
-                                _ctrl.hasClients && _ctrl.selectedItem == i;
-                            return Center(
-                              child: Text(
-                                _label(_values[i]),
-                                style: (sel ? tt.titleMedium : tt.bodyMedium)
-                                    ?.copyWith(
-                                  fontWeight:
-                                      sel ? FontWeight.w800 : FontWeight.w400,
-                                  color: sel
-                                      ? cs.onSurface
-                                      : cs.onSurfaceVariant,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                  itemExtent: 44,
+                  highlightH: 44,
                 ),
               ],
             ),
@@ -285,5 +421,15 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
         ),
       ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    if (widget.compact) {
+      return _buildCompact(cs, tt);
+    }
+    return _buildClassic(cs, tt);
   }
 }

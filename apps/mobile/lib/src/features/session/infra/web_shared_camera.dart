@@ -32,7 +32,16 @@ final class WebSharedCamera {
       _stream != null &&
       _video != null &&
       _video!.readyState >= html.MediaElement.HAVE_CURRENT_DATA &&
-      _video!.videoWidth >= 8;
+      _video!.videoWidth >= 8 &&
+      _tracksLive;
+
+  bool get _tracksLive {
+    final stream = _stream;
+    if (stream == null) return false;
+    final tracks = stream.getVideoTracks();
+    if (tracks.isEmpty) return false;
+    return tracks.every((t) => t.readyState == 'live');
+  }
 
   /// `공부 시작`·방 입장 등 버튼 핸들러 **맨 앞**에서 동기 호출 (Safari 필수).
   void openFromUserGesture() {
@@ -46,6 +55,11 @@ final class WebSharedCamera {
     _refs++;
     _disposeTimer?.cancel();
     _disposeTimer = null;
+
+    if (_stream != null && (!isStreamReady || !_tracksLive)) {
+      debugPrint('[WebSharedCamera] stale stream → reopen');
+      _teardown();
+    }
 
     if (_stream != null && isStreamReady) {
       return _stream;
@@ -104,6 +118,7 @@ final class WebSharedCamera {
     try {
       _video?.srcObject = null;
     } catch (_) {}
+    _video = null;
     _openFuture = null;
     _lastOpenError = null;
   }

@@ -384,8 +384,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                                 width: stripW,
                                 height: stripH,
                                 child: SessionSelfCameraSurface(
+                                  key: ValueKey<int>(_c.webCameraEpoch),
                                   width: stripW,
                                   height: stripH,
+                                  active: shellSession,
                                   appInForeground: () => _c.appInForeground,
                                   onAttentionSignals: _c.applyWebAttentionSignals,
                                 ),

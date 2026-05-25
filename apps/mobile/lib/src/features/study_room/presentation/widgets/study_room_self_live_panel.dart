@@ -118,7 +118,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     if (mounted) setState(() {});
   }
 
-  /// 방 퇴장·위젯 dispose: 카메라 점유 해제.
+  /// 방 퇴장·위젯 dispose: 구독 해제 + 본인이 연 카메라만 release.
   Future<void> _releaseCameraFully() async {
     await _suspendForTab();
     if (_ownsCamera) {
@@ -142,25 +142,12 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     if (!widget.cameraSlotActive) return;
 
     if (kIsWeb) {
+      WebSharedCamera.instance.openFromUserGesture();
       if (mounted) setState(() {});
       return;
     }
 
     if (_camera.hasActiveCamera) {
-      if (!_ownsCamera) {
-        final frontCam = await SessionCameraCache.getFrontOrDefault();
-        if (frontCam != null) {
-          try {
-            await _camera.acquire(
-              camera: frontCam,
-              appInForeground: () => _appInForeground,
-            );
-            _ownsCamera = true;
-          } catch (e) {
-            debugPrint('[StudyRoomSelfLivePanel] re-acquire: $e');
-          }
-        }
-      }
       await _attachStream();
       if (mounted) setState(() {});
       return;
@@ -270,8 +257,12 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
               children: [
                 if (kIsWeb)
                   SessionSelfCameraSurface(
+                    key: ValueKey<String>(
+                      'study-self-cam-${widget.controller.roomId}',
+                    ),
                     width: widget.width,
                     height: widget.height,
+                    active: true,
                     appInForeground: () => _appInForeground,
                     onAttentionSignals: _applyWebSignals,
                   )

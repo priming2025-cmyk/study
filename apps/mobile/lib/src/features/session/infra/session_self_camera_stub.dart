@@ -6,6 +6,7 @@ import '../domain/attention_signals.dart';
 class SessionSelfCameraSurface extends StatelessWidget {
   final double width;
   final double height;
+  final bool active;
   final bool Function()? appInForeground;
   final void Function(AttentionSignals)? onAttentionSignals;
 
@@ -13,6 +14,7 @@ class SessionSelfCameraSurface extends StatelessWidget {
     super.key,
     required this.width,
     required this.height,
+    this.active = true,
     this.appInForeground,
     this.onAttentionSignals,
   });

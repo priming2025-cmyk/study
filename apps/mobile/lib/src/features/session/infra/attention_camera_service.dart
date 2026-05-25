@@ -35,8 +35,11 @@ final class AttentionCameraService {
     required bool Function() appInForeground,
   }) {
     return _enqueue(() async {
-      if (!hasActiveCamera) {
-        if (_holders > 0) {
+      final c = _sensor.controller;
+      final streamDead =
+          c != null && c.value.isInitialized && !c.value.isStreamingImages;
+      if (!hasActiveCamera || streamDead) {
+        if (_holders > 0 || hasActiveCamera) {
           _holders = 0;
           await _sensor.stop();
         }

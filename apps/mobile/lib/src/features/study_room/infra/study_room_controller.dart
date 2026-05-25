@@ -7,6 +7,7 @@ import '../../../core/supabase/supabase_client.dart';
 import '../../session/domain/attention_scoring.dart';
 import '../../session/domain/attention_signals.dart';
 import '../../session/domain/session_summary.dart';
+import '../../session/infra/session_media_lifecycle.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'study_room_ambient_player.dart';
@@ -311,6 +312,7 @@ class StudyRoomController extends ChangeNotifier {
       await _snapshot.dispose();
     } catch (_) {}
     _snapshotInitialized = false;
+    await teardownSharedCameraMedia();
     notifyListeners();
   }
 

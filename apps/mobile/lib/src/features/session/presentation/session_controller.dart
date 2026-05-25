@@ -95,6 +95,9 @@ class SessionController extends ChangeNotifier {
   /// [CameraPreview] 위젯을 세션마다 새로 붙이기 위한 키(iOS 2회차 검은 화면 완화).
   int get cameraPreviewGeneration => _camera.previewGeneration;
 
+  /// 웹 [SessionSelfCameraSurface] 재마운트용 (세션 종료·재시작 시 정지 화면 방지).
+  int webCameraEpoch = 0;
+
   /// 웹: [SessionSelfCameraSurface] 위젯이 `<video>` 프레임을 분석해 호출합니다.
   /// (웹은 FaceAttentionSensor를 시작하지 않고 이 경로만 씁니다.)
   void applyWebAttentionSignals(AttentionSignals s) {
@@ -351,6 +354,7 @@ class SessionController extends ChangeNotifier {
     // 카메라 붙기 전·재시작 직후 이전 세션 signals가 남으면 ‘집중’으로 보이는 문제 방지
     _lastSignalAt = null;
     cameraStartError = null;
+    webCameraEpoch++;
     signals = const AttentionSignals(
       facePresent: false,
       multiFace: false,
@@ -556,6 +560,7 @@ class SessionController extends ChangeNotifier {
     cameraStartError = null;
     // 비동기 부트스트랩이 돌아가는 동안에도 즉시 false로 두어 카메라/Presence 경합을 줄입니다.
     running = false;
+    webCameraEpoch++;
     notifyListeners();
 
     final s = state;
