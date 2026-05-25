@@ -45,6 +45,7 @@ class SessionController extends ChangeNotifier {
   TodayPlan? todayPlan;
   String? selectedPlanItemId;
   String selectedSubjectLabel = '';
+  int draftTargetMinutes = 50;
   List<String> recentSubjects = const [];
 
   List<PresenceMember> others = const [];
@@ -170,6 +171,31 @@ class SessionController extends ChangeNotifier {
   void selectPlanItem(PlanItem item) {
     selectedPlanItemId = item.id;
     selectedSubjectLabel = item.subject;
+    draftTargetMinutes = (item.targetSeconds / 60).round().clamp(5, 240);
+    notifyListeners();
+  }
+
+  void setDraftSubject(String name) {
+    selectedPlanItemId = null;
+    selectedSubjectLabel = name.trim();
+    notifyListeners();
+  }
+
+  void setDraftTargetMinutes(int minutes) {
+    draftTargetMinutes = minutes.clamp(5, 240);
+    notifyListeners();
+  }
+
+  /// 카메라 멈춤·검은 화면 시 수동 복구.
+  Future<void> refreshCamera() async {
+    webCameraEpoch++;
+    if (kIsWeb) {
+      WebSharedCamera.instance.forceRelease();
+      WebSharedCamera.instance.openFromUserGesture();
+    } else if (running) {
+      await _releaseCamera();
+      await _startNativeCameraSensor();
+    }
     notifyListeners();
   }
 

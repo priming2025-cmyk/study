@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../data/custom_subject_store.dart';
 import '../../data/plan_models.dart';
 import '../../data/plan_repeat_config.dart';
+import 'compact_subject_grid.dart';
 import 'minute_scroll_picker.dart';
-import 'plan_subject_chip.dart';
 import 'plan_time_utils.dart';
 
 /// 과목 · 시간계획 · 반복 — 3탭 계획 추가 시트.
@@ -47,7 +47,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
   late Set<int> _weekdays;
-  bool _repeatNone = true;
+  bool _repeatNone = false;
   bool _saving = false;
 
   bool get _editing => widget.editItem != null;
@@ -86,6 +86,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     } else {
       _startMin = suggestPlanStartMinutes(widget.existingItems, DateTime.now());
       _durationMin = suggestPlanDurationMinutes(widget.existingItems) ?? 50;
+      _repeatNone = false;
+      _weekdays = {widget.planDay.weekday};
     }
   }
 
@@ -446,50 +448,18 @@ class _SubjectTabState extends State<_SubjectTab> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final sorted = _sortedSubjects();
-    final screenW = MediaQuery.sizeOf(context).width;
-    // 좁은 화면은 2열 → 과목명·⋮이 한 줄에 들어갈 폭 확보
-    final crossAxisCount = screenW >= 520 ? 3 : 2;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: crossAxisCount == 3 ? 2.55 : 3.0,
-          ),
-          itemCount: sorted.length,
-          itemBuilder: (context, i) {
-            final s = sorted[i];
-            return PlanSubjectChip(
-              subject: s,
-              selected: widget.selected == s.name,
-              onTap: () => widget.onSelect(s),
-              onEdit: () => _openEditSubjectForm(s),
-              onDelete: () => widget.onDeleteSubject(s.name),
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ActionChip(
-            avatar: Icon(Icons.add_rounded, size: 18, color: cs.primary),
-            label: Text(
-              '새과목',
-              style: TextStyle(
-                color: cs.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            backgroundColor: cs.primaryContainer.withValues(alpha: 0.35),
-            side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
-            onPressed: _openNewSubjectForm,
-          ),
+        CompactSubjectGrid(
+          subjects: sorted,
+          selectedName: widget.selected,
+          onSelect: widget.onSelect,
+          onAddNew: _openNewSubjectForm,
+          onEdit: _openEditSubjectForm,
+          onDelete: widget.onDeleteSubject,
+          maxRows: 2,
         ),
         if (_showNewSubjectForm) ...[
           const SizedBox(height: 16),

@@ -195,6 +195,32 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
 
   Future<void> _start() async {
     final messenger = ScaffoldMessenger.of(context);
+    final items = _c.todayPlan?.items ?? const <PlanItem>[];
+    if (items.isEmpty) {
+      final subject = _c.selectedSubjectLabel.trim();
+      if (subject.isEmpty) {
+        AppSnacks.showWithMessenger(
+          messenger,
+          '과목을 선택한 뒤 공부 시작을 눌러 주세요.',
+        );
+        return;
+      }
+      try {
+        await _c.addItemAndSelect(
+          subject: subject,
+          targetMinutes: _c.draftTargetMinutes,
+        );
+      } catch (e) {
+        AppSnacks.showWithMessenger(messenger, '계획 추가 실패: $e');
+        return;
+      }
+    } else if (_c.selectedSubjectLabel.trim().isEmpty) {
+      AppSnacks.showWithMessenger(
+        messenger,
+        '집중할 과목을 선택해 주세요.',
+      );
+      return;
+    }
     try {
       await _c.start();
     } catch (e) {
@@ -284,6 +310,16 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       appBar: AppBar(
         title: const Text('집중 공부'),
         actions: [
+          IconButton(
+            tooltip: '카메라 새로고침',
+            icon: const Icon(Icons.cameraswitch_rounded),
+            onPressed: () {
+              if (kIsWeb) {
+                WebSharedCamera.instance.openFromUserGesture();
+              }
+              unawaited(_c.refreshCamera());
+            },
+          ),
           IconButton(
             tooltip: '집중민감도',
             icon: const Icon(Icons.tune_rounded),
@@ -426,7 +462,13 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                       SubjectPickerCard(
                         todayPlan: _c.todayPlan,
                         selectedPlanItemId: _c.selectedPlanItemId,
+                        draftSubject: _c.selectedSubjectLabel.isEmpty
+                            ? null
+                            : _c.selectedSubjectLabel,
+                        draftTargetMinutes: _c.draftTargetMinutes,
                         onSelected: _c.selectPlanItem,
+                        onDraftSubject: _c.setDraftSubject,
+                        onDraftMinutes: _c.setDraftTargetMinutes,
                         recentSubjects: _c.recentSubjects,
                         onQuickAdd:
                             ({required String subject, required int targetMinutes}) =>

@@ -1,13 +1,15 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint, kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../session/domain/attention_scoring.dart';
 import '../../session/domain/attention_signals.dart';
 import '../../session/domain/session_summary.dart';
+import '../../session/infra/attention_camera_service.dart';
 import '../../session/infra/session_media_lifecycle.dart';
+import '../../session/infra/web_camera.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'study_room_ambient_player.dart';
@@ -48,6 +50,18 @@ class StudyRoomController extends ChangeNotifier {
 
   /// 웹 본인 카메라 위젯 재마운트용 (방 퇴장·재입장 시 정지 화면 방지).
   int webSelfCamEpoch = 0;
+
+  /// 카메라 멈춤 시 수동 복구.
+  Future<void> refreshSelfCamera() async {
+    webSelfCamEpoch++;
+    if (kIsWeb) {
+      WebSharedCamera.instance.forceRelease();
+      WebSharedCamera.instance.openFromUserGesture();
+    } else {
+      await AttentionCameraService.instance.forceStop();
+    }
+    notifyListeners();
+  }
 
   RealtimeChannel? _presenceChannel;
   RealtimeChannel? _messageChannel;

@@ -255,6 +255,16 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               title: const Text('셋터디'),
               actions: [
                 IconButton(
+                  tooltip: '카메라 새로고침',
+                  icon: const Icon(Icons.cameraswitch_rounded),
+                  onPressed: () {
+                    if (kIsWeb) {
+                      WebSharedCamera.instance.openFromUserGesture();
+                    }
+                    unawaited(_controller.refreshSelfCamera());
+                  },
+                ),
+                IconButton(
                   tooltip: '집중민감도',
                   icon: const Icon(Icons.tune_rounded),
                   onPressed: _openSensitivitySheet,

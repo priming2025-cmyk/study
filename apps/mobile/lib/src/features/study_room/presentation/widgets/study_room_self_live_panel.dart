@@ -109,6 +109,10 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
         unawaited(_suspendForTab());
       }
     }
+    if (oldWidget.controller.webSelfCamEpoch !=
+        widget.controller.webSelfCamEpoch) {
+      unawaited(_boot());
+    }
   }
 
   /// 탭 전환: 스트림 구독만 해제 (카메라 세션 유지 → 공부 탭·복귀 시 프리즈 방지).
