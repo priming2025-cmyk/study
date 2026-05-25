@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import '../domain/attention_signals.dart';
 import 'web_attention_face_codec.dart';
 import 'web_face_detector_holder.dart';
+import 'web_mediapipe_face_detector.dart';
 import 'web_shared_camera.dart';
 
 /// 브라우저 공유 카메라 + [FaceDetector] 분석 → [onAttentionSignals].
@@ -55,19 +56,11 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   final WebAttentionFacePipeline _pipeline = WebAttentionFacePipeline();
 
   bool get _isMobileSafari => WebFaceDetectorHolder.isMobileSafari;
-  bool get _hasGpu => WebFaceDetectorHolder.supportsWebGpu;
 
-  /// WebGPU(최신 iPhone)는 빠르게 준비되므로 재시도 횟수를 줄임.
-  int get _maxDetectorRetries {
-    if (!_isMobileSafari) return 8;
-    return _hasGpu ? 12 : 20;
-  }
+  /// iPhone은 MediaPipe가 주 경로 → LiteRT 재시도는 최소화.
+  int get _maxDetectorRetries => _isMobileSafari ? 3 : 8;
 
-  String get _preparingMsg {
-    if (!_isMobileSafari) return '얼굴 분석 준비 중…';
-    if (_hasGpu) return '얼굴 분석 준비 중…';
-    return '얼굴 분석 준비 중… (잠시만 기다려 주세요)';
-  }
+  String get _preparingMsg => '얼굴 분석 준비 중…';
 
   @override
   void initState() {
@@ -144,7 +137,7 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
 
       _analysisTimer?.cancel();
       _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 900),
+        const Duration(milliseconds: 800),
         (_) => unawaited(_sampleFrame()),
       );
       unawaited(_sampleFrame());
@@ -159,6 +152,25 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   }
 
   Future<void> _ensureDetector() async {
+    // ── iPhone: MediaPipe 우선 (WebGL, 10~15 초 준비) ────────────────────
+    if (_isMobileSafari) {
+      if (WebMediaPipeFaceDetector.isReady) {
+        _onDetectorReady();
+        return;
+      }
+      // MediaPipe가 아직 로딩 중이면 최대 25 초 대기
+      await WebMediaPipeFaceDetector.waitUntilReady(
+        timeout: const Duration(seconds: 25),
+      );
+      if (!mounted) return;
+      if (WebMediaPipeFaceDetector.isReady) {
+        _onDetectorReady();
+        return;
+      }
+      // MediaPipe 실패 → LiteRT 폴백
+    }
+
+    // ── 데스크탑 / Android Chrome 또는 MediaPipe 실패 시 LiteRT ───────────
     if (WebFaceDetectorHolder.instance.isReady) {
       _onDetectorReady();
       return;
@@ -186,11 +198,13 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
   Future<void> _retryDetectorNow() async {
     _retryCount = 0;
     _analysisFailed = false;
-    if (mounted) {
-      setState(() {
-        _analysisStatus = _preparingMsg;
-      });
+    if (mounted) setState(() => _analysisStatus = _preparingMsg);
+    // MediaPipe 재시도 (iPhone)
+    if (_isMobileSafari) {
+      await _ensureDetector();
+      return;
     }
+    // LiteRT 재시도
     WebFaceDetectorHolder.instance.scheduleRetry();
     unawaited(WebFaceDetectorHolder.instance.warmUp());
     await _ensureDetector();
@@ -233,18 +247,34 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
       return;
     }
 
-    final det = WebFaceDetectorHolder.instance.detector;
-    if (det == null) {
-      unawaited(_ensureDetector());
-      _emitNoFace();
-      return;
-    }
-
     _busy = true;
     try {
+      // ── iPhone: MediaPipe 경로 (WebGL, 빠름) ──────────────────────────
+      if (_isMobileSafari && WebMediaPipeFaceDetector.isReady) {
+        final video = WebSharedCamera.instance.video;
+        if (video != null) {
+          final sig = WebMediaPipeFaceDetector.detectFromVideo(
+            video,
+            widget.appInForeground(),
+          );
+          // null → 비디오 미준비 등 일시 오류: noFace만 내보내고 LiteRT 경로로 넘기지 않음
+          _clearStatus();
+          widget.onAttentionSignals(sig ?? _pipeline.noFace(widget.appInForeground()));
+          return;
+        }
+      }
+
+      // ── LiteRT 경로 (데스크탑·Android 또는 MediaPipe 초기화 전) ──────
+      final det = WebFaceDetectorHolder.instance.detector;
+      if (det == null) {
+        unawaited(_ensureDetector());
+        _emitNoFace();
+        return;
+      }
+
       final jpeg = await WebSharedCamera.instance.captureJpeg(
-        maxDim: _isMobileSafari ? 400 : 480,
-        quality: _isMobileSafari ? 0.78 : 0.82,
+        maxDim: 480,
+        quality: 0.82,
       );
 
       if (jpeg == null || !WebAttentionFacePipeline.jpegLooksLikePhoto(jpeg)) {
@@ -277,19 +307,22 @@ class _SessionSelfCameraSurfaceState extends State<SessionSelfCameraSurface> {
         inForeground: widget.appInForeground(),
       );
 
-      if (mounted && _analysisStatus != null) {
-        setState(() {
-          _analysisStatus = null;
-          _analysisFailed = false;
-        });
-      }
-
+      _clearStatus();
       widget.onAttentionSignals(sig);
     } catch (e) {
       debugPrint('[SessionSelfCamera-Web] sample: $e');
       _emitNoFace();
     } finally {
       _busy = false;
+    }
+  }
+
+  void _clearStatus() {
+    if (mounted && (_analysisStatus != null || _analysisFailed)) {
+      setState(() {
+        _analysisStatus = null;
+        _analysisFailed = false;
+      });
     }
   }
 

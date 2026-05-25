@@ -17,23 +17,23 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
   <!--
-    LiteRT.js: 얼굴 분석 엔진.
-    iPhone Safari 17+(아이폰 13+ iOS 17+)은 WebGPU를 통해 빠르게 초기화됩니다.
-    구형 기기는 WASM 경로로 폴백합니다.
+    ① LiteRT.js: 데스크탑 Chrome/Firefox 얼굴 분석 WASM.
+    iPhone Safari는 ② MediaPipe 경로를 우선 사용합니다.
   -->
   <script type="module">
     (async () => {
+      const isIPhone = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      // iPhone은 아래 MediaPipe 블록이 주 경로 → LiteRT는 폴백만
       const CDN = 'https://cdn.jsdelivr.net/npm/@litertjs/core@2.4.0';
       try {
         const mod = await import(CDN + '/+esm');
-        // loadLiteRt: WASM 바이너리 로드 (WebGPU 백엔드가 있어도 부트스트랩에 필요)
         await mod.loadLiteRt(CDN + '/wasm/litert_wasm_internal.js');
         window.LiteRt = mod;
         window.LiteRtReady = true;
         window.LiteRtLoadError = null;
-        console.info('[setudy] LiteRT ready');
+        console.info('[setudy] LiteRT ready' + (isIPhone ? ' (fallback)' : ''));
       } catch (e) {
-        // CDN 실패 시 unpkg 폴백
+        // unpkg 폴백
         try {
           const CDN2 = 'https://unpkg.com/@litertjs/core@2.4.0';
           const mod2 = await import(CDN2 + '/+esm');
@@ -41,9 +41,7 @@
           window.LiteRt = mod2;
           window.LiteRtReady = true;
           window.LiteRtLoadError = null;
-          console.info('[setudy] LiteRT ready (unpkg fallback)');
         } catch (e2) {
-          console.warn('[setudy] LiteRT load failed:', e2 && e2.message ? e2.message : e2);
           window.LiteRtReady = false;
           window.LiteRtLoadError = e2 && e2.message ? e2.message : String(e2);
         }
@@ -51,6 +49,83 @@
     })().finally(() => {
       window.dispatchEvent(new Event('litert-ready'));
     });
+  </script>
+
+  <!--
+    ② MediaPipe FaceLandmarker: iPhone Safari 전용 빠른 얼굴 감지.
+    - WASM 바이너리: ~3 MB (LiteRT ~20 MB 대비 훨씬 작음)
+    - WebGL GPU 추론 → iPhone에서 10~15 초 내 준비
+    - 478 랜드마크 반환 → EAR·헤드 포즈 계산 가능
+    - window.mpDetectFaceLandmarks(videoElement) → JSON 문자열 반환
+    주의: ES 모듈에서 최상단 return은 SyntaxError → if 블록으로 감쌉니다.
+  -->
+  <script type="module">
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.17';
+      // 자체 호스팅 모델 (web/mediapipe/face_landmarker.task, ~3.6 MB).
+      // base href를 고려해 경로를 동적으로 계산합니다.
+      const base = document.querySelector('base')?.href ?? (location.origin + '/');
+      const MODEL_LOCAL = new URL('mediapipe/face_landmarker.task', base).href;
+      // 네트워크 에러 등 로컬 실패 시 Google 공식 CDN 폴백
+      const MODEL_FALLBACK = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+
+      (async () => {
+        try {
+          const { FaceLandmarker, FilesetResolver } = await import(MP + '/vision_bundle.mjs');
+          const wasm = await FilesetResolver.forVisionTasks(MP + '/wasm');
+
+          // 로컬 모델 → 실패 시 CDN 폴백
+          let fl;
+          for (const modelUrl of [MODEL_LOCAL, MODEL_FALLBACK]) {
+            try {
+              fl = await FaceLandmarker.createFromOptions(wasm, {
+                baseOptions: { modelAssetPath: modelUrl, delegate: 'GPU' },
+                runningMode: 'IMAGE',
+                numFaces: 1,
+                minFaceDetectionConfidence: 0.5,
+                minFacePresenceConfidence: 0.5,
+                minTrackingConfidence: 0.5,
+              });
+              console.info('[setudy] MediaPipe model loaded:', modelUrl);
+              break;
+            } catch (modelErr) {
+              console.warn('[setudy] MediaPipe model load failed (' + modelUrl + '):', modelErr && modelErr.message ? modelErr.message : modelErr);
+            }
+          }
+
+          if (!fl) throw new Error('모든 모델 URL 실패');
+
+          // Dart에서 호출 가능한 JSON 브리지 함수를 먼저 등록한 뒤 Ready 플래그 설정
+          window.mpDetectFaceLandmarks = function(videoEl) {
+            try {
+              if (!videoEl || videoEl.videoWidth < 4 || videoEl.readyState < 2) return null;
+              const res = fl.detect(videoEl);
+              const lms = res.faceLandmarks;
+              if (!lms || lms.length === 0) return JSON.stringify({ n: 0 });
+              const face = lms[0];
+              // EAR 좌안 [362,385,387,263,373,380] 우안 [33,160,158,133,153,144]
+              // 헤드 포즈: 코끝(1), 좌안 외안각(226), 우안 외안각(446), 턱(152)
+              const idx = [33,133,144,153,158,160,226,263,362,373,380,385,387,446,1,152];
+              const pts = {};
+              for (const i of idx) {
+                const lm = face[i];
+                if (lm) pts[i] = { x: lm.x, y: lm.y };
+              }
+              return JSON.stringify({ n: lms.length, pts });
+            } catch (e) {
+              return null;
+            }
+          };
+          window.mpFaceReady = true;
+          console.info('[setudy] MediaPipe FaceLandmarker ready (iPhone)');
+        } catch (e) {
+          console.warn('[setudy] MediaPipe init failed:', e && e.message ? e.message : e);
+          window.mpFaceReady = false;
+        } finally {
+          window.dispatchEvent(new Event('mediapipe-ready'));
+        }
+      })();
+    }
   </script>
 </head>
 <body>

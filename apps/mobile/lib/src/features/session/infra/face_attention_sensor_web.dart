@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 
 import 'package:camera/camera.dart';
@@ -7,6 +8,8 @@ import 'package:flutter/foundation.dart' show Uint8List, debugPrint;
 import '../domain/attention_signals.dart';
 import 'web_attention_face_codec.dart';
 import 'web_face_detector_holder.dart';
+import 'web_mediapipe_face_detector.dart';
+import 'web_shared_camera.dart';
 
 /// 웹(Flutter Web)용 얼굴 집중 센서 — [AttentionCameraService] 보조 경로.
 ///
@@ -98,6 +101,24 @@ class FaceAttentionSensor {
     if (!_running || _busy || _controller == null) return;
     _busy = true;
     try {
+      // ── iPhone: MediaPipe 경로 (WebSharedCamera 비디오 공유) ────────────
+      if (WebFaceDetectorHolder.isMobileSafari &&
+          WebMediaPipeFaceDetector.isReady) {
+        final video = WebSharedCamera.instance.video;
+        if (video != null && WebSharedCamera.instance.isStreamReady) {
+          final sig = WebMediaPipeFaceDetector.detectFromVideo(
+            video,
+            appInForeground(),
+          );
+          if (sig != null) {
+            if (sig.facePresent) _lastValidSampleAt = DateTime.now();
+            _signals?.add(sig);
+            return;
+          }
+        }
+      }
+
+      // ── LiteRT 경로 (데스크탑·Android 또는 MediaPipe 폴백) ───────────
       final det = await WebFaceDetectorHolder.instance.acquire();
       if (det == null) {
         _emitNoFace(appInForeground);
