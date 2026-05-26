@@ -85,7 +85,9 @@ class StudyRoomInviteSheet extends StatelessWidget {
           // 공유 버튼 (네이티브 공유 시트)
           FilledButton.icon(
             onPressed: () {
-              Share.share(_inviteText, subject: '셋터디 초대');
+              SharePlus.instance.share(
+                ShareParams(text: _inviteText, subject: '셋터디 초대'),
+              );
             },
             icon: const Icon(Icons.share_rounded),
             label: const Text('공유하기'),

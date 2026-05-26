@@ -53,7 +53,7 @@ class StudyRoomMainStage extends StatelessWidget {
             : MediaQuery.sizeOf(context).height * 0.62;
 
         return _buildGrid(
-          context: context,
+          context,
           selfId: selfId,
           peers: peers,
           totalSlots: totalSlots,

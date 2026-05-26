@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/providers/core_providers.dart';
+import '../../../../core/providers/core_providers.dart';
 import '../../../motivation/domain/motivation_models.dart';
 import 'friend_status_section.dart';
 

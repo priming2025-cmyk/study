@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/providers/core_providers.dart';
+import '../../../../core/providers/core_providers.dart';
 import '../../../motivation/domain/motivation_models.dart';
 
 /// 친구 실시간 상태 열거형.
