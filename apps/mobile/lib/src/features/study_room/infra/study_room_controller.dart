@@ -10,9 +10,17 @@ import '../../session/domain/session_summary.dart';
 import '../../session/infra/attention_camera_service.dart';
 import '../../session/infra/session_media_lifecycle.dart';
 import '../../session/infra/web_camera.dart';
+import '../domain/study_room_join_code.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'study_room_ambient_player.dart';
+
+class StudyRoomCreated {
+  final String roomId;
+  final String joinCode;
+
+  const StudyRoomCreated({required this.roomId, required this.joinCode});
+}
 
 const _snapshotBucket = 'study-snapshots';
 const _snapshotInterval = Duration(seconds: 60);
@@ -31,6 +39,8 @@ class StudyRoomController extends ChangeNotifier {
   final StudyRoomAmbientPlayer _ambient;
 
   String? roomId;
+  /// 화면·공유용 6자리 입장코드.
+  String? joinCode;
   String? _selfId;
   String? get selfId => _selfId;
   String? selfSnapshotUrl;
@@ -175,69 +185,155 @@ class StudyRoomController extends ChangeNotifier {
 
   // ── 방 만들기 ──────────────────────────────────────────────────────────────
 
-  Future<String> createRoom({required String name}) async {
+  Future<StudyRoomCreated> createRoom({required String name}) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('로그인이 필요합니다.');
 
     await _ensureProfile(userId);
 
-    final row = await supabase
-        .from('study_rooms')
-        .insert({
-          'owner_id': userId,
-          'name': name.trim().isEmpty ? '우리셋' : name.trim(),
-          'max_peers': 8,
-        })
-        .select('id')
-        .single();
+    Object? lastError;
+    for (var attempt = 0; attempt < 6; attempt++) {
+      final code = generateStudyRoomJoinCode();
+      try {
+        final row = await supabase
+            .from('study_rooms')
+            .insert({
+              'owner_id': userId,
+              'name': name.trim().isEmpty ? '우리셋' : name.trim(),
+              'max_peers': 8,
+              'join_code': code,
+            })
+            .select('id, join_code')
+            .single();
+        final id = '${row['id']}';
+        final savedCode =
+            normalizeJoinCode('${row['join_code'] ?? code}');
+        joinCode = savedCode;
+        return StudyRoomCreated(roomId: id, joinCode: savedCode);
+      } catch (e) {
+        lastError = e;
+        final msg = e.toString();
+        if (msg.contains('unique') || msg.contains('duplicate')) {
+          continue;
+        }
+        if (msg.contains('join_code') && attempt == 0) {
+          final row = await supabase
+              .from('study_rooms')
+              .insert({
+                'owner_id': userId,
+                'name': name.trim().isEmpty ? '우리셋' : name.trim(),
+                'max_peers': 8,
+              })
+              .select('id')
+              .single();
+          final id = '${row['id']}';
+          final fallback = normalizeJoinCode(id.replaceAll('-', '').substring(0, 6));
+          joinCode = fallback;
+          return StudyRoomCreated(roomId: id, joinCode: fallback);
+        }
+        rethrow;
+      }
+    }
+    throw StateError('입장코드 생성에 실패했어요: $lastError');
+  }
 
-    return '${row['id']}';
+  /// 입장코드 또는 UUID → 방 id. 없으면 null.
+  Future<String?> resolveRoomIdFromEntry(String entry) async {
+    final raw = entry.trim();
+    if (raw.isEmpty) return null;
+
+    if (raw.contains('-') && raw.length > 20) {
+      final row = await supabase
+          .from('study_rooms')
+          .select('id')
+          .eq('id', raw)
+          .maybeSingle();
+      return row?['id'] as String?;
+    }
+
+    final code = normalizeJoinCode(raw);
+    try {
+      final row = await supabase
+          .from('study_rooms')
+          .select('id')
+          .eq('join_code', code)
+          .maybeSingle();
+      if (row != null) return row['id'] as String?;
+    } catch (_) {
+      // join_code 컬럼 미적용 DB
+    }
+
+    return null;
   }
 
   // ── 방 입장 ──────────────────────────────────────────────────────────────
 
-  Future<void> joinRoom({required String roomId, String goalText = ''}) async {
+  /// [roomIdOrCode]: 6자리 입장코드 또는 UUID. 성공 시 true.
+  Future<bool> joinRoom({
+    required String roomIdOrCode,
+    String goalText = '',
+  }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('로그인이 필요합니다.');
 
     joining = true;
     error = null;
+    roomId = null;
     notifyListeners();
 
     try {
       await _ensureProfile(userId);
 
-      this.roomId = roomId;
+      final resolvedId = await resolveRoomIdFromEntry(roomIdOrCode);
+      if (resolvedId == null) {
+        error = '입장코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.';
+        return false;
+      }
+
+      final roomRow = await supabase
+          .from('study_rooms')
+          .select('owner_id, join_code')
+          .eq('id', resolvedId)
+          .maybeSingle();
+      if (roomRow == null) {
+        error = '입장코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.';
+        return false;
+      }
+
+      roomId = resolvedId;
+      joinCode = roomRow['join_code'] != null
+          ? normalizeJoinCode('${roomRow['join_code']}')
+          : normalizeJoinCode(roomIdOrCode);
       _selfId = userId;
       _messages = [];
       _selfGoalText = goalText.trim();
       _selfJoinAtUtc = DateTime.now().toUtc();
       _selfStatus = 'focus';
-
-      final roomRow = await supabase
-          .from('study_rooms')
-          .select('owner_id')
-          .eq('id', roomId)
-          .maybeSingle();
-      roomOwnerId = roomRow?['owner_id'] as String?;
+      roomOwnerId = roomRow['owner_id'] as String?;
 
       await _loadSelfRpgForPresence();
 
       await supabase.from('study_room_members').upsert(
-        {'room_id': roomId, 'user_id': userId, 'left_at': null},
+        {'room_id': resolvedId, 'user_id': userId, 'left_at': null},
         onConflict: 'room_id,user_id',
       );
 
-      await _fetchMessages(roomId);
-      await _joinMessageChannel(roomId);
+      await _fetchMessages(resolvedId);
+      await _joinMessageChannel(resolvedId);
 
-      // presence 먼저 입장 → 스냅샷은 백그라운드(실시간 카메라 준비 후 1분 주기 업로드)
-      await _joinPresence(roomId: roomId, userId: userId, snapshotUrl: '');
-      unawaited(_finishJoinSnapshot(roomId: roomId, userId: userId));
+      await _joinPresence(
+        roomId: resolvedId,
+        userId: userId,
+        snapshotUrl: '',
+      );
+      unawaited(_finishJoinSnapshot(roomId: resolvedId, userId: userId));
       webSelfCamEpoch++;
+      return true;
     } catch (e) {
       error = '방 입장 실패: $e';
       debugPrint('[StudyRoomController] joinRoom error: $e');
+      roomId = null;
+      return false;
     } finally {
       joining = false;
       notifyListeners();
@@ -308,6 +404,7 @@ class StudyRoomController extends ChangeNotifier {
     final uid = _selfId;
 
     roomId = null;
+    joinCode = null;
     roomOwnerId = null;
     _selfId = null;
     _members = const [];

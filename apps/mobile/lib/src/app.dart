@@ -98,6 +98,14 @@ final _routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/room/join',
+        redirect: (context, state) {
+          final code = state.uri.queryParameters['code']?.trim() ?? '';
+          if (code.isEmpty) return '/room';
+          return '/room?join=${Uri.encodeComponent(code)}';
+        },
+      ),
+      GoRoute(
         path: '/home',
         redirect: (_, __) {
           final authed = Supabase.instance.client.auth.currentSession != null;

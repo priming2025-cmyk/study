@@ -18,20 +18,33 @@ cd "$ROOT"
 
 SUPA=(npx --yes supabase@latest)
 
-# 원격 ref: 환경변수 → apps/mobile/.env 의 SUPABASE_URL 호스트 순
+# 원격 ref: 환경변수 → apps/mobile/.env (또는 ..env) 의 SUPABASE_URL 호스트
+_ref_from_env_file() {
+  local f="$1"
+  [[ -f "$f" ]] || return 1
+  local url_line
+  url_line="$(grep -E '^[[:space:]]*SUPABASE_URL=' "$f" | head -1 || true)"
+  url_line="${url_line#SUPABASE_URL=}"
+  url_line="${url_line%\"}"
+  url_line="${url_line#\"}"
+  url_line="${url_line%/}"
+  if [[ "$url_line" =~ https?://([^.]+)\.supabase\.co ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
 REF="${SUPABASE_PROJECT_REF:-}"
 if [[ -z "$REF" ]]; then
-  ENV_FILE="$ROOT/apps/mobile/.env"
-  if [[ -f "$ENV_FILE" ]]; then
-    URL_LINE="$(grep -E '^[[:space:]]*SUPABASE_URL=' "$ENV_FILE" | head -1 || true)"
-    URL_LINE="${URL_LINE#SUPABASE_URL=}"
-    URL_LINE="${URL_LINE%\"}"
-    URL_LINE="${URL_LINE#\"}"
-    URL_LINE="${URL_LINE%/}"
-    if [[ "$URL_LINE" =~ https?://([^.]+)\.supabase\.co ]]; then
-      REF="${BASH_REMATCH[1]}"
+  MOBILE_ENV="$ROOT/apps/mobile"
+  for candidate in "$MOBILE_ENV/.env" "$MOBILE_ENV/..env"; do
+    REF="$(_ref_from_env_file "$candidate" || true)"
+    if [[ -n "$REF" && "$REF" != YOUR_* ]]; then
+      break
     fi
-  fi
+    REF=""
+  done
 fi
 if [[ -z "$REF" || "$REF" == YOUR_* ]]; then
   echo "원격 프로젝트 ref 를 알 수 없습니다." >&2

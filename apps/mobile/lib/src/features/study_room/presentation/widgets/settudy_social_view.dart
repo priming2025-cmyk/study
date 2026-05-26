@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../motivation/domain/motivation_models.dart';
 import 'friend_find_sheet.dart';
 import 'friend_status_section.dart';
+import 'recent_sets_empty_section.dart';
 import 'recent_sets_section.dart';
 import 'study_group_browser_sheet.dart';
 import '../../infra/study_room_recent_room.dart';
@@ -12,6 +13,7 @@ import '../../infra/study_room_recent_room.dart';
 /// 상단: 최근 셋(목표·참석자) / 하단: 인스타그램 DM 형식 메시지 목록.
 class SettudySocialView extends ConsumerWidget {
   final VoidCallback onCreateRoom;
+  final VoidCallback onJoinByCode;
   final List<RecentStudyRoom> recentRooms;
   final void Function(RecentStudyRoom room) onJoinRoom;
   final bool joining;
@@ -19,6 +21,7 @@ class SettudySocialView extends ConsumerWidget {
   const SettudySocialView({
     super.key,
     required this.onCreateRoom,
+    required this.onJoinByCode,
     required this.recentRooms,
     required this.onJoinRoom,
     this.joining = false,
@@ -32,7 +35,15 @@ class SettudySocialView extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        if (recentRooms.isNotEmpty)
+        if (recentRooms.isEmpty)
+          SliverToBoxAdapter(
+            child: RecentSetsEmptySection(
+              joining: joining,
+              onCreateRoom: onCreateRoom,
+              onJoin: onJoinByCode,
+            ),
+          )
+        else
           SliverToBoxAdapter(
             child: RecentSetsSection(
               rooms: recentRooms,

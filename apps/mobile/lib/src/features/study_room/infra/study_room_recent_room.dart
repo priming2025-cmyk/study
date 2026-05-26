@@ -8,22 +8,33 @@ const _maxRecentRooms = 10;
 /// 최근 접속한 셋 정보 모델.
 class RecentStudyRoom {
   final String roomId;
+  final String joinCode;
   final String goalText;
   final List<String> participantNames;
   final DateTime lastAccessedAt;
 
   const RecentStudyRoom({
     required this.roomId,
+    this.joinCode = '',
     required this.goalText,
     this.participantNames = const [],
     required this.lastAccessedAt,
   });
+
+  /// 카드·공유에 쓸 짧은 입장코드 (없으면 roomId 앞 6자).
+  String get displayCode {
+    if (joinCode.isNotEmpty) return joinCode;
+    final compact = roomId.replaceAll('-', '');
+    if (compact.length >= 6) return compact.substring(0, 6).toUpperCase();
+    return compact.toUpperCase();
+  }
 
   /// 참석자 표시 — 3명 이하면 전원, 초과 시 「이름 외 N명」.
   String get participantsLabel => formatParticipantNames(participantNames);
 
   Map<String, dynamic> toJson() => {
         'roomId': roomId,
+        'joinCode': joinCode,
         'goalText': goalText,
         'participantNames': participantNames,
         'lastAccessedAt': lastAccessedAt.toIso8601String(),
@@ -37,6 +48,7 @@ class RecentStudyRoom {
     }
     return RecentStudyRoom(
       roomId: json['roomId'] as String,
+      joinCode: json['joinCode'] as String? ?? '',
       goalText: json['goalText'] as String? ?? '',
       participantNames: names,
       lastAccessedAt:
@@ -64,6 +76,7 @@ String formatParticipantNames(List<String> names) {
 
 Future<void> saveRecentStudyRoom({
   required String roomId,
+  String joinCode = '',
   required String goalText,
   List<String> participantNames = const [],
 }) async {
@@ -73,6 +86,7 @@ Future<void> saveRecentStudyRoom({
   final updated = [
     RecentStudyRoom(
       roomId: roomId,
+      joinCode: joinCode,
       goalText: goalText,
       participantNames: participantNames,
       lastAccessedAt: DateTime.now(),

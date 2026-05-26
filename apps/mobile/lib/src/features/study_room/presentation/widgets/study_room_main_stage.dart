@@ -179,12 +179,12 @@ class StudyRoomMainStage extends StatelessWidget {
     }
     if (slot.isEmpty) {
       return _EmptyPeerSlot(
-        roomId: controller.roomId ?? '',
-        onTap: controller.roomId == null
+        onTap: controller.joinCode == null
             ? null
             : () => StudyRoomInviteSheet.show(
                   context,
-                  roomId: controller.roomId!,
+                  joinCode: controller.joinCode!,
+                  goalText: controller.goalText,
                 ),
       );
     }
@@ -216,10 +216,9 @@ class _Slot {
 
 // ── 빈 슬롯: + 친구초대 ──────────────────────────────────────
 class _EmptyPeerSlot extends StatelessWidget {
-  final String roomId;
   final VoidCallback? onTap;
 
-  const _EmptyPeerSlot({required this.roomId, this.onTap});
+  const _EmptyPeerSlot({this.onTap});
 
   @override
   Widget build(BuildContext context) {

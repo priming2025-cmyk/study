@@ -2,28 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// 셋터디 참여 초대 시트.
-/// "대기 중" 슬롯 탭 또는 별도 버튼에서 호출됩니다.
+import '../../infra/study_room_join_link.dart';
+
+/// 셋터디 참여 초대 시트 (짧은 입장코드 + 딥링크).
 class StudyRoomInviteSheet extends StatelessWidget {
-  final String roomId;
+  final String joinCode;
+  final String? goalText;
 
-  const StudyRoomInviteSheet({super.key, required this.roomId});
+  const StudyRoomInviteSheet({
+    super.key,
+    required this.joinCode,
+    this.goalText,
+  });
 
-  static Future<void> show(BuildContext context, {required String roomId}) {
+  static Future<void> show(
+    BuildContext context, {
+    required String joinCode,
+    String? goalText,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => StudyRoomInviteSheet(roomId: roomId),
+      builder: (_) => StudyRoomInviteSheet(joinCode: joinCode, goalText: goalText),
     );
   }
 
-  String get _inviteText =>
-      '우리 같이 공부하자!\n입장코드: $roomId\n\n셋터디(setudy) 앱을 열고 입력해 보세요!';
+  String get _inviteText => studyRoomInviteMessage(
+        joinCode: joinCode,
+        goalText: goalText,
+      );
+
+  String get _link => studyRoomJoinLink(joinCode);
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final code = joinCode.trim().toUpperCase();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
@@ -36,7 +51,6 @@ class StudyRoomInviteSheet extends StatelessWidget {
             style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
-          // 메시지 미리보기 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -51,42 +65,62 @@ class StudyRoomInviteSheet extends StatelessWidget {
                   '우리 같이 공부하자!',
                   style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 6),
+                if (goalText != null && goalText!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '목표: ${goalText!.trim()}',
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Text(
-                      '입장코드: ',
+                      '입장코드 ',
                       style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                     Text(
-                      roomId,
-                      style: tt.bodyMedium?.copyWith(
+                      code,
+                      style: tt.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: cs.primary,
-                        letterSpacing: 1.2,
+                        letterSpacing: 2,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: roomId));
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.copy_rounded, size: 18, color: cs.primary),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: code));
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('입장코드가 복사됐어요')),
                         );
                       },
-                      child: Icon(Icons.copy_rounded, size: 16, color: cs.primary),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '링크를 누르면 앱에서 바로 입장할 수 있어요',
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 4),
+                SelectableText(
+                  _link,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.primary,
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          // 공유 버튼 (네이티브 공유 시트)
           FilledButton.icon(
             onPressed: () {
               SharePlus.instance.share(
-                ShareParams(text: _inviteText, subject: '셋터디 초대'),
+                ShareParams(text: _inviteText, subject: 'Setudy 셋터디 초대'),
               );
             },
             icon: const Icon(Icons.share_rounded),
@@ -108,7 +142,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
               );
             },
             icon: const Icon(Icons.content_copy_rounded),
-            label: const Text('텍스트 복사'),
+            label: const Text('메시지 복사'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
               shape: RoundedRectangleBorder(
