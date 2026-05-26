@@ -10,7 +10,7 @@ import '../../../core/ui/app_snacks.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/infra/web_shared_camera.dart';
-import '../../session/presentation/widgets/engaged_sensitivity_metro_card.dart';
+import '../../session/presentation/widgets/session_settings_sheet.dart';
 import '../../session/presentation/widgets/session_end_result_sheet.dart';
 import '../domain/study_room_reward_config.dart';
 import '../infra/study_room_controller.dart';
@@ -82,18 +82,13 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: EngagedSensitivityMetroCard(
-            engagedMinScore: cur,
-            onSelect: (v) async {
-              await saveEngagedMinScore(v);
-              _engagedMinScoreN.value = v;
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-          ),
-        ),
+      builder: (ctx) => SessionSettingsSheet(
+        engagedMinScore: cur,
+        onSelectSensitivity: (v) async {
+          await saveEngagedMinScore(v);
+          _engagedMinScoreN.value = v;
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        },
       ),
     );
   }

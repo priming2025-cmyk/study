@@ -19,7 +19,7 @@ import '../../study_room/presentation/widgets/study_room_ambient_sheet.dart';
 import '../domain/attention_scoring.dart';
 import '../infra/session_self_camera.dart';
 import 'session_controller.dart';
-import 'widgets/engaged_sensitivity_metro_card.dart';
+import 'widgets/session_settings_sheet.dart';
 import 'widgets/session_end_result_sheet.dart';
 import 'widgets/session_bottom_bars.dart';
 import 'widgets/subject_picker_card.dart';
@@ -68,17 +68,12 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: EngagedSensitivityMetroCard(
-            engagedMinScore: _c.engagedMinScore,
-            onSelect: (v) async {
-              _c.setEngagedMinScore(v);
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-          ),
-        ),
+      builder: (ctx) => SessionSettingsSheet(
+        engagedMinScore: _c.engagedMinScore,
+        onSelectSensitivity: (v) async {
+          _c.setEngagedMinScore(v);
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        },
       ),
     );
   }

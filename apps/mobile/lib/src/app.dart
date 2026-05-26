@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/routing/go_router_refresh_stream.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/app_theme_provider.dart';
 import 'core/theme/theme_lab_screen.dart';
 import 'features/auth/auth_feature_flags.dart';
 import 'features/auth/presentation/login_screen.dart';
@@ -157,11 +158,12 @@ class StudyUpApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(_routerProvider);
+    final themeId = ref.watch(appThemeIdProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       onGenerateTitle: (ctx) => AppLocalizations.of(ctx).appTitle,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.light(themeId),
+      darkTheme: AppTheme.dark(themeId),
       themeMode: ThemeMode.system,
       localeListResolutionCallback: (deviceLocales, supported) {
         const fallback = Locale('ko');
