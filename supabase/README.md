@@ -44,7 +44,7 @@
 
 Supabase **기본 제공 목록에 네이버 전용 항목이 없을 수 있습니다.** 이 경우 **Custom OAuth / OIDC** 로 네이버를 추가하고, 대시보드에 표시되는 **Provider ID** 가 앱에서 보내는 값과 **완전히 같아야** 합니다.
 
-Study-up 앱은 기본으로 `OAuthProvider('naver')` 즉 **`naver`** 라는 이름으로 요청합니다. 대시보드에서 만든 커스텀 Provider ID가 `naver` 가 아니면, `apps/mobile/lib/src/features/auth/domain/study_up_oauth.dart` 의 문자열을 대시보드 값에 맞게 바꿉니다.
+Setudy 앱은 기본으로 `OAuthProvider('naver')` 즉 **`naver`** 라는 이름으로 요청합니다. 대시보드에서 만든 커스텀 Provider ID가 `naver` 가 아니면, `apps/mobile/lib/src/features/auth/domain/setudy_oauth.dart` 의 문자열을 대시보드 값에 맞게 바꿉니다.
 
 네이버 개발자센터의 Callback URL에도 동일하게  
 `https://<ref>.supabase.co/auth/v1/callback`  

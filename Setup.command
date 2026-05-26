@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MOBILE_DIR="$ROOT_DIR/apps/mobile"
 
 echo ""
-echo "== Study-up: 로컬 실행 준비(Setup) =="
+echo "== Setudy: 로컬 실행 준비(Setup) =="
 echo "워크스페이스: $ROOT_DIR"
 echo ""
 

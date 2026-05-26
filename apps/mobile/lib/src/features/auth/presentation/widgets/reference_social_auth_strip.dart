@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../domain/study_up_oauth.dart';
+import '../../domain/setudy_oauth.dart';
 
 /// NOL/트리플 스타일: 흰 배경 · 얇은 테두리 · 좌측 로고 · 가운데 정렬 문구 (애플 제외).
 class ReferenceSocialAuthStrip extends StatelessWidget {
@@ -43,7 +43,7 @@ class ReferenceSocialAuthStrip extends StatelessWidget {
         ),
         SizedBox(height: spacing),
         _OutlinedSocialTile(
-          onTap: enabled ? () => onProviderTap(StudyUpOAuth.naver) : null,
+          onTap: enabled ? () => onProviderTap(SetudyOAuth.naver) : null,
           outlineColor: outline.color,
           leading: Container(
             width: 34,

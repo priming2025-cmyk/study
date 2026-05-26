@@ -7,14 +7,14 @@ part 'app_database.g.dart';
 QueryExecutor _openStudyExecutor() {
   if (kIsWeb) {
     return driftDatabase(
-      name: 'study_up',
+      name: 'setudy',
       web: DriftWebOptions(
         sqlite3Wasm: Uri.parse('sqlite3.wasm'),
         driftWorker: Uri.parse('drift_worker.dart.js'),
       ),
     );
   }
-  return driftDatabase(name: 'study_up');
+  return driftDatabase(name: 'setudy');
 }
 
 class LocalPlans extends Table {

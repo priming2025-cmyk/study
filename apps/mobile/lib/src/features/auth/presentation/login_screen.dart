@@ -1,9 +1,11 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/branding/setudy_logo.dart';
+import '../../../core/supabase/auth_redirect_config.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../infra/auth_login_error_message.dart';
@@ -77,6 +79,11 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  void _goHomeAfterAuth() {
+    if (!mounted) return;
+    GoRouter.of(context).go('/session');
+  }
+
   // ── 로그인 ──────────────────────────────────────────────────
 
   Future<void> _signIn() async {
@@ -105,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen>
         await prefs.remove(_prefPasswordKey);
       }
       if (!mounted) return;
-      context.go('/session');
+      _goHomeAfterAuth();
     } on AuthException catch (e) {
       if (!mounted) return;
       AppSnacks.show(context, AuthLoginErrorMessage.forSignIn(e));
@@ -133,11 +140,13 @@ class _LoginScreenState extends State<LoginScreen>
       final res = await supabase.auth.signUp(
         email: _emailSignUp.text.trim(),
         password: _pwSignUp.text.trim(),
+        emailRedirectTo:
+            kIsWeb ? '${AuthRedirectConfig.oauthRedirectUri()}/session' : null,
       );
       if (!mounted) return;
       if (res.session != null) {
         // 이메일 인증 비활성화 시 세션이 바로 생성됩니다.
-        context.go('/session');
+        _goHomeAfterAuth();
         return;
       }
       // 이메일 확인이 필요한 경우 안내
@@ -296,29 +305,7 @@ class _BrandHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha(30),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.school_rounded, size: 24, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'setudy',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
-                ),
-              ),
-            ],
-          ),
+          const SetudyLogo.lightHeader(iconSize: 44, fontSize: 26),
           const SizedBox(height: 14),
           const Text(
             '계획하고, 집중하고, 성장해요.',

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:study_up/l10n/app_localizations.dart';
+import 'package:setudy/l10n/app_localizations.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/supabase/supabase_client.dart';

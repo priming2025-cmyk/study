@@ -56,6 +56,6 @@ Future<void> main() async {
     unawaited(warmUpWebAttentionStack());
   }
 
-  runApp(const ProviderScope(child: StudyUpApp()));
+  runApp(const ProviderScope(child: SetudyApp()));
 }
 

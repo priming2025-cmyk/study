@@ -1,5 +1,5 @@
-name: study_up
-description: Study-up MVP (on-device attention + minimal server)
+name: setudy
+description: Setudy — on-device attention study app
 publish_to: "none"
 version: 0.1.0
 

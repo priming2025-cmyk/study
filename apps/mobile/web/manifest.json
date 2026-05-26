@@ -1,6 +1,6 @@
 {
-    "name": "study_up",
-    "short_name": "study_up",
+    "name": "Setudy",
+    "short_name": "Setudy",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

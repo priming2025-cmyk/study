@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:study_up/l10n/app_localizations.dart';
+import 'package:setudy/l10n/app_localizations.dart';
 
 class LoginLegalFooter extends StatelessWidget {
   const LoginLegalFooter({super.key, required this.l10n});

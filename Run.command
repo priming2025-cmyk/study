@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MOBILE_DIR="$ROOT_DIR/apps/mobile"
 
 echo ""
-echo "== Study-up: 앱 실행(Run) =="
+echo "== Setudy: 앱 실행(Run) =="
 echo ""
 
 if ! command -v flutter >/dev/null 2>&1; then

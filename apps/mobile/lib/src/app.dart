@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:study_up/l10n/app_localizations.dart';
+import 'package:setudy/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +27,19 @@ import 'shell/app_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
+/// Supabase Site URL 등으로 들어오는 잘못된 경로를 정규화합니다.
+String? _normalizeUnknownEntryPath(String path, {required bool authed}) {
+  final trimmed = path.trim();
+  final lower = trimmed.toLowerCase().replaceAll(' ', '');
+  if (trimmed == '/' ||
+      lower == '/home' ||
+      trimmed == '/Home' ||
+      lower == 'home') {
+    return authed ? '/session' : '/login';
+  }
+  return null;
+}
+
 final _routerProvider = Provider<GoRouter>((ref) {
   final authStream = Supabase.instance.client.auth.onAuthStateChange;
   return GoRouter(
@@ -35,29 +48,62 @@ final _routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
       final session = Supabase.instance.client.auth.currentSession;
-      final onLogin = state.matchedLocation == '/login';
-      final onSignUp = state.matchedLocation == '/signup';
-      final onAuthScreen = onLogin || onSignUp;
       final authed = session != null;
-      final themeLab = kDebugMode && state.matchedLocation == '/dev/theme';
-      final legal = state.matchedLocation.startsWith('/legal/');
+      final loc = state.uri.path;
 
-      // /signup 경로는 /login 으로 통합됨 (로그인 화면 내 탭 전환)
+      final normalized = _normalizeUnknownEntryPath(loc, authed: authed);
+      if (normalized != null) return normalized;
+
+      final onLogin = loc == '/login';
+      final onSignUp = loc == '/signup';
+      final onAuthScreen = onLogin || onSignUp;
+      final themeLab = kDebugMode && loc == '/dev/theme';
+      final legal = loc.startsWith('/legal/');
+
       if (onSignUp) return '/login';
 
       const skipLoginGate =
           kDebugMode && AuthFeatureFlags.devBypassAuthGate;
-      if (!authed &&
-          !skipLoginGate &&
-          !onAuthScreen &&
-          !themeLab &&
-          !legal) {
+      if (!authed && !skipLoginGate && !onAuthScreen && !themeLab && !legal) {
         return '/login';
       }
       if (authed && onAuthScreen) return '/session';
       return null;
     },
+    errorBuilder: (context, state) {
+      final authed = Supabase.instance.client.auth.currentSession != null;
+      final target = authed ? '/session' : '/login';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.go(target);
+        }
+      });
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    },
     routes: [
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          final authed = Supabase.instance.client.auth.currentSession != null;
+          return authed ? '/session' : '/login';
+        },
+      ),
+      GoRoute(
+        path: '/Home',
+        redirect: (_, __) {
+          final authed = Supabase.instance.client.auth.currentSession != null;
+          return authed ? '/session' : '/login';
+        },
+      ),
+      GoRoute(
+        path: '/home',
+        redirect: (_, __) {
+          final authed = Supabase.instance.client.auth.currentSession != null;
+          return authed ? '/session' : '/login';
+        },
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
@@ -101,7 +147,6 @@ final _routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),
         branches: [
-          // 0: 공부 (기본 화면)
           StatefulShellBranch(
             preload: true,
             routes: [
@@ -111,11 +156,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: '/session/quick',
-                builder: (context, state) => const SessionScreen(autoStart: true),
+                builder: (context, state) =>
+                    const SessionScreen(autoStart: true),
               ),
             ],
           ),
-          // 1: 계획
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -124,7 +169,6 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // 2: 셋터디
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -133,11 +177,11 @@ final _routerProvider = Provider<GoRouter>((ref) {
               ),
               GoRoute(
                 path: '/room/quick',
-                builder: (context, state) => const StudyRoomScreen(quickJoin: true),
+                builder: (context, state) =>
+                    const StudyRoomScreen(quickJoin: true),
               ),
             ],
           ),
-          // 3: 기록
           StatefulShellBranch(
             routes: [
               GoRoute(
@@ -152,8 +196,8 @@ final _routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class StudyUpApp extends ConsumerWidget {
-  const StudyUpApp({super.key});
+class SetudyApp extends ConsumerWidget {
+  const SetudyApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -190,4 +234,3 @@ class StudyUpApp extends ConsumerWidget {
     );
   }
 }
-

@@ -1,4 +1,4 @@
-# study_up (Study-up)
+# Setudy
 
 ## Vercel에 웹 배포
 

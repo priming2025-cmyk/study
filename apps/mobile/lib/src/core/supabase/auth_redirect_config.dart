@@ -11,6 +11,6 @@ abstract final class AuthRedirectConfig {
       return Uri.base.origin;
     }
     // 네이티브 OAuth 시 AndroidManifest / iOS URL Types와 맞춰 등록하세요.
-    return 'studyup://auth-callback';
+    return 'setudy://auth-callback';
   }
 }
