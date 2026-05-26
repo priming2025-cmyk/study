@@ -43,6 +43,16 @@ class ProfileRpgSummary {
   }
 }
 
+class FriendSearchResult {
+  final String userId;
+  final String displayName;
+
+  const FriendSearchResult({
+    required this.userId,
+    required this.displayName,
+  });
+}
+
 class FriendRow {
   final String peerId;
   final String displayName;

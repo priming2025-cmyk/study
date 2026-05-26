@@ -8,33 +8,42 @@ const _maxRecentRooms = 10;
 /// 최근 접속한 셋 정보 모델.
 class RecentStudyRoom {
   final String roomId;
-  final String roomName;
   final String goalText;
+  final List<String> participantNames;
   final DateTime lastAccessedAt;
 
   const RecentStudyRoom({
     required this.roomId,
-    required this.roomName,
     required this.goalText,
+    this.participantNames = const [],
     required this.lastAccessedAt,
   });
 
+  /// 참석자 표시 — 3명 이하면 전원, 초과 시 「이름 외 N명」.
+  String get participantsLabel => formatParticipantNames(participantNames);
+
   Map<String, dynamic> toJson() => {
         'roomId': roomId,
-        'roomName': roomName,
         'goalText': goalText,
+        'participantNames': participantNames,
         'lastAccessedAt': lastAccessedAt.toIso8601String(),
       };
 
-  factory RecentStudyRoom.fromJson(Map<String, dynamic> json) =>
-      RecentStudyRoom(
-        roomId: json['roomId'] as String,
-        roomName: json['roomName'] as String? ?? '셋터디방',
-        goalText: json['goalText'] as String? ?? '',
-        lastAccessedAt:
-            DateTime.tryParse(json['lastAccessedAt'] as String? ?? '') ??
-                DateTime.now(),
-      );
+  factory RecentStudyRoom.fromJson(Map<String, dynamic> json) {
+    final rawNames = json['participantNames'];
+    List<String> names = const [];
+    if (rawNames is List) {
+      names = rawNames.map((e) => e.toString()).where((n) => n.isNotEmpty).toList();
+    }
+    return RecentStudyRoom(
+      roomId: json['roomId'] as String,
+      goalText: json['goalText'] as String? ?? '',
+      participantNames: names,
+      lastAccessedAt:
+          DateTime.tryParse(json['lastAccessedAt'] as String? ?? '') ??
+              DateTime.now(),
+    );
+  }
 
   String get lastAccessedLabel {
     final diff = DateTime.now().difference(lastAccessedAt);
@@ -45,10 +54,18 @@ class RecentStudyRoom {
   }
 }
 
+/// 참석자 이름 목록을 카드용 한 줄 문자열로 변환.
+String formatParticipantNames(List<String> names) {
+  final filtered = names.map((n) => n.trim()).where((n) => n.isNotEmpty).toList();
+  if (filtered.isEmpty) return '참석자 없음';
+  if (filtered.length <= 3) return filtered.join(', ');
+  return '${filtered.first} 외 ${filtered.length - 1}명';
+}
+
 Future<void> saveRecentStudyRoom({
   required String roomId,
   required String goalText,
-  String roomName = '셋터디방',
+  List<String> participantNames = const [],
 }) async {
   final sp = await SharedPreferences.getInstance();
   final rooms = await loadRecentStudyRooms();
@@ -56,8 +73,8 @@ Future<void> saveRecentStudyRoom({
   final updated = [
     RecentStudyRoom(
       roomId: roomId,
-      roomName: roomName,
       goalText: goalText,
+      participantNames: participantNames,
       lastAccessedAt: DateTime.now(),
     ),
     ...filtered,
@@ -83,7 +100,6 @@ Future<List<RecentStudyRoom>> loadRecentStudyRooms() async {
       return [
         RecentStudyRoom(
           roomId: oldId,
-          roomName: '최근 셋',
           goalText: goal,
           lastAccessedAt: DateTime.now(),
         ),

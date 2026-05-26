@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/providers/core_providers.dart';
+import '../../../motivation/domain/motivation_models.dart';
+
 /// 친구 실시간 상태 열거형.
 enum FriendStudyStatus {
   studying,   // 집중 중 (공부 세션 실행 중) → 초대 불가
@@ -26,6 +29,13 @@ class FriendPresence {
     this.studyingSubject,
   });
 }
+
+/// 셋터디 DM 목록용 — 맺은 친구 목록 (`list_friends` RPC).
+final settudyDmFriendsProvider =
+    FutureProvider.autoDispose<List<FriendRow>>((ref) async {
+  final repo = ref.watch(motivationRepositoryProvider);
+  return repo.listFriends();
+});
 
 /// Supabase presence/friend 데이터를 가져오는 Provider.
 /// 실제 구현은 Supabase Realtime presence 채널 또는 DB poll을 사용.

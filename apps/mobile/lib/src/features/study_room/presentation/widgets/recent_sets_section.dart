@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../infra/study_room_recent_room.dart';
 
-/// 최근 접속한 셋을 가로 스크롤 카드로 표시하는 섹션.
-/// 3개까지 화면에 딱 맞게 보이고, 그 이상은 좌우 스와이프.
+/// 최근 접속한 셋을 가로 스크롤 카드로 표시.
+/// 카드 상단: 스터디 그룹 목표 / 하단: 참석자.
 class RecentSetsSection extends StatelessWidget {
   final List<RecentStudyRoom> rooms;
   final bool joining;
@@ -37,7 +37,6 @@ class RecentSetsSection extends StatelessWidget {
                 '최근 셋',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface,
                     ),
               ),
             ],
@@ -45,10 +44,9 @@ class RecentSetsSection extends StatelessWidget {
         ),
         LayoutBuilder(
           builder: (context, constraints) {
-            // 화면에 딱 3개가 보이도록 카드 너비 계산
             final cardWidth = (constraints.maxWidth - 32 - 8 * 2) / 3;
             return SizedBox(
-              height: 88,
+              height: 100,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -87,65 +85,52 @@ class _RecentSetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final goal = room.goalText.trim().isEmpty ? '목표를 설정해 보세요' : room.goalText;
 
     return SizedBox(
       width: width,
       child: Material(
-        color: cs.primaryContainer.withValues(alpha: 0.4),
+        color: cs.primaryContainer.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: joining ? null : onTap,
           borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  goal,
+                  style: tt.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const Spacer(),
                 Row(
                   children: [
                     Icon(
-                      Icons.groups_2_rounded,
-                      size: 14,
-                      color: cs.primary,
+                      Icons.people_outline_rounded,
+                      size: 12,
+                      color: cs.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 3),
                     Expanded(
                       child: Text(
-                        room.lastAccessedLabel,
+                        room.participantsLabel,
                         style: TextStyle(
                           fontSize: 10,
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
+                          color: cs.onSurfaceVariant,
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: Text(
-                    room.roomName,
-                    style: tt.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (room.goalText.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    room.goalText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ],
             ),
           ),

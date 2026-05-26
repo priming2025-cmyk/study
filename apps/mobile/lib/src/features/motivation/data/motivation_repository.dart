@@ -102,6 +102,28 @@ class MotivationRepository {
         .toList();
   }
 
+  /// 이름·이메일·UUID로 친구 후보 검색 (RPC `find_users_for_friend`).
+  Future<List<FriendSearchResult>> findUsersForFriend(String query) async {
+    final q = query.trim();
+    if (q.length < 2) return const [];
+    try {
+      final rows = await supabase.rpc('find_users_for_friend', params: {
+        'p_query': q,
+      });
+      if (rows is! List) return const [];
+      return rows
+          .map(
+            (e) => FriendSearchResult(
+              userId: e['user_id'] as String,
+              displayName: e['display_name'] as String? ?? '사용자',
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> sendFriendRequest({required String toUserId}) async {
     await supabase.from('friend_requests').insert({
       'from_user_id': supabase.auth.currentUser!.id,

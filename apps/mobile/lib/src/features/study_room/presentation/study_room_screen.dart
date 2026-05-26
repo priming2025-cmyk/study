@@ -77,6 +77,28 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
+  List<String> _memberDisplayNames() {
+    return _controller.members
+        .map((m) => m.displayName?.trim() ?? '')
+        .where((n) => n.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> _persistRecentRoom() async {
+    final id = _controller.roomId;
+    if (id == null) return;
+    await saveRecentStudyRoom(
+      roomId: id,
+      goalText: _controller.goalText,
+      participantNames: _memberDisplayNames(),
+    );
+    if (mounted) {
+      setState(() {
+        _recentFuture = loadRecentStudyRooms();
+      });
+    }
+  }
+
   Future<void> _openSensitivitySheet() async {
     final cur = _engagedMinScoreN.value;
     await showModalBottomSheet<void>(
@@ -102,14 +124,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       await _controller.joinRoom(roomId: roomId, goalText: goal);
       if (_controller.roomId != null) {
         _controller.startFocusTracking(_engagedMinScoreN.value);
-        await saveRecentStudyRoom(
-          roomId: roomId,
-          goalText: goal,
-          roomName: _roomNameCtrl.text.trim().isEmpty
-              ? '셋터디방'
-              : _roomNameCtrl.text.trim(),
-        );
-        _recentFuture = loadRecentStudyRooms();
+        await _persistRecentRoom();
       }
       if (_controller.error != null && mounted) {
         AppSnacks.showWithMessenger(messenger, _controller.error!);
@@ -128,8 +143,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await _controller.joinRoom(roomId: id, goalText: goal);
     if (_controller.roomId != null) {
       _controller.startFocusTracking(_engagedMinScoreN.value);
-      await saveRecentStudyRoom(roomId: id, goalText: goal);
-      _recentFuture = loadRecentStudyRooms();
+      await _persistRecentRoom();
     }
     if (_controller.error != null && mounted) {
       AppSnacks.showWithMessenger(messenger, _controller.error!);
@@ -147,8 +161,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await _controller.joinRoom(roomId: roomId, goalText: goal);
     if (_controller.roomId != null) {
       _controller.startFocusTracking(_engagedMinScoreN.value);
-      await saveRecentStudyRoom(roomId: roomId, goalText: goal);
-      _recentFuture = loadRecentStudyRooms();
+      await _persistRecentRoom();
     }
     if (_controller.error != null && mounted) {
       AppSnacks.showWithMessenger(messenger, _controller.error!);
@@ -169,8 +182,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await _controller.joinRoom(roomId: rid, goalText: goal);
     if (_controller.roomId != null) {
       _controller.startFocusTracking(_engagedMinScoreN.value);
-      await saveRecentStudyRoom(roomId: rid, goalText: goal);
-      _recentFuture = loadRecentStudyRooms();
+      await _persistRecentRoom();
     }
     if (_controller.error != null && mounted) {
       AppSnacks.showWithMessenger(
@@ -214,6 +226,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     final summary = _controller.endFocusTracking();
+    await _persistRecentRoom();
     await _controller.leave();
     if (!mounted) return;
 
