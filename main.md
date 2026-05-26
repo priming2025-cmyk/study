@@ -1,7 +1,7 @@
 # Setudy (study_up) — 제품·기술 통합 문서
 
 > **목적**: 이 파일만 읽고 Cursor 등에서 **거의 동일한 앱**을 다른 폴더에 재구현할 수 있도록, 프론트/백엔드·탭 UX·집중력(얼굴) 감지까지 한곳에 정리합니다.  
-> **최종 갱신**: 2026-05-25  
+> **최종 갱신**: 2026-05-26  
 > **앱 패키지명**: `study_up` · **저장소 루트**: `setudy/`
 
 ---
@@ -56,7 +56,7 @@
 | 대상 | 경로·명령 |
 |------|-----------|
 | 웹 | **Vercel** — Root `apps/mobile`, `tool/vercel_build.sh` → `flutter build web` |
-| DB 마이그레이션 | `supabase/migrations/*.sql` (001~0024) |
+| DB 마이그레이션 | `supabase/migrations/*.sql` (001~0026) · 원격 반영: `npm run db:push` |
 | 웹 정적 자산 | `apps/mobile/web/` — `index.html`, `mediapipe/face_landmarker.task` (~3.6MB) |
 | 환경 변수 (Vercel) | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, 선택 `PREMIUM_VIDEO_ENABLED`, TURN_* |
 
@@ -324,7 +324,8 @@ iPhone 주 경로는 **HTML에서 이미 시작하는 MediaPipe**가 더 중요.
 | 테이블 | 용도 |
 |--------|------|
 | `profiles` | auth.users 1:1, role(student/parent/…) |
-| `plans` / `plan_items` | 일별 계획·과목·목표 초 |
+| `plans` / `plan_items` | 일별 계획·과목·목표 초 (`repeat_series_id`로 반복 묶음) |
+| `plan_repeat_series` | 반복 규칙(주/일, `repeat_interval`, 기간, 요일) — 일괄 삭제용 |
 | `study_sessions` | 세션 요약만 (started/ended, focused_seconds, scores, validation) |
 | `parent_links` | 부모-자녀 |
 | `coin_balances` / `coin_events` | 블럭·교환 코인 (asset=block/coin) |
@@ -338,6 +339,11 @@ iPhone 주 경로는 **HTML에서 이미 시작하는 MediaPipe**가 더 중요.
 - `0018` — 호스트 이전  
 - `0019` / `0020` — RLS 재귀 방지  
 - **`0024_study_room_bonus.sql`** — `award_study_room_bonus_for_session` (퇴장 블럭 보너스)
+- **`0025_plan_repeat_series.sql`** — `plan_repeat_series` + `plan_items.repeat_series_id` (컬럼명 `repeat_interval` — PostgreSQL `interval` 타입과 충돌 방지)
+- **`0026_plan_repeat_series_rename_interval.sql`** — 예전 0025의 `interval` 컬럼만 있을 때 rename
+
+**반복 계획 SQL 수동 적용** (대시보드만 쓸 때): `supabase/sql/반복계획_필수수정.sql`  
+**CLI로 일괄 적용** (권장): 저장소 루트에서 `npm run db:push` (Supabase CLI 로그인·`apps/mobile/.env`의 URL ref 필요)
 
 ### 6.3 클라이언트 Supabase
 
@@ -394,7 +400,7 @@ iPhone 주 경로는 **HTML에서 이미 시작하는 MediaPipe**가 더 중요.
 
 ### 8.4 DB
 
-- [ ] `supabase/migrations/0001_init.sql` 이후 순서대로 적용
+- [ ] `supabase/migrations/0001_init.sql` 이후 순서대로 적용 (반복 계획: **0025·0026**)
 
 ---
 

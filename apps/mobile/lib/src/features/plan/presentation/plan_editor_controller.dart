@@ -140,7 +140,7 @@ class PlanEditorController extends ChangeNotifier {
       final startD = repeatCfg.startDate ?? anchor;
       final endD = repeatCfg.endDate ?? anchor.add(const Duration(days: 30));
       final startMinutes = startTime != null ? (startTime.hour * 60 + startTime.minute) : null;
-      seriesId = await _repo.createRepeatSeries(
+      seriesId = await _repo.tryCreateRepeatSeries(
         subject: trimmed,
         targetSeconds: targetMinutes * 60,
         unit: unit,

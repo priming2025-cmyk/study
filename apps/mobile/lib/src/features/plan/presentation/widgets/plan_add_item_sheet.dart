@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../data/custom_subject_store.dart';
+import '../../data/plan_repository.dart';
 import '../../data/plan_models.dart';
 import '../../data/plan_repeat_config.dart';
 import 'compact_subject_grid.dart';
@@ -111,6 +114,18 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     super.dispose();
   }
 
+  static String _planAddErrorMessage(Object e) {
+    if (PlanRepository.isRepeatSchemaUnavailable(e)) {
+      return '반복 일괄 삭제를 쓰려면 Supabase SQL Editor에서 '
+          'supabase/sql/반복계획_필수수정.sql 을 실행해 주세요.';
+    }
+    if (e is PostgrestException) {
+      final msg = e.message.trim();
+      if (msg.isNotEmpty) return msg;
+    }
+    return e.toString();
+  }
+
   PlanRepeatConfig get _repeatConfig {
     if (_repeatNone || _editing) return const PlanRepeatConfig();
     return PlanRepeatConfig(
@@ -204,7 +219,11 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editing ? '저장 실패: $e' : '추가 실패: $e')),
+          SnackBar(
+            content: Text(
+              _editing ? '저장 실패: ${_planAddErrorMessage(e)}' : '추가 실패: ${_planAddErrorMessage(e)}',
+            ),
+          ),
         );
       }
     } finally {

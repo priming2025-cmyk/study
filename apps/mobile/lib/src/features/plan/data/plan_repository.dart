@@ -19,6 +19,29 @@ class PlanRepository {
         .substring(0, 10);
   }
 
+  /// 반복 시리즈 테이블/컬럼이 아직 없을 때(PostgREST PGRST204 등).
+  static bool isRepeatSchemaUnavailable(Object e) {
+    if (e is PostgrestException) {
+      final code = e.code ?? '';
+      if (code == 'PGRST204' ||
+          code == 'PGRST205' ||
+          code == '42P01' ||
+          code == '42703') {
+        return true;
+      }
+      final msg = e.message.toLowerCase();
+      if (msg.contains('plan_repeat_series') ||
+          msg.contains('repeat_series_id')) {
+        return true;
+      }
+      // PostgreSQL reserved type `interval` + JSON key "interval"
+      if (msg.contains('invalid input syntax for type interval')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// FK(profiles) 때문에 계획 insert가 실패하는 경우를 막기 위해, 본인 프로필 행을 보장합니다.
   /// Supabase에 `profiles_insert_own` RLS가 있어야 합니다.
   /// (저장소 루트에서 `npm run db:push` 또는 SQL Editor로 `supabase/sql/0011_profiles_insert_own.sql`·`과목추가_필수수정.sql` 적용)
@@ -193,6 +216,60 @@ class PlanRepository {
     }
   }
 
+  List<Map<String, dynamic>> _planItemInsertPayloads({
+    required String planId,
+    required String subject,
+    required int targetSeconds,
+    DateTime? scheduledStartAtUtc,
+    required bool reminderEnabled,
+    String? repeatSeriesId,
+  }) {
+    final linkSeries = repeatSeriesId != null && repeatSeriesId.isNotEmpty;
+    return <Map<String, dynamic>>[
+      if (scheduledStartAtUtc != null || reminderEnabled)
+        {
+          'plan_id': planId,
+          'subject': subject,
+          'target_seconds': targetSeconds,
+          'priority': 0,
+          if (scheduledStartAtUtc != null)
+            'scheduled_start_at': scheduledStartAtUtc.toIso8601String(),
+          'reminder_enabled': reminderEnabled,
+          if (linkSeries) 'repeat_series_id': repeatSeriesId,
+        },
+      {
+        'plan_id': planId,
+        'subject': subject,
+        'target_seconds': targetSeconds,
+        'priority': 0,
+        if (linkSeries) 'repeat_series_id': repeatSeriesId,
+      },
+      {
+        'plan_id': planId,
+        'subject': subject,
+        'target_seconds': targetSeconds,
+        if (linkSeries) 'repeat_series_id': repeatSeriesId,
+      },
+    ];
+  }
+
+  Future<Map<String, dynamic>> _insertPlanItemRow(Map<String, dynamic> row) async {
+    try {
+      return await supabase
+          .from('plan_items')
+          .insert(row)
+          .select('id, subject, target_seconds, repeat_series_id')
+          .single();
+    } catch (e) {
+      if (!isRepeatSchemaUnavailable(e)) rethrow;
+      return await supabase
+          .from('plan_items')
+          .insert(row)
+          .select('id, subject, target_seconds')
+          .single();
+    }
+  }
+
   Future<PlanItem> addItem({
     required String planId,
     required String subject,
@@ -203,56 +280,40 @@ class PlanRepository {
   }) async {
     await ensureProfileRow();
 
-    final payloads = <Map<String, dynamic>>[
-      if (scheduledStartAtUtc != null || reminderEnabled)
-        {
-          'plan_id': planId,
-          'subject': subject,
-          'target_seconds': targetSeconds,
-          'priority': 0,
-          if (scheduledStartAtUtc != null)
-            'scheduled_start_at': scheduledStartAtUtc.toIso8601String(),
-          'reminder_enabled': reminderEnabled,
-          if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
-        },
-      {
-        'plan_id': planId,
-        'subject': subject,
-        'target_seconds': targetSeconds,
-        'priority': 0,
-        if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
-      },
-      {
-        'plan_id': planId,
-        'subject': subject,
-        'target_seconds': targetSeconds,
-        if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
-      },
-    ];
+    final seriesAttempts = repeatSeriesId != null && repeatSeriesId.isNotEmpty
+        ? <String?>[repeatSeriesId, null]
+        : <String?>[null];
 
     Object? lastErr;
-    for (final row in payloads) {
-      try {
-        final inserted = await supabase
-            .from('plan_items')
-            .insert(row)
-            .select('id, subject, target_seconds, repeat_series_id')
-            .single();
-        return PlanItem(
-          id: inserted['id'] as String,
-          subject: inserted['subject'] as String,
-          targetSeconds: (inserted['target_seconds'] as num).toInt(),
-          actualSeconds: 0,
-          isDone: false,
-          scheduledStartAt: scheduledStartAtUtc,
-          reminderEnabled: reminderEnabled,
-          repeatSeriesId: (inserted['repeat_series_id'] as String?)?.trim().isEmpty == true
-              ? null
-              : inserted['repeat_series_id'] as String?,
-        );
-      } catch (e) {
-        lastErr = e;
-        continue;
+    for (final seriesId in seriesAttempts) {
+      final payloads = _planItemInsertPayloads(
+        planId: planId,
+        subject: subject,
+        targetSeconds: targetSeconds,
+        scheduledStartAtUtc: scheduledStartAtUtc,
+        reminderEnabled: reminderEnabled,
+        repeatSeriesId: seriesId,
+      );
+      for (final row in payloads) {
+        try {
+          final inserted = await _insertPlanItemRow(row);
+          final rawSeries = inserted['repeat_series_id'];
+          return PlanItem(
+            id: inserted['id'] as String,
+            subject: inserted['subject'] as String,
+            targetSeconds: (inserted['target_seconds'] as num).toInt(),
+            actualSeconds: 0,
+            isDone: false,
+            scheduledStartAt: scheduledStartAtUtc,
+            reminderEnabled: reminderEnabled,
+            repeatSeriesId: rawSeries is String && rawSeries.isNotEmpty
+                ? rawSeries
+                : seriesId,
+          );
+        } catch (e) {
+          lastErr = e;
+          if (seriesId != null && isRepeatSchemaUnavailable(e)) break;
+        }
       }
     }
     if (lastErr != null) throw lastErr;
@@ -311,6 +372,36 @@ class PlanRepository {
     await supabase.from('plan_items').delete().eq('id', itemId);
   }
 
+  /// 반복 시리즈 생성. 테이블/컬럼이 없으면 `null`(일정만 추가).
+  Future<String?> tryCreateRepeatSeries({
+    required String subject,
+    required int targetSeconds,
+    required String unit,
+    required int interval,
+    required List<int> weekdays,
+    required DateTime startDate,
+    required DateTime endDate,
+    int? startTimeMinutes,
+    required bool reminderEnabled,
+  }) async {
+    try {
+      return await createRepeatSeries(
+        subject: subject,
+        targetSeconds: targetSeconds,
+        unit: unit,
+        interval: interval,
+        weekdays: weekdays,
+        startDate: startDate,
+        endDate: endDate,
+        startTimeMinutes: startTimeMinutes,
+        reminderEnabled: reminderEnabled,
+      );
+    } catch (e) {
+      if (isRepeatSchemaUnavailable(e)) return null;
+      rethrow;
+    }
+  }
+
   Future<String> createRepeatSeries({
     required String subject,
     required int targetSeconds,
@@ -325,24 +416,24 @@ class PlanRepository {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw const AuthException('Not authenticated');
     await ensureProfileRow();
+
+    final safeWeekdays = weekdays.isEmpty ? <int>[startDate.weekday] : weekdays;
+    final body = <String, dynamic>{
+      'user_id': userId,
+      'unit': unit,
+      'repeat_interval': interval,
+      'weekdays': safeWeekdays,
+      'start_date': _toDateString(startDate),
+      'end_date': _toDateString(endDate),
+      'start_time_minutes': startTimeMinutes,
+      'reminder_enabled': reminderEnabled,
+      'subject': subject,
+      'target_seconds': targetSeconds,
+    };
+
     final row = await supabase
         .from('plan_repeat_series')
-        .insert({
-          'user_id': userId,
-          'unit': unit,
-          'interval': interval,
-          'weekdays': weekdays,
-          'start_date': DateTime(startDate.year, startDate.month, startDate.day)
-              .toIso8601String()
-              .substring(0, 10),
-          'end_date': DateTime(endDate.year, endDate.month, endDate.day)
-              .toIso8601String()
-              .substring(0, 10),
-          'start_time_minutes': startTimeMinutes,
-          'reminder_enabled': reminderEnabled,
-          'subject': subject,
-          'target_seconds': targetSeconds,
-        })
+        .insert(body)
         .select('id')
         .single();
     return row['id'] as String;
