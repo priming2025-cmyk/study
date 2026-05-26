@@ -3,20 +3,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'contacts_import_sheet.dart';
 import 'friend_status_section.dart';
+import 'recent_sets_section.dart';
 import 'study_group_browser_sheet.dart';
+import '../../infra/study_room_recent_room.dart';
 
-/// 인스타그램 DM 목록 느낌의 셋터디 친구 피드.
+/// 셋터디 탭 메인 화면 (로비).
+/// 상단: 최근 셋 카드 / 하단: 인스타그램 DM 형식 친구 목록.
 class SettudySocialView extends ConsumerWidget {
   final VoidCallback onCreateRoom;
-  final VoidCallback? onQuickJoinRecent;
-  final String? recentRoomId;
+  final List<RecentStudyRoom> recentRooms;
+  final void Function(RecentStudyRoom room) onJoinRoom;
   final bool joining;
 
   const SettudySocialView({
     super.key,
     required this.onCreateRoom,
-    this.onQuickJoinRecent,
-    this.recentRoomId,
+    required this.recentRooms,
+    required this.onJoinRoom,
     this.joining = false,
   });
 
@@ -28,16 +31,20 @@ class SettudySocialView extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
+        // ── 헤더 ──────────────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
             child: Row(
               children: [
-                Text('셋터디',
-                    style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                Text(
+                  '셋터디',
+                  style: tt.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
                 const Spacer(),
                 IconButton(
-                  tooltip: '그룹 찾기',
+                  tooltip: '그룹 검색',
                   icon: const Icon(Icons.search_rounded),
                   onPressed: () => _openGroupBrowser(context),
                 ),
@@ -45,27 +52,32 @@ class SettudySocialView extends ConsumerWidget {
             ),
           ),
         ),
-        if (recentRoomId != null && onQuickJoinRecent != null)
+
+        // ── 최근 셋 카드 섹션 ──────────────────────────────
+        if (recentRooms.isNotEmpty)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _QuickJoinChip(
-                roomId: recentRoomId!,
-                onTap: joining ? null : onQuickJoinRecent,
-              ),
+            child: RecentSetsSection(
+              rooms: recentRooms,
+              joining: joining,
+              onJoin: onJoinRoom,
             ),
           ),
+
+        // ── 메시지 섹션 헤더 ──────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
               children: [
-                Text('친구',
-                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text(
+                  '메시지',
+                  style: tt.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () => ContactsImportSheet.show(context),
-                  icon: const Icon(Icons.contacts_rounded, size: 18),
+                  icon: const Icon(Icons.contacts_rounded, size: 16),
                   label: const Text('연락처'),
                   style: TextButton.styleFrom(
                     visualDensity: VisualDensity.compact,
@@ -75,6 +87,11 @@ class SettudySocialView extends ConsumerWidget {
             ),
           ),
         ),
+        const SliverToBoxAdapter(
+          child: Divider(height: 1, indent: 16, endIndent: 16),
+        ),
+
+        // ── 친구 DM 목록 ──────────────────────────────────
         friends.when(
           loading: () => const SliverFillRemaining(
             hasScrollBody: false,
@@ -82,27 +99,34 @@ class SettudySocialView extends ConsumerWidget {
           ),
           error: (_, __) => SliverFillRemaining(
             hasScrollBody: false,
-            child: _EmptyFriends(onCreateRoom: onCreateRoom, cs: cs, tt: tt),
+            child: _EmptyFriends(
+              onCreateRoom: onCreateRoom,
+              cs: cs,
+              tt: tt,
+            ),
           ),
           data: (list) {
             if (list.isEmpty) {
               return SliverFillRemaining(
                 hasScrollBody: false,
-                child: _EmptyFriends(onCreateRoom: onCreateRoom, cs: cs, tt: tt),
+                child: _EmptyFriends(
+                  onCreateRoom: onCreateRoom,
+                  cs: cs,
+                  tt: tt,
+                ),
               );
             }
             return SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) {
-                  final f = list[i];
-                  return _FriendDmTile(friend: f);
-                },
+                (context, i) => _FriendDmTile(friend: list[i]),
                 childCount: list.length,
               ),
             );
           },
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 88)),
+
+        // FAB 여백
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
       ],
     );
   }
@@ -124,6 +148,10 @@ class SettudySocialView extends ConsumerWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 친구 DM 타일 — 인스타그램 DM 형식
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _FriendDmTile extends StatelessWidget {
   final FriendPresence friend;
 
@@ -136,14 +164,21 @@ class _FriendDmTile extends StatelessWidget {
     final isStudying = friend.status == FriendStudyStatus.studying;
     final isOnline = friend.status == FriendStudyStatus.online;
 
+    final statusColor = isStudying
+        ? Colors.red.shade400
+        : isOnline
+            ? Colors.green.shade400
+            : cs.outline;
+
     return Material(
       color: cs.surface,
       child: InkWell(
         onTap: () => _openDmSheet(context, friend),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             children: [
+              // 아바타 + 활동 점
               Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -161,17 +196,13 @@ class _FriendDmTile extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    bottom: 0,
-                    right: 0,
+                    bottom: 1,
+                    right: 1,
                     child: Container(
-                      width: 14,
-                      height: 14,
+                      width: 13,
+                      height: 13,
                       decoration: BoxDecoration(
-                        color: isStudying
-                            ? Colors.red.shade400
-                            : isOnline
-                                ? Colors.green.shade400
-                                : cs.outline,
+                        color: statusColor,
                         shape: BoxShape.circle,
                         border: Border.all(color: cs.surface, width: 2),
                       ),
@@ -180,17 +211,20 @@ class _FriendDmTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 14),
+
+              // 이름 + 최근 메세지
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       friend.displayName,
-                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                      style: tt.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _statusLine(friend),
+                      _recentMessage(friend),
                       style: tt.bodySmall?.copyWith(
                         color: isStudying
                             ? Colors.red.shade400
@@ -202,30 +236,26 @@ class _FriendDmTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isStudying)
-                TextButton(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${friend.displayName}에게 응원 보냈어요 👊')),
-                    );
-                  },
-                  child: const Text('응원'),
-                )
-              else if (isOnline)
-                FilledButton.tonal(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${friend.displayName}에게 초대를 보냈어요')),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(56, 32),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+
+              // 활동 시간
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _activityTime(friend),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
-                  child: const Text('초대'),
-                )
-              else
-                Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+                  const SizedBox(height: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -233,13 +263,21 @@ class _FriendDmTile extends StatelessWidget {
     );
   }
 
-  String _statusLine(FriendPresence f) {
+  String _recentMessage(FriendPresence f) {
     return switch (f.status) {
       FriendStudyStatus.studying =>
-        f.studyingSubject != null ? '${f.studyingSubject} 집중 중' : '집중 중',
-      FriendStudyStatus.online => '접속 중 · 오늘 계획 진행 중',
+        f.studyingSubject != null ? '📚 ${f.studyingSubject} 집중 중' : '📚 집중 공부 중',
+      FriendStudyStatus.online => '접속 중',
       FriendStudyStatus.offline =>
         f.lastSeenAgo != null ? '${f.lastSeenAgo} 접속' : '오프라인',
+    };
+  }
+
+  String _activityTime(FriendPresence f) {
+    return switch (f.status) {
+      FriendStudyStatus.studying => '공부 중',
+      FriendStudyStatus.online => '온라인',
+      FriendStudyStatus.offline => f.lastSeenAgo ?? '',
     };
   }
 
@@ -256,6 +294,10 @@ class _FriendDmTile extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DM 채팅 시트
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _DmSheet extends StatefulWidget {
   final FriendPresence friend;
@@ -285,7 +327,7 @@ class _DmSheetState extends State<_DmSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.55,
+        height: MediaQuery.of(context).size.height * 0.65,
         child: Column(
           children: [
             const SizedBox(height: 8),
@@ -297,32 +339,101 @@ class _DmSheetState extends State<_DmSheet> {
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
+            // DM 헤더
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(
                 children: [
                   CircleAvatar(
-                    child: Text(widget.friend.displayName[0].toUpperCase()),
+                    radius: 20,
+                    backgroundColor: cs.secondaryContainer,
+                    child: Text(
+                      widget.friend.displayName[0].toUpperCase(),
+                      style: tt.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSecondaryContainer,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      widget.friend.displayName,
-                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.friend.displayName,
+                          style: tt.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          _statusLabel(widget.friend.status),
+                          style: tt.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
                     ),
                   ),
+                  if (widget.friend.status == FriendStudyStatus.online)
+                    FilledButton.tonal(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                '${widget.friend.displayName}에게 초대를 보냈어요'),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(56, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: const Text('초대'),
+                    )
+                  else if (widget.friend.status == FriendStudyStatus.studying)
+                    OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                '${widget.friend.displayName}에게 응원 보냈어요 👊'),
+                          ),
+                        );
+                      },
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(56, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      child: const Text('응원 👊'),
+                    ),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
             const Divider(height: 1),
+            // 메시지 영역
             Expanded(
               child: Center(
-                child: Text(
-                  '메시지를 보내보세요',
-                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 40,
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '메시지를 보내보세요',
+                      style: tt.bodyMedium
+                          ?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
                 ),
               ),
             ),
+            // 입력창
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -351,7 +462,10 @@ class _DmSheetState extends State<_DmSheet> {
                       if (_ctrl.text.trim().isEmpty) return;
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${widget.friend.displayName}에게 전송')),
+                        SnackBar(
+                          content: Text(
+                              '${widget.friend.displayName}에게 전송됐어요'),
+                        ),
                       );
                     },
                     icon: const Icon(Icons.send_rounded, size: 20),
@@ -364,24 +478,17 @@ class _DmSheetState extends State<_DmSheet> {
       ),
     );
   }
+
+  String _statusLabel(FriendStudyStatus status) => switch (status) {
+        FriendStudyStatus.studying => '집중 공부 중',
+        FriendStudyStatus.online => '온라인',
+        FriendStudyStatus.offline => '오프라인',
+      };
 }
 
-class _QuickJoinChip extends StatelessWidget {
-  final String roomId;
-  final VoidCallback? onTap;
-
-  const _QuickJoinChip({required this.roomId, this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ActionChip(
-      avatar: Icon(Icons.history_rounded, size: 18, color: cs.primary),
-      label: Text('최근 셋 ${roomId.length > 6 ? '${roomId.substring(0, 6)}…' : roomId}'),
-      onPressed: onTap,
-    );
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 친구 없을 때 빈 화면
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _EmptyFriends extends StatelessWidget {
   final VoidCallback onCreateRoom;
@@ -401,18 +508,23 @@ class _EmptyFriends extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline_rounded,
-              size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+          Icon(
+            Icons.people_outline_rounded,
+            size: 52,
+            color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+          ),
           const SizedBox(height: 16),
-          Text('아직 친구가 없어요',
-              style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
+          Text(
+            '아직 친구가 없어요',
+            style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 8),
           Text(
-            '연락처에서 셋터디 친구를 찾거나\n+ 로 셋을 만들어 보세요',
+            '연락처에서 셋터디 친구를 찾거나\n+ 버튼으로 셋을 만들어 보세요',
             textAlign: TextAlign.center,
             style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           FilledButton.tonalIcon(
             onPressed: () => ContactsImportSheet.show(context),
             icon: const Icon(Icons.contacts_rounded),

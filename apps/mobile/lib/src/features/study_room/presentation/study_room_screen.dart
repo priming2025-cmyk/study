@@ -33,7 +33,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
   final _roomNameCtrl = TextEditingController(text: '우리셋');
   final _roomIdCtrl = TextEditingController();
-  late Future<(String roomId, String goalText)?> _recentFuture;
+  late Future<List<RecentStudyRoom>> _recentFuture;
 
   late final ValueNotifier<int> _engagedMinScoreN =
       ValueNotifier(kDefaultEngagedMinScore);
@@ -42,7 +42,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   void initState() {
     super.initState();
     _controller.addListener(_onChanged);
-    _recentFuture = loadRecentStudyRoom();
+    _recentFuture = loadRecentStudyRooms();
     _loadEngagedScore();
     if (widget.quickJoin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -102,8 +102,14 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       await _controller.joinRoom(roomId: roomId, goalText: goal);
       if (_controller.roomId != null) {
         _controller.startFocusTracking(_engagedMinScoreN.value);
-        await saveRecentStudyRoom(roomId: roomId, goalText: goal);
-        _recentFuture = loadRecentStudyRoom();
+        await saveRecentStudyRoom(
+          roomId: roomId,
+          goalText: goal,
+          roomName: _roomNameCtrl.text.trim().isEmpty
+              ? '셋터디방'
+              : _roomNameCtrl.text.trim(),
+        );
+        _recentFuture = loadRecentStudyRooms();
       }
       if (_controller.error != null && mounted) {
         AppSnacks.showWithMessenger(messenger, _controller.error!);
@@ -123,7 +129,26 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (_controller.roomId != null) {
       _controller.startFocusTracking(_engagedMinScoreN.value);
       await saveRecentStudyRoom(roomId: id, goalText: goal);
-      _recentFuture = loadRecentStudyRoom();
+      _recentFuture = loadRecentStudyRooms();
+    }
+    if (_controller.error != null && mounted) {
+      AppSnacks.showWithMessenger(messenger, _controller.error!);
+    }
+  }
+
+  /// 최근 셋 카드 탭 → 저장된 목표로 바로 입장.
+  Future<void> _joinRoomById(String roomId, String savedGoal) async {
+    if (_controller.joining || _controller.roomId != null) return;
+    final goal = savedGoal.isNotEmpty
+        ? savedGoal
+        : (await showStudyRoomGoalSheet(context)) ?? '';
+    if (!mounted || goal.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    await _controller.joinRoom(roomId: roomId, goalText: goal);
+    if (_controller.roomId != null) {
+      _controller.startFocusTracking(_engagedMinScoreN.value);
+      await saveRecentStudyRoom(roomId: roomId, goalText: goal);
+      _recentFuture = loadRecentStudyRooms();
     }
     if (_controller.error != null && mounted) {
       AppSnacks.showWithMessenger(messenger, _controller.error!);
@@ -145,6 +170,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (_controller.roomId != null) {
       _controller.startFocusTracking(_engagedMinScoreN.value);
       await saveRecentStudyRoom(roomId: rid, goalText: goal);
+      _recentFuture = loadRecentStudyRooms();
     }
     if (_controller.error != null && mounted) {
       AppSnacks.showWithMessenger(
@@ -320,27 +346,26 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               studyCameraSlotActive: studyCameraSlotActive,
               engagedMinListenable: _engagedMinScoreN,
             )
-          : FutureBuilder<(String roomId, String goalText)?>(
+          : FutureBuilder<List<RecentStudyRoom>>(
               future: _recentFuture,
               builder: (context, snap) {
-                final recentId = snap.data?.$1;
+                final rooms = snap.data ?? const [];
                 return SettudySocialView(
                   joining: _controller.joining,
+                  recentRooms: rooms,
                   onCreateRoom: () {
                     if (kIsWeb) {
                       WebSharedCamera.instance.openFromUserGesture();
                     }
                     unawaited(_createRoom());
                   },
-                  recentRoomId: recentId,
-                  onQuickJoinRecent: recentId == null
-                      ? null
-                      : () {
-                          if (kIsWeb) {
-                            WebSharedCamera.instance.openFromUserGesture();
-                          }
-                          unawaited(_quickJoinRecent());
-                        },
+                  onJoinRoom: (room) {
+                    _roomIdCtrl.text = room.roomId;
+                    if (kIsWeb) {
+                      WebSharedCamera.instance.openFromUserGesture();
+                    }
+                    unawaited(_joinRoomById(room.roomId, room.goalText));
+                  },
                 );
               },
             ),
