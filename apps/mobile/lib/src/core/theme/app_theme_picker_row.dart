@@ -11,7 +11,6 @@ class AppThemePickerRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(appThemeIdProvider);
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
     return Column(
@@ -22,29 +21,17 @@ class AppThemePickerRow extends ConsumerWidget {
           style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 4),
-        Text(
-          '탭하면 앱 전체 색이 바뀌어요',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-          textAlign: TextAlign.center,
-        ),
         const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (var i = 0; i < AppThemeCatalog.all.length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                _ThemeSwatch(
-                  def: AppThemeCatalog.all[i],
-                  selected: selected == AppThemeCatalog.all[i].id,
-                  onTap: () => ref
-                      .read(appThemeIdProvider.notifier)
-                      .setTheme(AppThemeCatalog.all[i].id),
-                ),
-              ],
-            ],
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            for (final def in AppThemeCatalog.all)
+              _ThemeSwatch(
+                def: def,
+                selected: selected == def.id,
+                onTap: () => ref.read(appThemeIdProvider.notifier).setTheme(def.id),
+              ),
+          ],
         ),
       ],
     );

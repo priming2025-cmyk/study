@@ -1,12 +1,11 @@
 /// 앱 색 테마 (집중·셋터디 설정에서 선택).
 enum AppThemeId {
   setudyWine,
-  snuBlue,
+  uosMint,
   yonseiRoyal,
   hufsGreen,
   hufsGray,
   kyungheeGold,
-  uosMint,
 }
 
 extension AppThemeIdX on AppThemeId {

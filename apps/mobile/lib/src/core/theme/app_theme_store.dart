@@ -6,8 +6,10 @@ import 'app_theme_id.dart';
 class AppThemeStore {
   static Future<AppThemeId> load() async {
     final sp = await SharedPreferences.getInstance();
-    return AppThemeIdX.tryParse(sp.getString(AppThemeIdX.storageKey)) ??
-        AppThemeId.setudyWine;
+    final raw = sp.getString(AppThemeIdX.storageKey);
+    // 제거된 서울대(snuBlue) → 청록(서울시립)으로 이전
+    if (raw == 'snuBlue') return AppThemeId.uosMint;
+    return AppThemeIdX.tryParse(raw) ?? AppThemeId.setudyWine;
   }
 
   static Future<void> save(AppThemeId id) async {
