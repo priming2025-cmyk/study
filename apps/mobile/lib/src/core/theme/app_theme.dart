@@ -3,12 +3,17 @@ import 'package:flutter/material.dart';
 import 'app_color_schemes.dart';
 
 class AppTheme {
+  /// 웹: index.html에서 Pretendard CDN 로드 후 이 family를 사용합니다.
+  /// 네이티브: 시스템 폰트 fallback (추후 assets/fonts/ 추가 예정).
+  static const _fontFamily = 'Pretendard Variable';
+
   static ThemeData light() {
     final scheme = AppColorSchemes.light();
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       brightness: Brightness.light,
+      fontFamily: _fontFamily,
     );
 
     final textTheme = base.textTheme.apply(
@@ -173,6 +178,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       brightness: Brightness.dark,
+      fontFamily: _fontFamily,
     );
 
     final textTheme = base.textTheme.apply(

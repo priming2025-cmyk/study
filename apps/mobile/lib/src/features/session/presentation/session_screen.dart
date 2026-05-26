@@ -698,22 +698,22 @@ class _ConcentrationCard extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _ScoreRing(score: score, color: statusColor),
-              const SizedBox(width: 14),
-              Column(
+        padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 20),
+        child: Row(
+          children: [
+            // 왼쪽: 큰 점수 링
+            _ScoreRing(score: score, color: statusColor),
+            const SizedBox(width: 20),
+            // 오른쪽: 상태 + 시간
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withAlpha(30),
+                      color: statusColor.withAlpha(22),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -722,16 +722,17 @@ class _ConcentrationCard extends StatelessWidget {
                         color: statusColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 13,
+                        letterSpacing: -0.2,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 14),
                   _TimeStat(
                     label: '집중',
                     seconds: focusedSeconds,
                     color: cs.primary,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   _TimeStat(
                     label: '이탈',
                     seconds: unfocusedSeconds,
@@ -739,18 +740,18 @@ class _ConcentrationCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Color _statusColor(ColorScheme cs) => switch (status) {
-        FocusStatus.focused => const Color(0xFF2E7D32),
-        FocusStatus.normal => const Color(0xFF1565C0),
-        FocusStatus.distracted => const Color(0xFFE65100),
-        FocusStatus.drowsy => const Color(0xFFAD1457),
+        FocusStatus.focused => const Color(0xFF1B7A3E),   // 집중: 포레스트 그린
+        FocusStatus.normal => cs.onSurfaceVariant,         // 보통: 중성 warm gray
+        FocusStatus.distracted => const Color(0xFFB84800), // 이탈: 딥 앰버
+        FocusStatus.drowsy => const Color(0xFF7B5200),     // 졸음: 다크 앰버
         FocusStatus.away => cs.error,
       };
 }
@@ -763,18 +764,33 @@ class _ScoreRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 80,
-      height: 80,
+      width: 96,
+      height: 96,
       child: CustomPaint(
         painter: _RingPainter(score: score, color: color),
         child: Center(
-          child: Text(
-            '$score',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$score',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  height: 1.0,
+                  letterSpacing: -1,
+                ),
+              ),
+              Text(
+                '점',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: color.withAlpha(180),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -791,7 +807,8 @@ class _RingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final radius = (size.width - 10) / 2;
+    const strokeW = 9.0;
+    final radius = (size.width - strokeW) / 2;
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
 
     // 배경 트랙
@@ -801,25 +818,27 @@ class _RingPainter extends CustomPainter {
       2 * math.pi,
       false,
       Paint()
-        ..color = color.withAlpha(40)
-        ..strokeWidth = 7
+        ..color = color.withAlpha(30)
+        ..strokeWidth = strokeW
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round,
     );
 
     // 점수 호
-    final sweep = 2 * math.pi * score / 100;
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      sweep,
-      false,
-      Paint()
-        ..color = color
-        ..strokeWidth = 7
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
+    if (score > 0) {
+      final sweep = 2 * math.pi * score / 100;
+      canvas.drawArc(
+        rect,
+        -math.pi / 2,
+        sweep,
+        false,
+        Paint()
+          ..color = color
+          ..strokeWidth = strokeW
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   @override
@@ -836,22 +855,33 @@ class _TimeStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final m = seconds ~/ 60;
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
     final s = seconds % 60;
+    final timeStr = h > 0
+        ? '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     return Row(
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: 7,
+          height: 7,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        const SizedBox(width: 10),
+        const SizedBox(width: 7),
         Text(
-          '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}',
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          timeStr,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: color,
               ),
         ),
       ],

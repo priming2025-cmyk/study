@@ -1,36 +1,38 @@
 import 'package:flutter/material.dart';
 
-/// Study-up 브랜드 팔레트 — Wine Red 감성 (대학생 인스타그램 스타일).
-/// Primary  : Wine Red   #8B162D  → 깊고 고급스러운 와인 레드
-/// Secondary: Dusty Rose #B0506E  → 소프트한 로즈 포인트
-/// Tertiary : Warm Caramel #C47B50 → 따뜻한 카라멜 엑센트
+/// Study-up 브랜드 팔레트 — Instagram 미니멀 감성.
+/// 메인 컬러 하나(Wine Red #8B162D)만 강하게, 나머지는 완전 중성 warm-gray.
+/// Primary : Wine Red  #8B162D  → 깊고 고급스러운 와인 레드
+/// 나머지  : Warm Gray 계열     → 방해 없이 메인 컬러를 돋보이게
 abstract final class AppColorSchemes {
   static ColorScheme light() {
     const primary = Color(0xFF8B162D);            // Wine Red
     const onPrimary = Color(0xFFFFFFFF);
-    const primaryContainer = Color(0xFFFFDDE4);   // Blush 100
-    const onPrimaryContainer = Color(0xFF3A0010); // Deep wine for text
+    const primaryContainer = Color(0xFFFFE8EC);   // 아주 연한 블러쉬 (거의 흰색)
+    const onPrimaryContainer = Color(0xFF3A0010);
 
-    const secondary = Color(0xFFB0506E);          // Dusty Rose
+    // secondary / tertiary: 컬러 경쟁 없는 warm neutral gray
+    const secondary = Color(0xFF6B5B5E);          // Warm Muted Gray
     const onSecondary = Color(0xFFFFFFFF);
-    const secondaryContainer = Color(0xFFFFDDE8); // Light rose
-    const onSecondaryContainer = Color(0xFF4A152A);
+    const secondaryContainer = Color(0xFFF3EDEF); // 거의 흰색
+    const onSecondaryContainer = Color(0xFF2B1F21);
 
-    const tertiary = Color(0xFFC47B50);           // Warm Caramel
+    const tertiary = Color(0xFF8A7468);           // Warm Brown-Gray
     const onTertiary = Color(0xFFFFFFFF);
-    const tertiaryContainer = Color(0xFFFAEBD7);  // Cream
-    const onTertiaryContainer = Color(0xFF4A2810);
+    const tertiaryContainer = Color(0xFFF5EDE9);
+    const onTertiaryContainer = Color(0xFF2E2018);
 
-    const surface = Color(0xFFFFFBFC);            // 미세하게 따뜻한 화이트
-    const onSurface = Color(0xFF1A0A0D);          // 거의 블랙 (따뜻한 톤)
+    // 표면: 순백 + 아주 미세한 warm tint → 차갑지 않고 따뜻한 느낌
+    const surface = Color(0xFFFFFFFF);
+    const onSurface = Color(0xFF1C1417);          // 따뜻한 near-black
     const surfaceContainerLowest = Color(0xFFFFFFFF);
-    const surfaceContainerLow = Color(0xFFFFF5F6);   // 매우 연한 블러쉬
-    const surfaceContainer = Color(0xFFF8EAED);      // 연한 블러쉬
-    const surfaceContainerHigh = Color(0xFFF0D8DD);  // 소프트 블러쉬
-    const onSurfaceVariant = Color(0xFF725258);       // 따뜻한 그레이
+    const surfaceContainerLow = Color(0xFFFAF7F7); // 거의 흰색
+    const surfaceContainer = Color(0xFFF3EEEF);    // 아주 연한 warm gray
+    const surfaceContainerHigh = Color(0xFFEDE6E8);
+    const onSurfaceVariant = Color(0xFF6B5E62);    // Warm medium gray
 
-    const outline = Color(0xFFDFC3C8);            // 소프트 로즈 그레이
-    const outlineVariant = Color(0xFFF0E1E5);     // 거의 안 보이는 경계
+    const outline = Color(0xFFC9B8BB);             // 얇고 부드러운 경계
+    const outlineVariant = Color(0xFFEDE6E8);
 
     return const ColorScheme(
       brightness: Brightness.light,
@@ -60,32 +62,38 @@ abstract final class AppColorSchemes {
       onSurfaceVariant: onSurfaceVariant,
       outline: outline,
       outlineVariant: outlineVariant,
-      shadow: Color(0x1A1A0A0D),
-      scrim: Color(0x801A0A0D),
-      inverseSurface: Color(0xFF2A1215),
-      onInverseSurface: Color(0xFFF5E8EA),
-      inversePrimary: Color(0xFFE8899A), // 밝은 로즈 (다크 배경용)
+      shadow: Color(0x1A1C1417),
+      scrim: Color(0x801C1417),
+      inverseSurface: Color(0xFF2A1E21),
+      onInverseSurface: Color(0xFFF5EEF0),
+      inversePrimary: Color(0xFFE8899A),
     );
   }
 
   static ColorScheme dark() {
-    const primary = Color(0xFFE8899A);            // 밝은 로즈 (다크 모드 primary)
+    const primary = Color(0xFFE8899A);            // 밝은 로즈 (다크 primary)
     const onPrimary = Color(0xFF520018);
-    const primaryContainer = Color(0xFF6E1028);   // 중간 와인 (컨테이너)
-    const onPrimaryContainer = Color(0xFFFFDDE4);
+    const primaryContainer = Color(0xFF6E1028);
+    const onPrimaryContainer = Color(0xFFFFE8EC);
 
-    const secondary = Color(0xFFD4899B);          // 소프트 로즈
-    const onSecondary = Color(0xFF3A0D1C);
-    const secondaryContainer = Color(0xFF6B1F36); // 다크 로즈
-    const onSecondaryContainer = Color(0xFFFFDDE8);
+    const secondary = Color(0xFFBFAAAD);          // Warm light gray
+    const onSecondary = Color(0xFF3A2A2D);
+    const secondaryContainer = Color(0xFF4A3A3D);
+    const onSecondaryContainer = Color(0xFFF3EDEF);
 
-    const surface = Color(0xFF12080A);            // 딥 와인 블랙
-    const onSurface = Color(0xFFF5E8EA);
-    const surfaceContainerLowest = Color(0xFF0A0405);
-    const surfaceContainerLow = Color(0xFF1C0C10);  // 매우 어두운 와인
-    const surfaceContainer = Color(0xFF2A1216);     // 어두운 와인
-    const surfaceContainerHigh = Color(0xFF3A1C22); // 미디엄 다크 와인
-    const onSurfaceVariant = Color(0xFFC4A0A8);     // 따뜻한 연그레이
+    const tertiary = Color(0xFFBFAA9E);
+    const onTertiary = Color(0xFF3A2A20);
+    const tertiaryContainer = Color(0xFF4A3A30);
+    const onTertiaryContainer = Color(0xFFF5EDE9);
+
+    // 다크: 순수 따뜻한 블랙 계열 (차갑지 않게)
+    const surface = Color(0xFF161012);
+    const onSurface = Color(0xFFF5EEF0);
+    const surfaceContainerLowest = Color(0xFF0E0A0B);
+    const surfaceContainerLow = Color(0xFF1E1618);
+    const surfaceContainer = Color(0xFF281D20);
+    const surfaceContainerHigh = Color(0xFF332528);
+    const onSurfaceVariant = Color(0xFFBFACB0);
 
     return const ColorScheme(
       brightness: Brightness.dark,
@@ -97,10 +105,10 @@ abstract final class AppColorSchemes {
       onSecondary: onSecondary,
       secondaryContainer: secondaryContainer,
       onSecondaryContainer: onSecondaryContainer,
-      tertiary: Color(0xFFD4A070),               // 따뜻한 카라멜 (다크)
-      onTertiary: Color(0xFF3A2010),
-      tertiaryContainer: Color(0xFF5A3820),
-      onTertiaryContainer: Color(0xFFFAEBD7),
+      tertiary: tertiary,
+      onTertiary: onTertiary,
+      tertiaryContainer: tertiaryContainer,
+      onTertiaryContainer: onTertiaryContainer,
       error: Color(0xFFF4838B),
       onError: Color(0xFF450A0A),
       errorContainer: Color(0xFF7F1D1D),
@@ -113,13 +121,13 @@ abstract final class AppColorSchemes {
       surfaceContainerLow: surfaceContainerLow,
       surfaceContainerLowest: surfaceContainerLowest,
       onSurfaceVariant: onSurfaceVariant,
-      outline: Color(0xFF3A1C22),
-      outlineVariant: Color(0xFF2A1216),
+      outline: Color(0xFF4A3A3D),
+      outlineVariant: Color(0xFF332528),
       shadow: Color(0x80000000),
       scrim: Color(0xCC000000),
-      inverseSurface: Color(0xFFF0D8DD),
-      onInverseSurface: Color(0xFF1A0A0D),
-      inversePrimary: Color(0xFF8B162D),         // Wine Red (라이트 배경용)
+      inverseSurface: Color(0xFFF3EEEF),
+      onInverseSurface: Color(0xFF1C1417),
+      inversePrimary: Color(0xFF8B162D),
     );
   }
 }

@@ -16,60 +16,103 @@ class DashboardHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final summary = rpg;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final dark = Color.lerp(cs.primary, Colors.black, 0.28)!;
+    final mid = Color.lerp(cs.primary, const Color(0xFFD4607A), 0.4)!;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [dark, cs.primary, mid],
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (summary != null) ...[
-              Row(
+            // 왼쪽: 레벨 배지
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha(28),
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  summary != null ? '${summary.level}' : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            // 오른쪽: 계급 + XP
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          summary.currentRankKo ?? '집중 중',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          summary.nextRankKo == null
-                              ? 'XP ${summary.xpTotal} · 최고 계급 달성'
-                              : '다음: ${summary.nextRankKo} · 남은 XP ${summary.xpToNextRank ?? 0}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
+                  Text(
+                    summary?.currentRankKo ?? '세투디 학생',
+                    style: tt.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
-              ),
-            ],
-            if (email != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.verified_user_outlined, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      email!,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                  const SizedBox(height: 4),
+                  Text(
+                    summary == null
+                        ? '공부를 시작하면 레벨이 올라요'
+                        : summary.nextRankKo == null
+                            ? 'XP ${summary.xpTotal} · 최고 계급 달성!'
+                            : '다음: ${summary.nextRankKo}  ·  +${summary.xpToNextRank ?? 0} XP',
+                    style: tt.bodySmall?.copyWith(
+                      color: Colors.white.withAlpha(200),
                     ),
                   ),
+                  if (summary != null) ...[
+                    const SizedBox(height: 10),
+                    _XpBar(
+                      xpTotal: summary.xpTotal,
+                      xpToNext: summary.xpToNextRank,
+                    ),
+                  ],
                 ],
               ),
-            ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _XpBar extends StatelessWidget {
+  final int xpTotal;
+  final int? xpToNext;
+  const _XpBar({required this.xpTotal, required this.xpToNext});
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = xpToNext == null || xpToNext! <= 0
+        ? 1.0
+        : (1.0 - xpToNext! / (xpToNext! + xpTotal).clamp(1, double.infinity)).clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: LinearProgressIndicator(
+        value: progress,
+        backgroundColor: Colors.white.withAlpha(40),
+        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+        minHeight: 5,
       ),
     );
   }

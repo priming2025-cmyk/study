@@ -183,122 +183,154 @@ class _LoginScreenState extends State<LoginScreen>
 
     return Scaffold(
       backgroundColor: cs.surface,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ── 로고 ──
-                  _Logo(color: cs.primary),
-                  const SizedBox(height: 36),
-                  // ── 탭 ──
-                  _AuthTabBar(controller: _tab, disabled: _loading),
-                  const SizedBox(height: 28),
-                  // ── 탭 내용 ──
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    switchInCurve: Curves.easeOut,
-                    switchOutCurve: Curves.easeIn,
-                    child: IndexedStack(
-                      key: ValueKey<int>(_tab.index),
-                      index: _tab.index,
+      body: Column(
+        children: [
+          // ── 상단 브랜드 헤더 (와인 레드 그라데이션) ──
+          _BrandHeader(primary: cs.primary),
+          // ── 하단 폼 영역 ──
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(28, 28, 28, 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _AuthTabBar(controller: _tab, disabled: _loading),
+                    const SizedBox(height: 24),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: IndexedStack(
+                        key: ValueKey<int>(_tab.index),
+                        index: _tab.index,
+                        children: [
+                          _LoginForm(
+                            emailCtrl: _emailLogin,
+                            pwCtrl: _pwLogin,
+                            showPw: _showPwLogin,
+                            onTogglePw: () =>
+                                setState(() => _showPwLogin = !_showPwLogin),
+                            saveCredentials: _saveCredentials,
+                            onSaveCredentialsChanged: (v) =>
+                                setState(() => _saveCredentials = v),
+                            loading: _loading,
+                            onSubmit: _signIn,
+                          ),
+                          _SignUpForm(
+                            emailCtrl: _emailSignUp,
+                            pwCtrl: _pwSignUp,
+                            confirmCtrl: _pwConfirm,
+                            showPw: _showPwSignUp,
+                            onTogglePw: () =>
+                                setState(() => _showPwSignUp = !_showPwSignUp),
+                            showConfirm: _showPwConfirm,
+                            onToggleConfirm: () =>
+                                setState(
+                                    () => _showPwConfirm = !_showPwConfirm),
+                            loading: _loading,
+                            onSubmit: _signUp,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _LoginForm(
-                          emailCtrl: _emailLogin,
-                          pwCtrl: _pwLogin,
-                          showPw: _showPwLogin,
-                          onTogglePw: () =>
-                              setState(() => _showPwLogin = !_showPwLogin),
-                          saveCredentials: _saveCredentials,
-                          onSaveCredentialsChanged: (v) =>
-                              setState(() => _saveCredentials = v),
-                          loading: _loading,
-                          onSubmit: _signIn,
-                        ),
-                        _SignUpForm(
-                          emailCtrl: _emailSignUp,
-                          pwCtrl: _pwSignUp,
-                          confirmCtrl: _pwConfirm,
-                          showPw: _showPwSignUp,
-                          onTogglePw: () =>
-                              setState(() => _showPwSignUp = !_showPwSignUp),
-                          showConfirm: _showPwConfirm,
-                          onToggleConfirm: () =>
-                              setState(() => _showPwConfirm = !_showPwConfirm),
-                          loading: _loading,
-                          onSubmit: _signUp,
+                        Icon(Icons.lock_outline, size: 13, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 5),
+                        Text(
+                          '얼굴·영상은 서버로 보내지 않아요.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  // ── 하단 안내 ──
-                  Text(
-                    '얼굴·영상은 서버로 보내지 않아요.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.outlineVariant,
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 12),
+                      Center(
+                        child: TextButton(
+                          onPressed: () => context.push('/dev/theme'),
+                          child: const Text('테마 미리보기 (개발)'),
                         ),
-                  ),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 12),
-                    Center(
-                      child: TextButton(
-                        onPressed: () => context.push('/dev/theme'),
-                        child: const Text('테마 미리보기 (개발)'),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-// ── 로고 ─────────────────────────────────────────────────────
+// ── 브랜드 헤더 (와인 그라데이션) ─────────────────────────────
 
-class _Logo extends StatelessWidget {
-  final Color color;
-  const _Logo({required this.color});
+class _BrandHeader extends StatelessWidget {
+  final Color primary;
+  const _BrandHeader({required this.primary});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: color.withAlpha(20),
-            borderRadius: BorderRadius.circular(18),
+    final dark = Color.lerp(primary, Colors.black, 0.3)!;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [dark, primary, Color.lerp(primary, const Color(0xFFD4607A), 0.45)!],
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        28,
+        MediaQuery.of(context).padding.top + 28,
+        28,
+        28,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(30),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.school_rounded, size: 24, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'setudy',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.8,
+                ),
+              ),
+            ],
           ),
-          child: Icon(Icons.school_rounded, size: 36, color: color),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'setudy',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: color,
-                letterSpacing: -1,
-              ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '계획하고, 집중하고, 성장해요.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          const Text(
+            '계획하고, 집중하고, 성장해요.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -350,6 +382,7 @@ class _AuthTabBar extends StatelessWidget {
 // ── 공통 필드 빌더 ────────────────────────────────────────────
 
 Widget _buildField({
+  required BuildContext context,
   required TextEditingController controller,
   required String label,
   required IconData icon,
@@ -360,6 +393,7 @@ Widget _buildField({
   VoidCallback? onSubmit,
   bool enabled = true,
 }) {
+  final cs = Theme.of(context).colorScheme;
   return TextFormField(
     controller: controller,
     obscureText: obscure,
@@ -374,26 +408,27 @@ Widget _buildField({
     onFieldSubmitted: onSubmit != null ? (_) => onSubmit() : null,
     decoration: InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, size: 20),
+      prefixIcon: Icon(icon, size: 20, color: cs.onSurfaceVariant),
       suffixIcon: suffixIcon,
       filled: true,
+      fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: cs.outline.withAlpha(100)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: cs.outline.withAlpha(100)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: Colors.blue.shade400,
-          width: 2,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: cs.primary, width: 1.5),
       ),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: cs.outline.withAlpha(50)),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
   );
 }
@@ -423,11 +458,12 @@ class _LoginForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildField(
+          context: context,
           controller: emailCtrl,
           label: '이메일',
           icon: Icons.email_outlined,
@@ -436,6 +472,7 @@ class _LoginForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildField(
+          context: context,
           controller: pwCtrl,
           label: '비밀번호',
           icon: Icons.lock_outline_rounded,
@@ -473,7 +510,7 @@ class _LoginForm extends StatelessWidget {
                   child: Text(
                     '아이디·비밀번호 저장',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: onSurfaceVariant,
+                          color: cs.onSurfaceVariant,
                         ),
                   ),
                 ),
@@ -543,6 +580,7 @@ class _SignUpForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildField(
+          context: context,
           controller: emailCtrl,
           label: '이메일',
           icon: Icons.email_outlined,
@@ -551,6 +589,7 @@ class _SignUpForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildField(
+          context: context,
           controller: pwCtrl,
           label: '비밀번호 (6자 이상)',
           icon: Icons.lock_outline_rounded,
@@ -568,6 +607,7 @@ class _SignUpForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _buildField(
+          context: context,
           controller: confirmCtrl,
           label: '비밀번호 확인',
           icon: Icons.lock_person_outlined,
