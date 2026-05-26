@@ -107,7 +107,7 @@ class PlanRepository {
       itemsRaw = await supabase
           .from('plan_items')
           .select(
-            'id, subject, target_seconds, actual_seconds, is_done, scheduled_start_at, reminder_enabled',
+            'id, subject, target_seconds, actual_seconds, is_done, scheduled_start_at, reminder_enabled, repeat_series_id',
           )
           .eq('plan_id', planId)
           .order('created_at', ascending: true);
@@ -115,13 +115,13 @@ class PlanRepository {
       try {
         itemsRaw = await supabase
             .from('plan_items')
-            .select('id, subject, target_seconds, actual_seconds, is_done')
+            .select('id, subject, target_seconds, actual_seconds, is_done, repeat_series_id')
             .eq('plan_id', planId)
             .order('created_at', ascending: true);
       } catch (_) {
         itemsRaw = await supabase
             .from('plan_items')
-            .select('id, subject, target_seconds')
+            .select('id, subject, target_seconds, repeat_series_id')
             .eq('plan_id', planId)
             .order('created_at', ascending: true);
       }
@@ -144,6 +144,7 @@ class PlanRepository {
     if (rawSched is String && rawSched.isNotEmpty) {
       scheduled = DateTime.tryParse(rawSched);
     }
+    final rawSeries = m['repeat_series_id'];
     return PlanItem(
       id: m['id'] as String,
       subject: m['subject'] as String,
@@ -152,6 +153,7 @@ class PlanRepository {
       isDone: (m['is_done'] ?? false) as bool,
       scheduledStartAt: scheduled,
       reminderEnabled: (m['reminder_enabled'] ?? false) as bool,
+      repeatSeriesId: rawSeries is String && rawSeries.isNotEmpty ? rawSeries : null,
     );
   }
 
@@ -197,6 +199,7 @@ class PlanRepository {
     required int targetSeconds,
     DateTime? scheduledStartAtUtc,
     bool reminderEnabled = false,
+    String? repeatSeriesId,
   }) async {
     await ensureProfileRow();
 
@@ -210,17 +213,20 @@ class PlanRepository {
           if (scheduledStartAtUtc != null)
             'scheduled_start_at': scheduledStartAtUtc.toIso8601String(),
           'reminder_enabled': reminderEnabled,
+          if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
         },
       {
         'plan_id': planId,
         'subject': subject,
         'target_seconds': targetSeconds,
         'priority': 0,
+        if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
       },
       {
         'plan_id': planId,
         'subject': subject,
         'target_seconds': targetSeconds,
+        if (repeatSeriesId != null) 'repeat_series_id': repeatSeriesId,
       },
     ];
 
@@ -230,7 +236,7 @@ class PlanRepository {
         final inserted = await supabase
             .from('plan_items')
             .insert(row)
-            .select('id, subject, target_seconds')
+            .select('id, subject, target_seconds, repeat_series_id')
             .single();
         return PlanItem(
           id: inserted['id'] as String,
@@ -240,6 +246,9 @@ class PlanRepository {
           isDone: false,
           scheduledStartAt: scheduledStartAtUtc,
           reminderEnabled: reminderEnabled,
+          repeatSeriesId: (inserted['repeat_series_id'] as String?)?.trim().isEmpty == true
+              ? null
+              : inserted['repeat_series_id'] as String?,
         );
       } catch (e) {
         lastErr = e;
@@ -300,6 +309,47 @@ class PlanRepository {
 
   Future<void> deleteItem(String itemId) async {
     await supabase.from('plan_items').delete().eq('id', itemId);
+  }
+
+  Future<String> createRepeatSeries({
+    required String subject,
+    required int targetSeconds,
+    required String unit,
+    required int interval,
+    required List<int> weekdays,
+    required DateTime startDate,
+    required DateTime endDate,
+    int? startTimeMinutes,
+    required bool reminderEnabled,
+  }) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw const AuthException('Not authenticated');
+    await ensureProfileRow();
+    final row = await supabase
+        .from('plan_repeat_series')
+        .insert({
+          'user_id': userId,
+          'unit': unit,
+          'interval': interval,
+          'weekdays': weekdays,
+          'start_date': DateTime(startDate.year, startDate.month, startDate.day)
+              .toIso8601String()
+              .substring(0, 10),
+          'end_date': DateTime(endDate.year, endDate.month, endDate.day)
+              .toIso8601String()
+              .substring(0, 10),
+          'start_time_minutes': startTimeMinutes,
+          'reminder_enabled': reminderEnabled,
+          'subject': subject,
+          'target_seconds': targetSeconds,
+        })
+        .select('id')
+        .single();
+    return row['id'] as String;
+  }
+
+  Future<void> deleteRepeatSeries(String seriesId) async {
+    await supabase.from('plan_repeat_series').delete().eq('id', seriesId);
   }
 
   Future<List<String>> fetchRecentSubjects({int limit = 12}) async {

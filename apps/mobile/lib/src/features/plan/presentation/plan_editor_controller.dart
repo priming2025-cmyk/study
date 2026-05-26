@@ -131,8 +131,27 @@ class PlanEditorController extends ChangeNotifier {
     final repeatCfg = repeat ?? const PlanRepeatConfig();
     final anchor = forDay ?? planDay;
     final dates = repeatCfg.enabled
-        ? repeatCfg.occurrenceDates(anchor)
+        ? repeatCfg.occurrenceDates(anchor, maxOccurrences: 240)
         : [DateTime(anchor.year, anchor.month, anchor.day)];
+
+    String? seriesId;
+    if (repeatCfg.enabled) {
+      final unit = repeatCfg.unit == PlanRepeatUnit.day ? 'day' : 'week';
+      final startD = repeatCfg.startDate ?? anchor;
+      final endD = repeatCfg.endDate ?? anchor.add(const Duration(days: 30));
+      final startMinutes = startTime != null ? (startTime.hour * 60 + startTime.minute) : null;
+      seriesId = await _repo.createRepeatSeries(
+        subject: trimmed,
+        targetSeconds: targetMinutes * 60,
+        unit: unit,
+        interval: repeatCfg.interval,
+        weekdays: repeatCfg.weekdays.toList()..sort(),
+        startDate: startD,
+        endDate: endD,
+        startTimeMinutes: startMinutes,
+        reminderEnabled: reminderEnabled && startTime != null,
+      );
+    }
 
     for (final day in dates) {
       await _addPlanEntryForDay(
@@ -141,6 +160,7 @@ class PlanEditorController extends ChangeNotifier {
         targetMinutes: targetMinutes,
         startTime: startTime,
         reminderEnabled: reminderEnabled,
+        repeatSeriesId: seriesId,
         refreshTodayView: sameCalendarDay(day, planDay),
       );
     }
@@ -155,6 +175,7 @@ class PlanEditorController extends ChangeNotifier {
     required int targetMinutes,
     TimeOfDay? startTime,
     required bool reminderEnabled,
+    String? repeatSeriesId,
     required bool refreshTodayView,
   }) async {
     DateTime? scheduledUtc;
@@ -182,6 +203,7 @@ class PlanEditorController extends ChangeNotifier {
       targetSeconds: targetMinutes * 60,
       scheduledStartAtUtc: scheduledUtc,
       reminderEnabled: reminderEnabled && scheduledUtc != null,
+      repeatSeriesId: repeatSeriesId,
     );
 
     if (refreshTodayView) {
@@ -252,6 +274,11 @@ class PlanEditorController extends ChangeNotifier {
     await _persistCache();
     await PlanAlarmService.syncFromPlan(todayPlan);
     notifyListeners();
+  }
+
+  Future<void> deleteRepeatSeries(String seriesId) async {
+    await _repo.deleteRepeatSeries(seriesId);
+    await bootstrap();
   }
 
   Future<void> toggleDone(PlanItem item, bool done) async {

@@ -301,17 +301,58 @@ class SessionController extends ChangeNotifier {
   void reorderPlanItems(int oldIndex, int newIndex) {
     final plan = todayPlan;
     if (plan == null) return;
-    final items = List<PlanItem>.from(plan.items);
-    if (newIndex > oldIndex) newIndex--;
-    final item = items.removeAt(oldIndex);
-    items.insert(newIndex, item);
+    final oldItems = List<PlanItem>.from(plan.items);
+    if (oldItems.isEmpty) return;
+
+    // Flutter ReorderableListView의 newIndex 보정.
+    var correctedNewIndex = newIndex;
+    if (correctedNewIndex > oldIndex) correctedNewIndex--;
+
+    // 1) 화면상 “순서”만 바꾼 결과(아이템 순서 변경)
+    final reordered = List<PlanItem>.from(oldItems);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(correctedNewIndex, moved);
+
+    // 2) 사용자가 원하는 동작: 위치가 바뀌면 “시간 범위”도 위치에 맞게 자동 교체
+    //    즉, index i의 슬롯에 있던 scheduled_start_at/reminder_enabled을 새로 정렬된 아이템에 재할당.
+    final updated = <PlanItem>[];
+    for (var i = 0; i < reordered.length; i++) {
+      final slot = oldItems[i]; // i번째 슬롯 시간
+      updated.add(
+        reordered[i].copyWith(
+          scheduledStartAt: slot.scheduledStartAt,
+          reminderEnabled: slot.reminderEnabled,
+        ),
+      );
+    }
+
     todayPlan = TodayPlan(
       id: plan.id,
       date: plan.date,
       title: plan.title,
-      items: items,
+      items: updated,
     );
     notifyListeners();
+
+    // 원격/알림도 시간 교체 결과로 동기화.
+    unawaited(() async {
+      try {
+        for (var i = 0; i < updated.length; i++) {
+          final item = updated[i];
+          final slot = oldItems[i];
+          await _planRepo.updatePlanItemDetails(
+            itemId: item.id,
+            subject: item.subject,
+            targetSeconds: item.targetSeconds,
+            scheduledStartAtUtc: slot.scheduledStartAt?.toUtc(),
+            reminderEnabled: slot.reminderEnabled,
+          );
+        }
+        await PlanAlarmService.syncFromPlan(todayPlan);
+      } catch (_) {
+        // 실패해도 UI는 이미 교체된 상태이므로, 사용 흐름을 끊지 않습니다.
+      }
+    }());
   }
 
   /// 오늘 계획에서 항목 삭제. 선택 중이던 항목이면 다른 항목으로 옮깁니다.
@@ -335,6 +376,25 @@ class SessionController extends ChangeNotifier {
     }
     await PlanAlarmService.syncFromPlan(todayPlan);
     notifyListeners();
+  }
+
+  Future<void> deleteRepeatSeries(String seriesId) async {
+    await _planRepo.deleteRepeatSeries(seriesId);
+    todayPlan = await _planRepo.fetchTodayPlan();
+    _applyDefaultPlanSelection(todayPlan);
+    try {
+      recentSubjects = await _planRepo.fetchRecentSubjects();
+    } catch (_) {
+      recentSubjects = const [];
+    }
+    await PlanAlarmService.syncFromPlan(todayPlan);
+    notifyListeners();
+  }
+
+  Future<void> reloadPlan() async {
+    loadingPlan = true;
+    notifyListeners();
+    await _loadTodayPlan();
   }
 
   void _runAttentionTick() {

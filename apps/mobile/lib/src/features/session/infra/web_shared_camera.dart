@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert' show base64Decode;
 import 'dart:html' as html;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 

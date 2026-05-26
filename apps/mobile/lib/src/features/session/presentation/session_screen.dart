@@ -168,27 +168,41 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   }
 
   Future<void> _onDeleteSessionPlanItem(PlanItem item) async {
-    final ok = await showDialog<bool>(
+    final seriesId = item.repeatSeriesId;
+    final action = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('이 과목을 삭제할까요?'),
-        content: Text('「${item.subject}」이(가) 오늘 계획에서 사라집니다.'),
+        title: const Text('이 계획을 삭제할까요?'),
+        content: Text(
+          seriesId == null
+              ? '「${item.subject}」이(가) 오늘 계획에서 사라집니다.'
+              : '「${item.subject}」은(는) 반복 일정이에요.\n이 항목만 지울까요, 반복 일정 전체를 지울까요?',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
             child: const Text('취소'),
           ),
+          if (seriesId != null)
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('one'),
+              child: const Text('이 항목만'),
+            ),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('삭제'),
+            onPressed: () => Navigator.of(ctx).pop(seriesId != null ? 'all' : 'one'),
+            child: Text(seriesId != null ? '반복 전체 삭제' : '삭제'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return;
+    if (action == null || action == 'cancel' || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await _c.deletePlanItem(item);
+      if (action == 'all' && seriesId != null) {
+        await _c.deleteRepeatSeries(seriesId);
+      } else {
+        await _c.deletePlanItem(item);
+      }
     } catch (e) {
       AppSnacks.showWithMessenger(messenger, '삭제 실패: $e');
     }
@@ -460,24 +474,32 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                           unfocusedSeconds: unfocused,
                         ),
                       ],
-                      SubjectPickerCard(
-                        todayPlan: _c.todayPlan,
-                        selectedPlanItemId: _c.selectedPlanItemId,
-                        reloadToken: _subjectReloadToken,
-                        draftSubject: _c.selectedSubjectLabel.isEmpty
-                            ? null
-                            : _c.selectedSubjectLabel,
-                        draftTargetMinutes: _c.draftTargetMinutes,
-                        onSelected: _c.selectPlanItem,
-                        onDraftSubject: _c.setDraftSubject,
-                        onDraftMinutes: _c.setDraftTargetMinutes,
-                        onOpenAdvancedAdd: _openSessionAddSheet,
-                        onEditItem: _openEditSheet,
-                        onDeleteItem: _onDeleteSessionPlanItem,
-                        onReorder: _c.reorderPlanItems,
-                      ),
-                      // 같이 공부 중(others) 카드 제거: 스터디방에서만 노출
-                      const SizedBox(height: 80),
+                      if (!running)
+                        SubjectPickerCard(
+                          todayPlan: _c.todayPlan,
+                          selectedPlanItemId: _c.selectedPlanItemId,
+                          reloadToken: _subjectReloadToken,
+                          draftSubject: _c.selectedSubjectLabel.isEmpty
+                              ? null
+                              : _c.selectedSubjectLabel,
+                          draftTargetMinutes: _c.draftTargetMinutes,
+                          onSelected: _c.selectPlanItem,
+                          onDraftSubject: _c.setDraftSubject,
+                          onDraftMinutes: _c.setDraftTargetMinutes,
+                          onOpenAdvancedAdd: _openSessionAddSheet,
+                          onEditItem: _openEditSheet,
+                          onDeleteItem: _onDeleteSessionPlanItem,
+                          onReorder: _c.reorderPlanItems,
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _CurrentStudyOnly(
+                            subject: _c.selectedSubjectLabel,
+                          ),
+                        ),
+                      // bottomNavigationBar 안전 여백
+                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -581,6 +603,38 @@ class _NativeSessionCameraMirror extends StatelessWidget {
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrentStudyOnly extends StatelessWidget {
+  final String subject;
+
+  const _CurrentStudyOnly({required this.subject});
+
+  @override
+  Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            const Icon(Icons.book_rounded, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                subject.isEmpty ? '현재 과목' : subject,
+                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );

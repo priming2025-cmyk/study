@@ -171,7 +171,7 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
               TextButton.icon(
                 onPressed: widget.onOpenAdvancedAdd,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('계획 추가'),
+                label: const Text('+ 계획 추가'),
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 8),

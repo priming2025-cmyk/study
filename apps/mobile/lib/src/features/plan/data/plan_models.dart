@@ -31,6 +31,7 @@ class PlanItem {
   /// 사용자가 정한 시작 시각(서버 timestamptz, UTC 저장 → 앱에서 toLocal 표시)
   final DateTime? scheduledStartAt;
   final bool reminderEnabled;
+  final String? repeatSeriesId;
 
   const PlanItem({
     required this.id,
@@ -40,6 +41,7 @@ class PlanItem {
     required this.isDone,
     this.scheduledStartAt,
     this.reminderEnabled = false,
+    this.repeatSeriesId,
   });
 
   /// 집중 세션으로 목표 시간을 채웠는지 (수동 체크와 무관).
@@ -62,6 +64,7 @@ class PlanItem {
     bool? isDone,
     DateTime? scheduledStartAt,
     bool? reminderEnabled,
+    String? repeatSeriesId,
   }) {
     return PlanItem(
       id: id ?? this.id,
@@ -71,6 +74,7 @@ class PlanItem {
       isDone: isDone ?? this.isDone,
       scheduledStartAt: scheduledStartAt ?? this.scheduledStartAt,
       reminderEnabled: reminderEnabled ?? this.reminderEnabled,
+      repeatSeriesId: repeatSeriesId ?? this.repeatSeriesId,
     );
   }
 }

@@ -48,6 +48,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   int _repeatInterval = 1;
   late Set<int> _weekdays;
   bool _repeatNone = true;
+  late DateTime _repeatStartDay;
+  late DateTime _repeatEndDay;
   bool _saving = false;
 
   bool get _editing => widget.editItem != null;
@@ -70,6 +72,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
         if (!_tab.indexIsChanging) setState(() {});
       });
     _weekdays = {widget.planDay.weekday};
+    _repeatStartDay = DateTime(widget.planDay.year, widget.planDay.month, widget.planDay.day);
+    _repeatEndDay = _repeatStartDay.add(const Duration(days: 30));
     _loadSubjects();
     final e = widget.editItem;
     if (e != null) {
@@ -90,6 +94,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
       _repeatUnit = PlanRepeatUnit.week;
       _repeatInterval = 1;
       _weekdays = {widget.planDay.weekday};
+      _repeatStartDay = DateTime(widget.planDay.year, widget.planDay.month, widget.planDay.day);
+      _repeatEndDay = _repeatStartDay.add(const Duration(days: 30));
     }
   }
 
@@ -111,7 +117,25 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
       unit: _repeatUnit,
       interval: _repeatInterval,
       weekdays: _weekdays,
+      startDate: _repeatStartDay,
+      endDate: _repeatEndDay,
     );
+  }
+
+  Future<void> _pickRepeatRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 3)),
+      initialDateRange: DateTimeRange(start: _repeatStartDay, end: _repeatEndDay),
+      saveText: '완료',
+      helpText: '반복 기간',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _repeatStartDay = DateTime(picked.start.year, picked.start.month, picked.start.day);
+      _repeatEndDay = DateTime(picked.end.year, picked.end.month, picked.end.day);
+    });
   }
 
   Future<void> _deleteSubjectFromList(String name) async {
@@ -192,7 +216,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottom = MediaQuery.of(context).padding.bottom;
-    final navH = kBottomNavigationBarHeight;
+    const navH = kBottomNavigationBarHeight;
     final sheetH = MediaQuery.of(context).size.height * 0.78;
 
     return SizedBox(
@@ -266,6 +290,9 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                     unit: _repeatUnit,
                     interval: _repeatInterval,
                     weekdays: _weekdays,
+                    rangeStart: _repeatStartDay,
+                    rangeEnd: _repeatEndDay,
+                    onPickRange: _pickRepeatRange,
                     onPickInterval: () async {
                       final picked = await _RepeatIntervalSheet.show(
                         context,
@@ -293,6 +320,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                       _repeatUnit = PlanRepeatUnit.week;
                       _repeatInterval = 1;
                       _weekdays = {widget.planDay.weekday};
+                      _repeatStartDay = DateTime(widget.planDay.year, widget.planDay.month, widget.planDay.day);
+                      _repeatEndDay = _repeatStartDay.add(const Duration(days: 30));
                     }),
                   ),
                 ],
@@ -627,6 +656,9 @@ class _RepeatTab extends StatelessWidget {
   final PlanRepeatUnit unit;
   final int interval;
   final Set<int> weekdays;
+  final DateTime rangeStart;
+  final DateTime rangeEnd;
+  final VoidCallback onPickRange;
   final VoidCallback onPickInterval;
   final ValueChanged<int> onWeekdayToggle;
   final VoidCallback onRepeatOff;
@@ -637,6 +669,9 @@ class _RepeatTab extends StatelessWidget {
     required this.unit,
     required this.interval,
     required this.weekdays,
+    required this.rangeStart,
+    required this.rangeEnd,
+    required this.onPickRange,
     required this.onPickInterval,
     required this.onWeekdayToggle,
     required this.onRepeatOff,
@@ -663,6 +698,39 @@ class _RepeatTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (repeatOn) ...[
+          Row(
+            children: [
+              Text('기간', style: tt.titleSmall),
+              const Spacer(),
+              Material(
+                color: cs.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(10),
+                child: InkWell(
+                  onTap: onPickRange,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${rangeStart.month}월 ${rangeStart.day}일~${rangeEnd.month}월 ${rangeEnd.day}일',
+                          style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Row(
             children: [
               Text('반복 주기', style: tt.titleSmall),

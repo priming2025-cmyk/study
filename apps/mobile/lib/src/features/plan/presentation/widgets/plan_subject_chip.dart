@@ -45,18 +45,18 @@ class PlanSubjectChip extends StatelessWidget {
                   left: Radius.circular(11),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 10, 4, 10),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 2, 8),
                   child: Row(
                     children: [
-                      CircleAvatar(radius: 6, backgroundColor: color),
-                      const SizedBox(width: 8),
+                      CircleAvatar(radius: 5, backgroundColor: color),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           subject.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                             color: selected ? color : cs.onSurface,
@@ -70,7 +70,7 @@ class PlanSubjectChip extends StatelessWidget {
             ),
             // ── ⋮ 메뉴 — 오른쪽 끝 고정 폭, 선택 탭과 겹치지 않음 ───────
             SizedBox(
-              width: 36,
+              width: 28,
               height: double.infinity,
               child: PopupMenuButton<String>(
                 padding: EdgeInsets.zero,
@@ -78,7 +78,7 @@ class PlanSubjectChip extends StatelessWidget {
                 splashRadius: 18,
                 tooltip: '편집·삭제',
                 constraints: const BoxConstraints(
-                  minWidth: 36,
+                  minWidth: 28,
                   minHeight: 36,
                 ),
                 position: PopupMenuPosition.under,

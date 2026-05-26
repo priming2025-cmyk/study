@@ -56,29 +56,43 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
   }
 
   Future<bool> _confirmDeleteItem(PlanItem item) async {
-    final ok = await showDialog<bool>(
+    final seriesId = item.repeatSeriesId;
+    final action = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('이 과목을 삭제할까요?'),
-        content: Text('「${item.subject}」 항목이 오늘 계획에서 사라집니다.'),
+        title: const Text('이 계획을 삭제할까요?'),
+        content: Text(
+          seriesId == null
+              ? '「${item.subject}」 항목이 오늘 계획에서 사라집니다.'
+              : '「${item.subject}」은(는) 반복 일정이에요.\n이 항목만 지울까요, 반복 일정 전체를 지울까요?',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
+            onPressed: () => Navigator.of(ctx).pop('cancel'),
             child: const Text('취소'),
           ),
+          if (seriesId != null)
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop('one'),
+              child: const Text('이 항목만'),
+            ),
           FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(seriesId != null ? 'all' : 'one'),
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
-            child: const Text('삭제'),
+            child: Text(seriesId != null ? '반복 전체 삭제' : '삭제'),
           ),
         ],
       ),
     );
-    if (ok != true || !mounted) return false;
+    if (action == null || action == 'cancel' || !mounted) return false;
     try {
-      await _c.deleteItem(item);
+      if (action == 'all' && seriesId != null) {
+        await _c.deleteRepeatSeries(seriesId);
+      } else {
+        await _c.deleteItem(item);
+      }
       return true;
     } catch (e) {
       if (!mounted) return false;
