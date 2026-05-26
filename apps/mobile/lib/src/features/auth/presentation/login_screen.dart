@@ -105,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen>
         await prefs.remove(_prefPasswordKey);
       }
       if (!mounted) return;
-      context.go('/');
+      context.go('/session');
     } on AuthException catch (e) {
       if (!mounted) return;
       AppSnacks.show(context, AuthLoginErrorMessage.forSignIn(e));
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
       if (res.session != null) {
         // 이메일 인증 비활성화 시 세션이 바로 생성됩니다.
-        context.go('/');
+        context.go('/session');
         return;
       }
       // 이메일 확인이 필요한 경우 안내

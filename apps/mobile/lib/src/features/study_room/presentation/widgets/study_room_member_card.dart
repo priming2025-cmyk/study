@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
+import 'study_room_member_viewer_sheet.dart';
 
 part 'study_room_member_card_part.dart';
 
@@ -11,6 +12,8 @@ class StudyRoomMemberCard extends StatelessWidget {
   final bool compact;
   final String? floatingReaction;
   final void Function(String emoji)? onQuickReact;
+  /// DM 채팅 열기
+  final VoidCallback? onChat;
 
   const StudyRoomMemberCard({
     super.key,
@@ -19,6 +22,7 @@ class StudyRoomMemberCard extends StatelessWidget {
     this.compact = false,
     this.floatingReaction,
     this.onQuickReact,
+    this.onChat,
   });
 
   @override
@@ -164,7 +168,92 @@ class StudyRoomMemberCard extends StatelessWidget {
               right: 6,
               child: _SnapshotAge(at: member.snapshotAt!),
             ),
+
+          // 피어 카드에만 표시: 우측 아이콘 열 (말풍선 / 하트 / 모니터)
+          if (!isSelf)
+            Positioned(
+              right: 4,
+              top: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _IconBtn(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    tooltip: '메시지',
+                    onTap: () {
+                      if (onChat != null) {
+                        onChat!();
+                      } else {
+                        _showChatSnack(context);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  _IconBtn(
+                    icon: Icons.favorite_outline_rounded,
+                    tooltip: '응원',
+                    onTap: () {
+                      if (onQuickReact != null) {
+                        onQuickReact!('❤️');
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  _IconBtn(
+                    icon: Icons.monitor_outlined,
+                    tooltip: '영상/사진 보기',
+                    onTap: () => StudyRoomMemberViewerSheet.show(
+                      context,
+                      member: member,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  void _showChatSnack(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${member.displayName ?? '친구'}에게 메시지를 보냈어요',
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _IconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Colors.black.withAlpha(100),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: Colors.white),
+        ),
       ),
     );
   }

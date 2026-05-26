@@ -186,7 +186,7 @@ class StudyRoomController extends ChangeNotifier {
         .insert({
           'owner_id': userId,
           'name': name.trim().isEmpty ? '우리셋' : name.trim(),
-          'max_peers': 4,
+          'max_peers': 8,
         })
         .select('id')
         .single();

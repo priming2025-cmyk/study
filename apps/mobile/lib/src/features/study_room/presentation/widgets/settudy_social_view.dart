@@ -32,25 +32,6 @@ class SettudySocialView extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-            child: Row(
-              children: [
-                Text(
-                  '셋터디',
-                  style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const Spacer(),
-                IconButton(
-                  tooltip: '그룹 검색',
-                  icon: const Icon(Icons.search_rounded),
-                  onPressed: () => _openGroupBrowser(context),
-                ),
-              ],
-            ),
-          ),
-        ),
         if (recentRooms.isNotEmpty)
           SliverToBoxAdapter(
             child: RecentSetsSection(

@@ -20,6 +20,7 @@ import 'widgets/study_room_active_view.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
+import 'widgets/study_room_invite_sheet.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
   final bool quickJoin;
@@ -267,6 +268,99 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     );
   }
 
+  void _showInviteSheet(String roomId) {
+    StudyRoomInviteSheet.show(context, roomId: roomId);
+  }
+
+  /// 헤더 + 버튼 → 셋 만들기 / 입장 선택
+  void _showCreateOrJoinMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '셋터디 시작',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('셋 만들기'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                if (kIsWeb) WebSharedCamera.instance.openFromUserGesture();
+                unawaited(_createRoom());
+              },
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.login_rounded),
+              label: const Text('입장'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _showJoinCodeDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 입장 → 참여코드 입력 다이얼로그
+  void _showJoinCodeDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('입장 코드 입력'),
+        content: TextField(
+          controller: _roomIdCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '입장 코드를 붙여넣기 해주세요',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final id = _roomIdCtrl.text.trim();
+              if (id.isEmpty) return;
+              Navigator.pop(ctx);
+              if (kIsWeb) WebSharedCamera.instance.openFromUserGesture();
+              unawaited(_joinRoom());
+            },
+            child: const Text('입장'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── 빌드 ──────────────────────────────────────────────────────────────────
 
   @override
@@ -282,29 +376,27 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     });
 
     return Scaffold(
-      // 키보드가 올라와도 본문(2×2·카메라) 높이를 줄이지 않음 → 채팅 입력 시 레이아웃이 덜 흔들림
-      resizeToAvoidBottomInset: !inRoom,
+      resizeToAvoidBottomInset: false,
       appBar: inRoom
           ? AppBar(
               title: const Text('셋터디'),
               actions: [
-                IconButton(
-                  tooltip: '카메라 새로고침',
-                  icon: const Icon(Icons.cameraswitch_rounded),
-                  onPressed: () {
-                    if (kIsWeb) {
+                if (kIsWeb)
+                  IconButton(
+                    tooltip: '카메라 새로고침',
+                    icon: const Icon(Icons.cameraswitch_rounded),
+                    onPressed: () {
                       WebSharedCamera.instance.openFromUserGesture();
-                    }
-                    unawaited(_controller.refreshSelfCamera());
-                  },
-                ),
+                      unawaited(_controller.refreshSelfCamera());
+                    },
+                  ),
                 IconButton(
                   tooltip: '집중민감도',
                   icon: const Icon(Icons.tune_rounded),
                   onPressed: _openSensitivitySheet,
                 ),
                 IconButton(
-                  tooltip: '집중 배경음',
+                  tooltip: '배경음',
                   icon: const Icon(Icons.graphic_eq_rounded),
                   onPressed: () => showStudyRoomAmbientSheet(
                     context,
@@ -319,40 +411,49 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                         showStudyRoomHostActionsSheet(context, _controller),
                   ),
                 IconButton(
-                  tooltip: '셋 ID 복사',
-                  icon: const Icon(Icons.copy_rounded),
-                  onPressed: _copyRoomId,
+                  tooltip: '입장코드 공유',
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  onPressed: () {
+                    final id = _controller.roomId;
+                    if (id != null) {
+                      _showInviteSheet(id);
+                    }
+                  },
                 ),
               ],
             )
-          : null,
-      floatingActionButton: !inRoom
-          ? GestureDetector(
-              onLongPress: _controller.joining
-                  ? null
-                  : () => _showJoinByIdDialog(context),
-              child: FloatingActionButton(
-                onPressed: _controller.joining
-                    ? null
-                    : () {
-                        if (kIsWeb) {
-                          WebSharedCamera.instance.openFromUserGesture();
-                        }
-                        unawaited(_createRoom());
-                      },
-                child: _controller.joining
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.add),
-              ),
-            )
-          : null,
+          : AppBar(
+              title: const Text('셋터디'),
+              titleTextStyle: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+              actions: [
+                // + 버튼 → 셋 만들기 / 입장
+                if (_controller.joining)
+                  const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  IconButton(
+                    tooltip: '셋 만들기 / 입장',
+                    icon: const Icon(Icons.add_rounded),
+                    onPressed: () => _showCreateOrJoinMenu(context),
+                  ),
+                IconButton(
+                  tooltip: '그룹 검색',
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () {/* settudy_social_view의 검색 */},
+                ),
+              ],
+            ),
+      // FAB 완전 제거
+      floatingActionButton: null,
       body: inRoom
           ? StudyRoomActiveView(
               controller: _controller,
