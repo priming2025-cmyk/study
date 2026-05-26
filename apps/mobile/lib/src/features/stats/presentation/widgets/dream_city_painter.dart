@@ -113,8 +113,8 @@ class DreamCityPainter extends CustomPainter {
           Offset(0, size.height * 0.82),
           Offset(0, size.height),
           [
-            const Color(0xFF38BDF8).withValues(alpha: 0.7),
-            const Color(0xFF0369A1),
+            const Color(0xFF7090C0).withValues(alpha: 0.7),
+            const Color(0xFF2B4A7A),
           ],
         ),
     );

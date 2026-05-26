@@ -38,7 +38,7 @@ const _subjectColors = <String, Color>{
   '도덕': Color(0xFFA855F7),
   '음악': Color(0xFFEC4899),
   '미술': Color(0xFFF472B6),
-  '체육': Color(0xFF0EA5E9),
+  '체육': Color(0xFF0891B2),
   '정보': Color(0xFF14B8A6),
   '제2외국어': Color(0xFFFF7043),
 };
