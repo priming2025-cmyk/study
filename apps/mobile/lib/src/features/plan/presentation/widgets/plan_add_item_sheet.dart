@@ -47,7 +47,7 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
   late Set<int> _weekdays;
-  bool _repeatNone = false;
+  bool _repeatNone = true;
   bool _saving = false;
 
   bool get _editing => widget.editItem != null;
@@ -86,7 +86,9 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     } else {
       _startMin = suggestPlanStartMinutes(widget.existingItems, DateTime.now());
       _durationMin = suggestPlanDurationMinutes(widget.existingItems) ?? 50;
-      _repeatNone = false;
+      _repeatNone = true;
+      _repeatUnit = PlanRepeatUnit.week;
+      _repeatInterval = 1;
       _weekdays = {widget.planDay.weekday};
     }
   }
@@ -274,7 +276,6 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                       setState(() {
                         _repeatInterval = picked.$1;
                         _repeatUnit = picked.$2;
-                        _repeatNone = false;
                       });
                     },
                     onWeekdayToggle: (d) => setState(() {
@@ -285,9 +286,14 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                       } else {
                         _weekdays = Set.from(_weekdays)..add(d);
                       }
-                      _repeatNone = false;
                     }),
-                    onNone: () => setState(() => _repeatNone = true),
+                    onRepeatOff: () => setState(() => _repeatNone = true),
+                    onRepeatOn: () => setState(() {
+                      _repeatNone = false;
+                      _repeatUnit = PlanRepeatUnit.week;
+                      _repeatInterval = 1;
+                      _weekdays = {widget.planDay.weekday};
+                    }),
                   ),
                 ],
               ),
@@ -571,6 +577,51 @@ class _TimePlanTab extends StatelessWidget {
   }
 }
 
+class _RepeatModeChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RepeatModeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? cs.primaryContainer : cs.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected
+                  ? cs.primary.withValues(alpha: 0.6)
+                  : cs.outlineVariant,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RepeatTab extends StatelessWidget {
   final bool repeatNone;
   final PlanRepeatUnit unit;
@@ -578,7 +629,8 @@ class _RepeatTab extends StatelessWidget {
   final Set<int> weekdays;
   final VoidCallback onPickInterval;
   final ValueChanged<int> onWeekdayToggle;
-  final VoidCallback onNone;
+  final VoidCallback onRepeatOff;
+  final VoidCallback onRepeatOn;
 
   const _RepeatTab({
     required this.repeatNone,
@@ -587,7 +639,8 @@ class _RepeatTab extends StatelessWidget {
     required this.weekdays,
     required this.onPickInterval,
     required this.onWeekdayToggle,
-    required this.onNone,
+    required this.onRepeatOff,
+    required this.onRepeatOn,
   });
 
   static const _days = ['월', '화', '수', '목', '금', '토', '일'];
@@ -604,94 +657,108 @@ class _RepeatTab extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final showWeekdays = !repeatNone && unit == PlanRepeatUnit.week;
 
+    final repeatOn = !repeatNone;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Text('반복 주기', style: tt.titleSmall),
-            const Spacer(),
-            Material(
-              color: cs.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(10),
-              child: InkWell(
-                onTap: onPickInterval,
+        if (repeatOn) ...[
+          Row(
+            children: [
+              Text('반복 주기', style: tt.titleSmall),
+              const Spacer(),
+              Material(
+                color: cs.surfaceContainerHigh,
                 borderRadius: BorderRadius.circular(10),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        repeatNone ? '1주마다' : _intervalLabel,
-                        style: tt.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
+                child: InkWell(
+                  onTap: onPickInterval,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _intervalLabel,
+                          style: tt.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 20,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ],
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-        if (showWeekdays) ...[
-          const SizedBox(height: 16),
-          Row(
-            children: List.generate(7, (i) {
-              final d = i + 1;
-              final sel = weekdays.contains(d);
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
-                  child: Material(
-                    color: sel
-                        ? cs.surfaceContainerHigh
-                        : cs.surfaceContainerLowest,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      onTap: () => onWeekdayToggle(d),
+            ],
+          ),
+          if (showWeekdays) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: List.generate(7, (i) {
+                final d = i + 1;
+                final sel = weekdays.contains(d);
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(left: i == 0 ? 0 : 3),
+                    child: Material(
+                      color: sel
+                          ? cs.surfaceContainerHigh
+                          : cs.surfaceContainerLowest,
                       borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        height: 34,
-                        child: Center(
-                          child: Text(
-                            _days[i],
-                            style: tt.labelMedium?.copyWith(
-                              fontWeight:
-                                  sel ? FontWeight.w700 : FontWeight.w500,
-                              color: sel
-                                  ? cs.onSurface
-                                  : cs.onSurfaceVariant,
+                      child: InkWell(
+                        onTap: () => onWeekdayToggle(d),
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          height: 34,
+                          child: Center(
+                            child: Text(
+                              _days[i],
+                              style: tt.labelMedium?.copyWith(
+                                fontWeight:
+                                    sel ? FontWeight.w700 : FontWeight.w500,
+                                color: sel
+                                    ? cs.onSurface
+                                    : cs.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              );
-            }),
-          ),
+                );
+              }),
+            ),
+          ],
+          const SizedBox(height: 20),
         ],
-        const SizedBox(height: 24),
-        OutlinedButton(
-          onPressed: onNone,
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(double.infinity, 48),
-            foregroundColor: cs.onSurface,
-            side: BorderSide(color: cs.outlineVariant),
-          ),
-          child: const Text('반복 안 함'),
+        Row(
+          children: [
+            Expanded(
+              child: _RepeatModeChip(
+                label: '반복 안 함',
+                selected: repeatNone,
+                onTap: onRepeatOff,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _RepeatModeChip(
+                label: '반복',
+                selected: repeatOn,
+                onTap: onRepeatOn,
+              ),
+            ),
+          ],
         ),
       ],
     );
