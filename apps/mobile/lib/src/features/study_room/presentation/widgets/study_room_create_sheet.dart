@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
+import '../../domain/study_room_default_name.dart';
+import 'peer_count_selector_row.dart';
+
 class StudyRoomCreateRequest {
   final String name;
   final int maxPeers;
@@ -49,7 +53,10 @@ class _StudyRoomCreateSheetBodyState extends State<_StudyRoomCreateSheetBody> {
 
   void _submit() {
     Navigator.of(context).pop(
-      StudyRoomCreateRequest(name: _name.text.trim(), maxPeers: _maxPeers),
+      StudyRoomCreateRequest(
+        name: resolveStudyRoomName(_name.text),
+        maxPeers: _maxPeers,
+      ),
     );
   }
 
@@ -59,39 +66,38 @@ class _StudyRoomCreateSheetBodyState extends State<_StudyRoomCreateSheetBody> {
     final tt = Theme.of(context).textTheme;
 
     return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 8, bottom: 16 + bottom),
+      padding: EdgeInsets.only(left: 16, right: 16, top: 0, bottom: 16 + bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('셋 만들기', style: tt.titleMedium),
-          const SizedBox(height: 12),
+          const SheetHeaderBar(title: '셋 만들기'),
+          Text(
+            '셋이름(선택)',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _name,
             autofocus: true,
             textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
-              hintText: '셋 이름 (선택)',
+              hintText: '비우면 우리셋',
               border: OutlineInputBorder(),
             ),
             onSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 14),
-          Text('인원수 선택', style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final n in const [2, 3, 4, 5, 6, 7, 8])
-                ChoiceChip(
-                  label: Text('$n'),
-                  selected: _maxPeers == n,
-                  onSelected: (_) => setState(() => _maxPeers = n),
-                ),
-            ],
-          ),
           const SizedBox(height: 16),
+          Text(
+            '인원수 선택',
+            style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          PeerCountSelectorRow(
+            value: _maxPeers,
+            onChanged: (n) => setState(() => _maxPeers = n),
+          ),
+          const SizedBox(height: 20),
           Row(
             children: [
               TextButton(
@@ -110,4 +116,3 @@ class _StudyRoomCreateSheetBodyState extends State<_StudyRoomCreateSheetBody> {
     );
   }
 }
-

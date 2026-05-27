@@ -67,6 +67,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   Future<void> _openSensitivitySheet() async {
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) => SessionSettingsSheet(
         engagedMinScore: _c.engagedMinScore,

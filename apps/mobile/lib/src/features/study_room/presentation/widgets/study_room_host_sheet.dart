@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../infra/study_room_controller.dart';
 
 /// 방장 전용: 다른 참가자에게 방장(호스트) 위임.
@@ -20,19 +21,12 @@ Future<void> showStudyRoomHostActionsSheet(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Text('방장 넘기기', style: Theme.of(ctx).textTheme.titleMedium),
+              SheetHeaderBar(
+                title: '방장 넘기기',
+                subtitle: '선택한 멤버에게 방장 권한이 넘어가요.',
+                onClose: () => Navigator.pop(ctx),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: Text(
-                  '선택한 멤버에게 방장 권한이 넘어가요.',
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ),
+              const SizedBox(height: 4),
               if (others.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(24),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../data/contacts_friend_service.dart';
 
 /// 연락처에서 셋터디 친구 찾기 바텀시트.
@@ -87,13 +88,12 @@ class _ContactsImportSheetState extends State<ContactsImportSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('연락처에서 친구 찾기',
-                      style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  Text(
-                    '카카오톡·인스타처럼 연락처에 있는 사람 중 셋터디를 쓰는 친구를 찾아요. '
-                    '번호는 친구 매칭에만 사용됩니다.',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  const SheetHeaderBar(
+                    title: '연락처에서 친구 찾기',
+                    subtitle:
+                        '카카오톡·인스타처럼 연락처에 있는 사람 중 셋터디를 쓰는 친구를 찾아요. '
+                        '번호는 친구 매칭에만 사용됩니다.',
+                    padding: EdgeInsets.zero,
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(

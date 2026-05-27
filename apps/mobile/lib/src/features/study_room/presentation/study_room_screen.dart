@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../../../core/widgets/sheet_header_bar.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/infra/web_shared_camera.dart';
@@ -125,10 +126,11 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     final cur = _engagedMinScoreN.value;
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) => StudyRoomSettingsSheet(
         isRoomHost: _controller.isRoomHost,
-        initialRoomName: _controller.roomName ?? '셋',
+        initialRoomName: _controller.roomName ?? '',
         initialMaxPeers: _controller.maxPeers ?? 8,
         engagedMinScore: cur,
         onUpdateRoomSettings: (name, maxPeers) async {
@@ -300,14 +302,12 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '셋터디 시작',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
+            SheetHeaderBar(
+              title: '셋터디 시작',
+              onClose: () => Navigator.pop(ctx),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
             FilledButton.icon(
               icon: const Icon(Icons.add_rounded),
               label: const Text('셋 만들기'),

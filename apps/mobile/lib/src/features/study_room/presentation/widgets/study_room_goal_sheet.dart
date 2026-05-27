@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
+
 /// 방 입장 전 스터디 그룹 목표 한 줄을 입력받습니다. 취소 시 `null`.
 ///
 /// [TextEditingController]는 시트 State가 소유해, 모달이 완전히 내려간 뒤
@@ -49,8 +51,8 @@ class _StudyRoomGoalSheetBodyState extends State<_StudyRoomGoalSheetBody> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('스터디 그룹의 목표', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 12),
+          const SheetHeaderBar(title: '스터디 그룹의 목표'),
+          const SizedBox(height: 8),
           TextField(
             controller: _text,
             autofocus: true,

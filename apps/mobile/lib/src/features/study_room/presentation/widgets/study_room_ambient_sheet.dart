@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../infra/study_room_ambient_player.dart';
 
 Future<void> showStudyRoomAmbientSheet(
@@ -15,9 +16,9 @@ Future<void> showStudyRoomAmbientSheet(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              child: Text('집중 배경음', style: Theme.of(ctx).textTheme.titleMedium),
+            SheetHeaderBar(
+              title: '집중 배경음',
+              onClose: () => Navigator.of(ctx).pop(),
             ),
             for (final t in StudyRoomAmbientTrack.values)
               ListTile(

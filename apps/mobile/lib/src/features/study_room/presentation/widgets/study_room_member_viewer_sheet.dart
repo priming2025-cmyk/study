@@ -88,6 +88,11 @@ class _StudyRoomMemberViewerSheetState
                   ),
                   // 집중도 배지
                   _FocusBadge(status: member.status),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
                 ],
               ),
             ),

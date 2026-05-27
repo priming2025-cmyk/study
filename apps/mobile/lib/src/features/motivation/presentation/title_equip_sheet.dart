@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/widgets/sheet_header_bar.dart';
 import '../data/motivation_repository.dart';
 
 /// 획득한 칭호 목록에서 착용할 칭호를 고릅니다.
@@ -31,9 +32,9 @@ Future<void> showTitleEquipBottomSheet(
             return ListView(
               shrinkWrap: true,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                  child: Text('칭호 착용', style: Theme.of(context).textTheme.titleMedium),
+                SheetHeaderBar(
+                  title: '칭호 착용',
+                  onClose: () => Navigator.pop(sheetContext),
                 ),
                 ...rows.map((r) {
                   final nested = r['titles'] as Map<String, dynamic>?;

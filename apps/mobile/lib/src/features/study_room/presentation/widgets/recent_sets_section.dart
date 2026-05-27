@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/study_room_default_name.dart';
 import '../../infra/study_room_recent_room.dart';
 
 /// 최근 접속한 셋을 가로 스크롤 카드로 표시.
@@ -90,7 +91,9 @@ class _RecentSetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final title = room.roomName.trim().isNotEmpty ? room.roomName.trim() : '셋';
+    final title = room.roomName.trim().isNotEmpty
+        ? room.roomName.trim()
+        : kDefaultStudyRoomName;
     final participantCount = room.participantNames
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)

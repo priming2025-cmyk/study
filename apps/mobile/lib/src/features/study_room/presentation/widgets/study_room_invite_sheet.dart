@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../infra/study_room_join_link.dart';
 
 /// 셋터디 참여 초대 시트 (짧은 입장코드 + 딥링크).
@@ -53,11 +54,11 @@ class StudyRoomInviteSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '친구 초대',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          const SheetHeaderBar(
+            title: '친구 초대',
+            padding: EdgeInsets.fromLTRB(0, 0, 0, 8),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(

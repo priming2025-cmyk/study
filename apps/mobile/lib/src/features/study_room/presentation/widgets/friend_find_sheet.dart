@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/core_providers.dart';
+import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../../motivation/domain/motivation_models.dart';
 import 'friend_status_section.dart';
 
@@ -89,13 +90,7 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: Text(
-                '친구 찾기',
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ),
+            const SheetHeaderBar(title: '친구 찾기'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(

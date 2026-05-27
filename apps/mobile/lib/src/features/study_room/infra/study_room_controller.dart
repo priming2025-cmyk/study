@@ -11,6 +11,7 @@ import '../../session/domain/session_summary.dart';
 import '../../session/infra/attention_camera_service.dart';
 import '../../session/infra/session_media_lifecycle.dart';
 import '../../session/infra/web_camera.dart';
+import '../domain/study_room_default_name.dart';
 import '../domain/study_room_join_code.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
@@ -212,7 +213,7 @@ class StudyRoomController extends ChangeNotifier {
             .from('study_rooms')
             .insert({
               'owner_id': userId,
-              'name': name.trim().isEmpty ? '셋' : name.trim(),
+              'name': resolveStudyRoomName(name),
               'max_peers': cappedPeers,
               'join_code': code,
             })
@@ -222,7 +223,7 @@ class StudyRoomController extends ChangeNotifier {
         final savedCode =
             normalizeJoinCode('${row['join_code'] ?? code}');
         joinCode = savedCode;
-        roomName = name.trim().isEmpty ? '셋' : name.trim();
+        roomName = resolveStudyRoomName(name);
         this.maxPeers = cappedPeers;
         return StudyRoomCreated(roomId: id, joinCode: savedCode);
       } catch (e) {
@@ -236,7 +237,7 @@ class StudyRoomController extends ChangeNotifier {
               .from('study_rooms')
               .insert({
                 'owner_id': userId,
-                'name': name.trim().isEmpty ? '셋' : name.trim(),
+                'name': resolveStudyRoomName(name),
                 'max_peers': cappedPeers,
               })
               .select('id')
@@ -244,7 +245,7 @@ class StudyRoomController extends ChangeNotifier {
           final id = '${row['id']}';
           final fallback = normalizeJoinCode(id.replaceAll('-', '').substring(0, 6));
           joinCode = fallback;
-          roomName = name.trim().isEmpty ? '셋' : name.trim();
+          roomName = resolveStudyRoomName(name);
           this.maxPeers = cappedPeers;
           return StudyRoomCreated(roomId: id, joinCode: fallback);
         }
@@ -268,7 +269,7 @@ class StudyRoomController extends ChangeNotifier {
     if (!isRoomHost) return false;
 
     final cappedPeers = newMaxPeers.clamp(2, 8);
-    final name = newName.trim().isEmpty ? '셋' : newName.trim();
+    final name = resolveStudyRoomName(newName);
 
     try {
       await supabase

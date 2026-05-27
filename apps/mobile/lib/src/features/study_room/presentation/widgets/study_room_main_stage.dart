@@ -32,7 +32,7 @@ class StudyRoomMainStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selfId = controller.selfId ?? '';
-    // `max_peers`는 "나 포함 총 인원 수"로 가정.
+    // `max_peers`는 "나 포함 총 인원 수".
     final maxSlots = (controller.maxPeers ?? 8).clamp(2, 8);
     final availablePeerSlots = maxSlots - 1;
 
@@ -41,11 +41,8 @@ class StudyRoomMainStage extends StatelessWidget {
         .take(availablePeerSlots)
         .toList();
 
-    // 빈 슬롯은 "대기 중/초대" 카드로 1칸만 보여줍니다(여유가 있을 때).
-    final totalPeerSlots = peers.length < availablePeerSlots
-        ? peers.length + 1
-        : availablePeerSlots;
-    final totalSlots = 1 + totalPeerSlots; // 나 포함
+    // 선택한 최대 인원수만큼 항상 그리드를 구성 (빈 자리는 초대 슬롯).
+    final totalSlots = maxSlots;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -58,7 +55,7 @@ class StudyRoomMainStage extends StatelessWidget {
           context,
           selfId: selfId,
           peers: peers,
-          peerSlotsCount: totalPeerSlots,
+          peerSlotsCount: availablePeerSlots,
           totalSlots: totalSlots,
           maxW: maxW,
           maxH: maxH,

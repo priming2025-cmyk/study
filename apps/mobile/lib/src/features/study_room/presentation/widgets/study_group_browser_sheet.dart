@@ -203,6 +203,11 @@ class _StudyGroupBrowserSheetState extends State<StudyGroupBrowserSheet>
                         ],
                       ),
                     ),
+                    IconButton(
+                      tooltip: '닫기',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
                   ],
                 ),
               ),

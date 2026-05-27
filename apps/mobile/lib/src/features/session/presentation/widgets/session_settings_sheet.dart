@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme_picker_row.dart';
+import '../../../../core/widgets/sheet_header_bar.dart';
 import 'engaged_sensitivity_metro_card.dart';
 
 /// 집중·셋터디 공통 설정 시트 (집중민감도 + 색 테마).
@@ -18,11 +19,12 @@ class SessionSettingsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SheetHeaderBar(title: '집중 설정'),
             EngagedSensitivityMetroCard(
               engagedMinScore: engagedMinScore,
               onSelect: onSelectSensitivity,
