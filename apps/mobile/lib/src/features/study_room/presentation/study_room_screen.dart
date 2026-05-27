@@ -191,7 +191,8 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
-  Future<void> _joinRoom() => _joinWithEntry(_roomIdCtrl.text.trim());
+  Future<void> _joinRoom() =>
+      _joinWithEntry(_roomIdCtrl.text.trim(), savedGoal: '');
 
   Future<void> _joinFromInviteLink(String code) async {
     await _joinWithEntry(code, savedGoal: '');

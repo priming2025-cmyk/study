@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../motivation/domain/motivation_models.dart';
 import 'friend_find_sheet.dart';
 import 'friend_status_section.dart';
-import 'recent_sets_empty_section.dart';
 import 'recent_sets_section.dart';
 import 'study_group_browser_sheet.dart';
 import '../../infra/study_room_recent_room.dart';
@@ -37,23 +36,16 @@ class SettudySocialView extends ConsumerWidget {
 
     return CustomScrollView(
       slivers: [
-        if (recentRooms.isEmpty)
-          SliverToBoxAdapter(
-            child: RecentSetsEmptySection(
-              joining: joining,
-              onCreateRoom: onCreateRoom,
-              onJoin: onJoinByCode,
-            ),
-          )
-        else
-          SliverToBoxAdapter(
-            child: RecentSetsSection(
-              rooms: recentRooms,
-              joining: joining,
-              onJoin: onJoinRoom,
-                onInvite: onInviteRoom,
-            ),
+        SliverToBoxAdapter(
+          child: RecentSetsSection(
+            rooms: recentRooms,
+            joining: joining,
+            onJoin: onJoinRoom,
+            onInvite: onInviteRoom,
+            onCreateRoom: onCreateRoom,
+            onJoinByCode: onJoinByCode,
           ),
+        ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),

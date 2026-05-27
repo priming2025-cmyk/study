@@ -291,33 +291,29 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
-  /// 입장코드 또는 UUID → 방 id. 없으면 null.
-  Future<String?> resolveRoomIdFromEntry(String entry) async {
+  /// RLS 밖 SECURITY DEFINER RPC — 비멤버도 입장코드로 방 메타 조회.
+  Future<Map<String, dynamic>?> _lookupRoomForJoin(String entry) async {
     final raw = entry.trim();
     if (raw.isEmpty) return null;
-
-    if (raw.contains('-') && raw.length > 20) {
-      final row = await supabase
-          .from('study_rooms')
-          .select('id')
-          .eq('id', raw)
-          .maybeSingle();
-      return row?['id'] as String?;
-    }
-
-    final code = normalizeJoinCode(raw);
     try {
-      final row = await supabase
-          .from('study_rooms')
-          .select('id')
-          .eq('join_code', code)
-          .maybeSingle();
-      if (row != null) return row['id'] as String?;
-    } catch (_) {
-      // join_code 컬럼 미적용 DB
+      final result = await supabase.rpc(
+        'lookup_study_room_for_join',
+        params: {'p_entry': raw},
+      );
+      if (result == null) return null;
+      if (result is Map<String, dynamic>) return result;
+      if (result is Map) return Map<String, dynamic>.from(result);
+      return null;
+    } catch (e) {
+      debugPrint('[StudyRoomController] lookup_study_room_for_join: $e');
+      return null;
     }
+  }
 
-    return null;
+  /// 입장코드 또는 UUID → 방 id. 없으면 null.
+  Future<String?> resolveRoomIdFromEntry(String entry) async {
+    final row = await _lookupRoomForJoin(entry);
+    return row?['id'] as String?;
   }
 
   // ── 방 입장 ──────────────────────────────────────────────────────────────
@@ -338,18 +334,14 @@ class StudyRoomController extends ChangeNotifier {
     try {
       await _ensureProfile(userId);
 
-      final resolvedId = await resolveRoomIdFromEntry(roomIdOrCode);
-      if (resolvedId == null) {
+      final roomRow = await _lookupRoomForJoin(roomIdOrCode);
+      if (roomRow == null) {
         error = '입장코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.';
         return false;
       }
 
-      final roomRow = await supabase
-          .from('study_rooms')
-          .select('owner_id, join_code, name, max_peers')
-          .eq('id', resolvedId)
-          .maybeSingle();
-      if (roomRow == null) {
+      final resolvedId = roomRow['id'] as String?;
+      if (resolvedId == null || resolvedId.isEmpty) {
         error = '입장코드를 찾을 수 없어요. 코드를 다시 확인해 주세요.';
         return false;
       }
@@ -359,7 +351,7 @@ class StudyRoomController extends ChangeNotifier {
           ? normalizeJoinCode('${roomRow['join_code']}')
           : normalizeJoinCode(roomIdOrCode);
       roomName = '${roomRow['name'] ?? ''}'.trim();
-      maxPeers = (roomRow['max_peers'] as int?)?.clamp(2, 8) ?? 8;
+      maxPeers = (roomRow['max_peers'] as num?)?.toInt().clamp(2, 8) ?? 8;
       _selfId = userId;
       _messages = [];
       _selfGoalText = goalText.trim();
