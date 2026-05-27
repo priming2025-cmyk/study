@@ -5,6 +5,7 @@ import '../../../../core/providers/core_providers.dart';
 import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../../social/data/friend_dm_providers.dart';
 import '../../../motivation/domain/motivation_models.dart';
+import '../../../social/presentation/friend_invite_sheet.dart';
 import 'friend_incoming_requests_section.dart';
 
 /// 이름·이메일로 친구를 검색해 요청을 보내는 시트.
@@ -101,6 +102,17 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SheetHeaderBar(title: '친구 찾기'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: OutlinedButton.icon(
+                onPressed: () => FriendInviteSheet.show(context),
+                icon: const Icon(Icons.ios_share_rounded),
+                label: const Text('카톡·인스타로 초대 링크 보내기'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44),
+                ),
+              ),
+            ),
             FriendIncomingRequestsSection(
               key: ValueKey('find_incoming_$_incomingKey'),
               onChanged: () => setState(() => _incomingKey++),

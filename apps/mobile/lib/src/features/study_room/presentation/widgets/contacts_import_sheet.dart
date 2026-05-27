@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/widgets/sheet_header_bar.dart';
+import '../../../social/infra/friend_invite_link.dart';
 import '../../data/contacts_friend_service.dart';
 
 /// 연락처에서 셋터디 친구 찾기 바텀시트.
@@ -155,6 +158,16 @@ class _ContactsImportSheetState extends State<ContactsImportSheet> {
                         subtitle: Text(
                           c.onSettudy ? '셋터디 사용 중' : '초대하기',
                         ),
+                        trailing: c.onSettudy
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.ios_share_rounded),
+                                tooltip: '초대 링크 공유',
+                                onPressed: () => _shareInviteToContact(c.name),
+                              ),
+                        onTap: c.onSettudy
+                            ? null
+                            : () => _shareInviteToContact(c.name),
                       ),
                     ),
                   ],
@@ -165,6 +178,19 @@ class _ContactsImportSheetState extends State<ContactsImportSheet> {
         ),
       ),
     );
+  }
+
+  Future<void> _shareInviteToContact(String name) async {
+    final text = '${name}님, ${friendInviteMessage()}';
+    try {
+      await SharePlus.instance.share(ShareParams(text: text));
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('초대 메시지를 복사했어요')),
+      );
+    }
   }
 
   String _maskPhone(String p) {

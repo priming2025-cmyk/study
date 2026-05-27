@@ -26,6 +26,7 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
   final _scrollCtrl = ScrollController();
   List<FriendMessage> _messages = const [];
   bool _loading = true;
+  bool _sending = false;
   FriendMessage? _replyingTo;
 
   static const _quickReplies = [
@@ -47,6 +48,7 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
   @override
   void dispose() {
     ref.read(friendDmRepositoryProvider).removeListener(_onRepo);
+    ref.read(friendDmActivePeerProvider.notifier).state = null;
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -58,22 +60,40 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
 
   Future<void> _load() async {
     final repo = ref.read(friendDmRepositoryProvider);
-    final list = await repo.fetchThread(widget.peerId);
-    await repo.markRead(widget.peerId);
-    if (!mounted) return;
-    setState(() {
-      _messages = list;
-      _loading = false;
-    });
-    _scrollToBottom();
+    try {
+      final list = await repo.fetchThread(widget.peerId);
+      await repo.markRead(widget.peerId);
+      if (!mounted) return;
+      setState(() {
+        _messages = list;
+        _loading = false;
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('대화를 불러오지 못했어요: $e')),
+      );
+    }
   }
 
   void _reloadFromRepo() {
     ref.read(friendDmRepositoryProvider).fetchThread(widget.peerId).then((list) {
       if (!mounted) return;
-      setState(() => _messages = list);
+      setState(() {
+        if (list.isNotEmpty || _messages.isEmpty) {
+          _messages = list;
+        }
+      });
       _scrollToBottom();
-    });
+    }).catchError((_) {});
+  }
+
+  void _appendMessage(FriendMessage msg) {
+    if (_messages.any((m) => m.id == msg.id)) return;
+    setState(() => _messages = [..._messages, msg]);
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -89,21 +109,34 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
 
   Future<void> _send([String? preset]) async {
     final text = (preset ?? _textCtrl.text).trim();
-    if (text.isEmpty) return;
-    if (preset == null) _textCtrl.clear();
+    if (text.isEmpty || _sending) return;
+
+    setState(() => _sending = true);
     HapticFeedback.lightImpact();
-    await ref.read(friendDmRepositoryProvider).sendMessage(
-          peerId: widget.peerId,
-          content: text,
-          replyToMessageId: _replyingTo?.id,
+    try {
+      final sent = await ref.read(friendDmRepositoryProvider).sendMessage(
+            peerId: widget.peerId,
+            content: text,
+            replyToMessageId: _replyingTo?.id,
+          );
+      if (preset == null) _textCtrl.clear();
+      if (mounted) {
+        setState(() {
+          _replyingTo = null;
+          _sending = false;
+        });
+      }
+      _appendMessage(sent);
+      await ref.read(friendDmRepositoryProvider).markRead(widget.peerId);
+      ref.invalidate(friendDmThreadsProvider);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('전송에 실패했어요. 친구 관계·네트워크를 확인해 주세요.\n$e')),
         );
-    if (mounted) {
-      setState(() => _replyingTo = null);
-    } else {
-      _replyingTo = null;
+      }
     }
-    await _load();
-    ref.invalidate(friendDmThreadsProvider);
   }
 
   String _formatTime(DateTime at) {
@@ -330,8 +363,17 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
                   ),
                   const SizedBox(width: 6),
                   IconButton.filled(
-                    onPressed: () => _send(),
-                    icon: const Icon(Icons.send_rounded, size: 20),
+                    onPressed: _sending ? null : () => _send(),
+                    icon: _sending
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.onPrimary,
+                            ),
+                          )
+                        : const Icon(Icons.send_rounded, size: 20),
                   ),
                 ],
               ),

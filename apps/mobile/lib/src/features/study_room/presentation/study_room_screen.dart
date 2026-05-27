@@ -5,9 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/study/study_activity_gate.dart';
+import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../../social/infra/pending_friend_invite.dart';
 import '../../../core/widgets/sheet_header_bar.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
@@ -54,12 +57,14 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     _loadEngagedScore();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final linkCode = GoRouterState.of(context).uri.queryParameters['join'];
+      final params = GoRouterState.of(context).uri.queryParameters;
+      final linkCode = params['join'];
       if (linkCode != null && linkCode.trim().isNotEmpty) {
         unawaited(_joinFromInviteLink(linkCode.trim()));
       } else if (widget.quickJoin) {
         unawaited(_quickJoinRecent());
       }
+      unawaited(_handleFriendInviteRef(params['friendRef']));
     });
   }
 
@@ -237,6 +242,28 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (uri.queryParameters.containsKey('join')) {
       context.go('/room');
     }
+  }
+
+  Future<void> _handleFriendInviteRef(String? fromQuery) async {
+    var refId = fromQuery?.trim();
+    if (refId == null || refId.isEmpty) {
+      refId = await PendingFriendInvite.consume();
+    } else {
+      await PendingFriendInvite.consume();
+    }
+    if (!mounted || refId == null || refId.isEmpty) return;
+
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) {
+      await PendingFriendInvite.save(refId);
+      return;
+    }
+    if (uid == refId) return;
+
+    final repo = ref.read(motivationRepositoryProvider);
+    final result = await repo.sendFriendRequestSafe(toUserId: refId);
+    if (!mounted) return;
+    AppSnacks.show(context, result.message);
   }
 
   /// 최근 셋 카드 탭 → 저장된 목표로 바로 입장.

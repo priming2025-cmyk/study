@@ -58,12 +58,57 @@ class StudyRoomMemberCard extends StatelessWidget {
           else
             _Placeholder(cs: cs),
 
-          if (member.joinAt != null && !compact)
-            Positioned(
-              top: 6,
-              left: 6,
-              child: _JoinElapsedBadge(joinAt: member.joinAt!),
+          Positioned(
+            top: 6,
+            left: 6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (member.focusScore != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(160),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withAlpha(60),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.bolt_rounded,
+                          size: 12,
+                          color: Colors.amber.shade300,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${member.focusScore}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (member.joinAt != null && !compact)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: member.focusScore != null ? 4 : 0,
+                    ),
+                    child: _JoinElapsedBadge(joinAt: member.joinAt!),
+                  ),
+              ],
             ),
+          ),
 
           if (floatingReaction != null &&
               floatingReaction!.isNotEmpty &&
@@ -100,23 +145,6 @@ class StudyRoomMemberCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (member.focusScore != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(140),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '${member.focusScore}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
                       if (isSelf)
                         Container(
                           margin: const EdgeInsets.only(left: 4),

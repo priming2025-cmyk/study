@@ -5,6 +5,7 @@ import '../../../social/data/friend_dm_providers.dart';
 import '../../../social/domain/friend_dm_models.dart';
 import '../../../social/presentation/friend_dm_listener.dart';
 import '../../infra/study_room_recent_room.dart';
+import '../../../social/presentation/friend_invite_sheet.dart';
 import 'friend_find_sheet.dart';
 import 'friend_incoming_requests_section.dart';
 import 'recent_sets_section.dart';
@@ -75,6 +76,13 @@ class _SettudySocialViewState extends ConsumerState<SettudySocialView> {
                   style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
+                TextButton(
+                  onPressed: () => FriendInviteSheet.show(context),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('초대'),
+                ),
                 TextButton(
                   onPressed: () => FriendFindSheet.show(context).then((_) {
                     _refreshFriends();
@@ -311,8 +319,13 @@ class _EmptyFriends extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           FilledButton.tonal(
+            onPressed: () => FriendInviteSheet.show(context),
+            child: const Text('친구 초대 링크 보내기'),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
             onPressed: () => FriendFindSheet.show(context),
-            child: const Text('친구찾기'),
+            child: const Text('이름으로 친구 찾기'),
           ),
         ],
       ),

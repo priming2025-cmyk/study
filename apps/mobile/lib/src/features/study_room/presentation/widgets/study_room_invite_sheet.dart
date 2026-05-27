@@ -70,7 +70,6 @@ class StudyRoomInviteSheet extends StatelessWidget {
           text: text,
           subject: '셋터디 초대',
           sharePositionOrigin: _shareOrigin(context),
-          mailToFallbackEnabled: true,
         ),
       );
     } catch (_) {
@@ -153,7 +152,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
             builder: (btnContext) => FilledButton.icon(
               onPressed: () => _shareInvite(btnContext),
               icon: const Icon(Icons.share_rounded),
-              label: const Text('공유하기'),
+              label: const Text('카톡·인스타 등으로 공유'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
                 shape: RoundedRectangleBorder(

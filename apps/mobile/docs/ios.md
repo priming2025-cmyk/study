@@ -356,6 +356,7 @@ adb shell pm verify-app-links --re-verify com.studyup.student
 | 앱 **켜져 있을 때** DM 수신·로컬 알림 | ✅ 가능 | Realtime + 기존 리스너 |
 | 계획 **5분 전** 알림 (`셋터디 5분 전입니다`) | ✅ 가능 | 로컬 알림, Firebase 불필요 |
 | 앱 **완전 종료** 후 DM 푸시 | ⏸ **중지** | FCM/APNs 설정 전 |
+| 친구 초대 (카톡·인스타 링크) | ✅ 가능 | `SETUDY_WEB_URL` + 앱 딥링크 `/friend?ref=` |
 
 앱 코드 기본값: `apps/mobile/.env` 에 **`SETUDY_FCM_ENABLED=false`** (또는 미설정 = 꺼짐).
 

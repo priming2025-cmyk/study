@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 
+import '../../features/social/infra/pending_friend_invite.dart';
 import '../../features/study_room/domain/study_room_join_code.dart';
 
 bool _bound = false;
@@ -41,6 +42,22 @@ void _routeDeepLink(GoRouter router, Uri uri) {
 
   if (path == '/room' || path.startsWith('/room/')) {
     router.go(uri.hasQuery ? '$path?${uri.query}' : path);
+    return;
+  }
+
+  // 친구 초대 링크: /friend?ref=<user_uuid>
+  if (path == '/friend' || path.startsWith('/friend/')) {
+    final refUser =
+        uri.queryParameters['ref']?.trim() ??
+        uri.queryParameters['user']?.trim();
+    if (refUser != null && refUser.isNotEmpty) {
+      unawaited(PendingFriendInvite.save(refUser));
+    }
+    router.go(
+      refUser != null && refUser.isNotEmpty
+          ? '/room?friendRef=${Uri.encodeComponent(refUser)}'
+          : '/room',
+    );
   }
 }
 

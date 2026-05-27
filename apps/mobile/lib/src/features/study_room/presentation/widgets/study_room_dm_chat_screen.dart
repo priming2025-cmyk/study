@@ -60,12 +60,19 @@ class _StudyRoomDmChatScreenState extends State<StudyRoomDmChatScreen> {
   Future<void> _send() async {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
-    _textCtrl.clear();
-    await widget.controller.sendDirectMessage(
+    final ok = await widget.controller.sendDirectMessage(
       recipientUserId: widget.peerUserId,
       content: text,
     );
-    _scrollToBottom();
+    if (!mounted) return;
+    if (ok) {
+      _textCtrl.clear();
+      _scrollToBottom();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('메시지를 보내지 못했어요. 방에 들어가 있는지 확인해 주세요.')),
+      );
+    }
   }
 
   @override

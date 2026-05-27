@@ -522,14 +522,14 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
-  Future<void> sendDirectMessage({
+  Future<bool> sendDirectMessage({
     required String recipientUserId,
     required String content,
   }) async {
     final rid = roomId;
     final uid = _selfId;
-    if (rid == null || uid == null || content.trim().isEmpty) return;
-    if (recipientUserId == uid) return;
+    if (rid == null || uid == null || content.trim().isEmpty) return false;
+    if (recipientUserId == uid) return false;
 
     try {
       await supabase.from('study_room_messages').insert({
@@ -538,8 +538,10 @@ class StudyRoomController extends ChangeNotifier {
         'recipient_user_id': recipientUserId,
         'content': content.trim(),
       });
+      return true;
     } catch (e) {
       debugPrint('[StudyRoomController] sendDirectMessage error: $e');
+      return false;
     }
   }
 

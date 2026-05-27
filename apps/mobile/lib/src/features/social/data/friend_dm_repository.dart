@@ -83,37 +83,63 @@ class FriendDmRepository extends ChangeNotifier {
     final uid = supabase.auth.currentUser?.id;
     if (uid == null) return const [];
     try {
-      final rows = await supabase
+      final sent = await supabase
           .from('friend_messages')
           .select()
-          .or(
-            'and(sender_id.eq.$uid,recipient_id.eq.$peerId),'
-            'and(sender_id.eq.$peerId,recipient_id.eq.$uid)',
-          )
+          .eq('sender_id', uid)
+          .eq('recipient_id', peerId)
           .order('created_at', ascending: true)
           .limit(200);
-      return rows.map((r) => FriendMessage.fromJson(r)).toList();
+      final received = await supabase
+          .from('friend_messages')
+          .select()
+          .eq('sender_id', peerId)
+          .eq('recipient_id', uid)
+          .order('created_at', ascending: true)
+          .limit(200);
+
+      final byId = <String, FriendMessage>{};
+      for (final row in [...sent, ...received]) {
+        final msg = FriendMessage.fromJson(row);
+        byId[msg.id] = msg;
+      }
+      final list = byId.values.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return list;
     } catch (e) {
       debugPrint('[FriendDmRepository] fetchThread: $e');
-      return const [];
+      rethrow;
     }
   }
 
-  Future<void> sendMessage({
+  /// 전송 성공 시 삽입된 메시지를 반환. 실패 시 예외.
+  Future<FriendMessage> sendMessage({
     required String peerId,
     required String content,
     String? replyToMessageId,
   }) async {
     final uid = supabase.auth.currentUser?.id;
     final text = content.trim();
-    if (uid == null || text.isEmpty) return;
+    if (uid == null || text.isEmpty) {
+      throw StateError('로그인이 필요하거나 메시지가 비어 있어요');
+    }
 
-    await supabase.from('friend_messages').insert({
+    final payload = <String, dynamic>{
       'sender_id': uid,
       'recipient_id': peerId,
       'content': text,
-      'reply_to_message_id': replyToMessageId,
-    });
+    };
+    if (replyToMessageId != null) {
+      payload['reply_to_message_id'] = replyToMessageId;
+    }
+
+    final row = await supabase
+        .from('friend_messages')
+        .insert(payload)
+        .select()
+        .single();
+    final msg = FriendMessage.fromJson(row);
+    notifyListeners();
 
     // 종료 상태 푸시 — SETUDY_FCM_ENABLED=true + ios.md §8-A 준비 후에만 호출.
     if (PushFeatureConfig.fcmEnabled) {
@@ -124,6 +150,7 @@ class FriendDmRepository extends ChangeNotifier {
       body: text,
       ));
     }
+    return msg;
   }
 
   Future<String> _displayNameOf(String userId) async {
@@ -198,7 +225,6 @@ class FriendDmRepository extends ChangeNotifier {
     } catch (e) {
       debugPrint('[FriendDmRepository] markRead: $e');
     }
-    notifyListeners();
   }
 
   @override
