@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/push/push_feature_config.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/supabase/supabase_config.dart';
 import '../domain/friend_dm_models.dart';
@@ -114,14 +115,15 @@ class FriendDmRepository extends ChangeNotifier {
       'reply_to_message_id': replyToMessageId,
     });
 
-    // 메시지 전송과 함께 (상대 앱 종료 상태를 포함한) FCM 푸시 발송.
-    // 방해 최소화는 수신 측(FCM background handler + StudyActivityGate)에서 처리합니다.
-    unawaited(_tryInvokeFriendDmPush(
+    // 종료 상태 푸시 — SETUDY_FCM_ENABLED=true + ios.md §8-A 준비 후에만 호출.
+    if (PushFeatureConfig.fcmEnabled) {
+      unawaited(_tryInvokeFriendDmPush(
       recipientUserId: peerId,
       peerDisplayName: await _displayNameOf(peerId),
       senderName: await _displayNameOf(uid),
       body: text,
-    ));
+      ));
+    }
   }
 
   Future<String> _displayNameOf(String userId) async {

@@ -346,6 +346,79 @@ adb shell pm verify-app-links --re-verify com.studyup.student
 
 ## 8. 통합 배포 순서 (승인·키 확보 후)
 
+## 8-A. (중요) 앱 종료 상태 DM 푸시(FCM/APNs) — **지금은 일시 중지**
+
+### 현재 기본 설정 (아이디·키 없이 테스트)
+
+| 기능 | 아이디/키 없이 | 비고 |
+|------|----------------|------|
+| 로그인·친구·DM 저장·답장 | ✅ 가능 | Supabase만 사용 |
+| 앱 **켜져 있을 때** DM 수신·로컬 알림 | ✅ 가능 | Realtime + 기존 리스너 |
+| 계획 **5분 전** 알림 (`셋터디 5분 전입니다`) | ✅ 가능 | 로컬 알림, Firebase 불필요 |
+| 앱 **완전 종료** 후 DM 푸시 | ⏸ **중지** | FCM/APNs 설정 전 |
+
+앱 코드 기본값: `apps/mobile/.env` 에 **`SETUDY_FCM_ENABLED=false`** (또는 미설정 = 꺼짐).
+
+```bash
+# 지금 테스트할 때 (.env)
+SETUDY_FCM_ENABLED=false
+```
+
+Firebase·APNs를 다 준비한 뒤에만 아래로 바꿉니다.
+
+```bash
+# 종료 상태 푸시 켜기 (준비 완료 후)
+SETUDY_FCM_ENABLED=true
+```
+
+그다음 **8-A-1 ~ 8-A-3 체크리스트**를 순서대로 진행하고, 앱을 다시 빌드·실기기 테스트하세요.
+
+---
+
+Setudy는 **DB/실시간(Supabase)** 위에 올라가 있고, **앱이 꺼져 있을 때 푸시 “배달”만** iOS/Android 시스템을 통해 이루어집니다.  
+**사용자(학생)에게 Firebase 로그인/아이디는 필요 없고**, **개발자(나)가 나중에 채울 설정값/키**만 필요합니다.  
+(지금은 위 표처럼 **종료 푸시만 멈춰 두었고**, 나머지는 그대로 테스트 가능합니다.)
+
+### 8-A-1. 당신(개발자)이 준비해야 하는 값 (잊지 말기용)
+
+아래 값들은 “Firebase 아이디(계정)”을 저에게 주는 개념이 아니라, **Firebase 콘솔에서 프로젝트를 만들고 나오는 설정값/키**입니다.
+
+- **Firebase 프로젝트 ID**: `______________`  
+- **iOS Bundle ID** (Xcode의 Runner): `______________`  
+- **Apple Team ID (10자)**: `______________`  
+- **APNs Auth Key** (Apple Developer → Keys)
+  - **Key ID**: `______________`
+  - **Team ID**: `______________`
+  - **.p8 파일**: (로컬에만 보관, Git 업로드 금지)
+- **FCM Service Account JSON** (서버 발송용)
+  - Supabase Edge Function 환경변수로 넣을 값: `FIREBASE_SERVICE_ACCOUNT_JSON`
+  - (로컬/Git에 넣지 말고) Supabase Functions Secrets로만 관리
+
+### 8-A-2. Supabase(서버) 쪽 준비
+
+- [ ] `public.fcm_tokens` 테이블 존재 (`0033_fcm_tokens.sql`)  
+- [ ] Supabase Edge Function `send_friend_dm_push` 배포  
+- [ ] Edge Function secrets 설정:
+  - [ ] `FIREBASE_PROJECT_ID`
+  - [ ] `FIREBASE_SERVICE_ACCOUNT_JSON`
+  - [ ] `SUPABASE_SERVICE_ROLE_KEY`
+
+### 8-A-3. iOS 앱 쪽 준비 (Xcode) — `SETUDY_FCM_ENABLED=true` **이후**
+
+1. [ ] Apple Developer Membership Active  
+2. [ ] Firebase 콘솔에서 iOS 앱 등록 (Bundle ID = Runner와 동일)  
+3. [ ] `apps/mobile` 에서 `flutterfire configure` → `lib/firebase_options.dart` 생성  
+4. [ ] `GoogleService-Info.plist` 를 `ios/Runner/` 에 추가 (Xcode Runner 타깃 포함)  
+5. [ ] Xcode: **Push Notifications** capability  
+6. [ ] Xcode: **Background Modes → Remote notifications**  
+7. [ ] `.env` 에 `SETUDY_FCM_ENABLED=true` 저장 후 앱 재빌드  
+8. [ ] 실기기에서 푸시 권한 허용 확인  
+
+### 8-A-4. 중요한 설계 원칙(공부 방해 방지)
+
+- **공부 중(혼자 공부/셋터디 방 참여)** 에는 푸시를 표시하지 않도록 앱이 로컬 상태(`setudy_is_studying`)로 억제합니다.
+- FCM은 **data-only**로 보내고, 실제 알림 표시 여부는 앱이 결정합니다.
+
 ### 웹 딥링크 서버 (Vercel) — iOS + Android
 
 - [ ] `SETUDY_APPLE_TEAM_ID` (iOS)  
@@ -405,4 +478,6 @@ adb shell pm verify-app-links --re-verify com.studyup.student
 | `tool/generate_well_known.sh` | AASA + assetlinks 생성 |
 | `tool/apply_native_vercel_env.sh` | `.env` → Vercel + 재배포 |
 | `tool/apply_ios_vercel_env.sh` | 위 스크립트 호환 래퍼 |
-| `.env.example` | 환경 변수 템플릿 |
+| `.env.example` | 환경 변수 템플릿 (`SETUDY_FCM_ENABLED` 포함) |
+| `lib/src/core/push/push_feature_config.dart` | 종료 푸시 on/off (`SETUDY_FCM_ENABLED`) |
+| `lib/src/core/push/push_notifications.dart` | FCM 초기화 (플래그 true일 때만) |

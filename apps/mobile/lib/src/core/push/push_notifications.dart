@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routing/root_navigator_key.dart';
 import '../study/study_activity_gate.dart';
+import 'push_feature_config.dart';
 import '../../features/social/presentation/friend_dm_chat_screen.dart';
 import '../supabase/supabase_client.dart';
 
@@ -51,6 +52,8 @@ Future<void> _showFriendDmLocalNotification({
 
 /// 앱 백그라운드/종료 상태에서 수신되는 경우 호출됩니다.
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // 웹에서는 FCM background isolate가 동작하지 않습니다.
+  if (kIsWeb) return;
   WidgetsFlutterBinding.ensureInitialized();
 
   // Firebase init is required in background isolate.
@@ -89,7 +92,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 /// 2) background/종료 상태에서만 로컬 알림을 표시하되, SharedPreferences의 `setudy_is_studying` 값을 기준으로 공부 중이면 알림을 버립니다.
 abstract final class PushNotifications {
   static Future<void> initAfterLaunch() async {
-    await Firebase.initializeApp();
+    if (!PushFeatureConfig.fcmEnabled) return;
+
+    // 웹은 현재 Firebase 설정(firebase_options.dart)이 없어서 초기화하면 런타임에서 실패합니다.
+    if (kIsWeb) return;
+
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {
+      // Firebase 설정이 아직 없는 환경(google-services.json / GoogleService-Info.plist 미설치)에서는
+      // 앱 접속이 막히지 않도록 푸시만 비활성화합니다.
+      return;
+    }
 
     // background handler 등록(최초 1회)
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
