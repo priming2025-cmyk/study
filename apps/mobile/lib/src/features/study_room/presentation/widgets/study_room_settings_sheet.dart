@@ -91,17 +91,12 @@ class _StudyRoomSettingsSheetState extends State<StudyRoomSettingsSheet> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (widget.isRoomHost) ...[
-                      Text(
-                        '셋이름(변경)',
-                        style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
                       TextField(
                         controller: _nameCtrl,
                         enabled: canEdit,
                         textInputAction: TextInputAction.done,
                         decoration: const InputDecoration(
-                          hintText: '비우면 우리셋',
+                          hintText: '우리셋 (변경가능)',
                           border: OutlineInputBorder(),
                         ),
                       ),

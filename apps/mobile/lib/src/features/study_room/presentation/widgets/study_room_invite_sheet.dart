@@ -5,7 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/widgets/sheet_header_bar.dart';
 import '../../infra/study_room_join_link.dart';
 
-/// 셋터디 참여 초대 시트 (짧은 입장코드 + 딥링크).
+/// 셋터디 참여 초대 시트 (짧은 입장코드 + 공유).
 class StudyRoomInviteSheet extends StatelessWidget {
   final String joinCode;
   final String? goalText;
@@ -40,7 +40,47 @@ class StudyRoomInviteSheet extends StatelessWidget {
         goalText: goalText,
       );
 
-  String get _link => studyRoomJoinLink(joinCode);
+  Future<void> _copyCode(BuildContext context, String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('입장코드가 복사됐어요')),
+    );
+  }
+
+  Rect? _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  Future<void> _shareInvite(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final text = _inviteText.trim();
+    if (text.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('공유할 초대 내용이 없어요.')),
+      );
+      return;
+    }
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: '셋터디 초대',
+          sharePositionOrigin: _shareOrigin(context),
+          mailToFallbackEnabled: true,
+        ),
+      );
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('공유할 수 없어서 초대 메시지를 복사했어요.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +120,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
                     style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ],
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Text(
@@ -95,76 +135,39 @@ class StudyRoomInviteSheet extends StatelessWidget {
                         letterSpacing: 2,
                       ),
                     ),
-                    if (!shareOnly) ...[
-                      const SizedBox(width: 8),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.copy_rounded,
-                            size: 18, color: cs.primary),
-                        onPressed: () {
-                          Clipboard.setData(ClipboardData(text: code));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('입장코드가 복사됐어요')),
-                          );
-                        },
-                      ),
-                    ],
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: code.isEmpty
+                          ? null
+                          : () => _copyCode(context, code),
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: const Text('복사하기'),
+                    ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '링크를 누르면 앱에서 바로 입장할 수 있어요',
-                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-                const SizedBox(height: 4),
-                SelectableText(
-                  _link,
-                  style: tt.bodySmall?.copyWith(
-                    color: cs.primary,
-                    decoration: TextDecoration.underline,
-                  ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await SharePlus.instance.share(
-                  ShareParams(text: _inviteText, subject: 'Setudy 셋터디 초대'),
-                );
-              } catch (e) {
-                // 공유가 막힌 환경에서도 최소한 메시지 텍스트는 전달 가능하게 함.
-                Clipboard.setData(ClipboardData(text: _inviteText));
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: const Text('공유에 실패했어요. 초대 메시지를 복사했어요.'),
-                    action: SnackBarAction(
-                      label: '확인',
-                      onPressed: () {},
-                    ),
-                  ),
-                );
-              } finally {
-                if (context.mounted) Navigator.pop(context);
-              }
-            },
-            icon: const Icon(Icons.share_rounded),
-            label: const Text('공유하기'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+          Builder(
+            builder: (btnContext) => FilledButton.icon(
+              onPressed: () => _shareInvite(btnContext),
+              icon: const Icon(Icons.share_rounded),
+              label: const Text('공유하기'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
           if (!shareOnly) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: _inviteText));
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: _inviteText));
+                if (!context.mounted) return;
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('초대 메시지가 복사됐어요!')),

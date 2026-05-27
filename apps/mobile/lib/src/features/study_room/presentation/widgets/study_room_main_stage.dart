@@ -7,14 +7,14 @@ import 'study_room_invite_sheet.dart';
 import 'study_room_member_card.dart';
 import 'study_room_self_live_panel.dart';
 
-/// 인원수에 따른 가변 레이아웃:
-///   2명(나+1)   → 1열 2행 세로
-///   3명(나+2)   → 1열 3행 세로
-///   4명(나+3)   → 2×2
-///   5명(나+4)   → 2×2 + 하단 1
-///   6명(나+5)   → 2×3
-///   7명(나+6)   → 2×3 + 하단 1
-///   8명(나+7)   → 2×4
+/// 인원수에 따른 가변 레이아웃 (Flutter 공통 — iOS · Android · Web 동일):
+///   2명 → 1열 세로 (나, 1)
+///   3명 → 1열 세로 (나, 2)
+///   4명 → 2×2 (나 포함)
+///   5명 → 맨 위 나(전체 너비) + 아래 2×2
+///   6명 → 2×3 (나 포함)
+///   7명 → 맨 위 나(전체 너비) + 아래 2×3
+///   8명 → 2×4 (나 포함)
 class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
@@ -32,7 +32,6 @@ class StudyRoomMainStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selfId = controller.selfId ?? '';
-    // `max_peers`는 "나 포함 총 인원 수".
     final maxSlots = (controller.maxPeers ?? 8).clamp(2, 8);
     final availablePeerSlots = maxSlots - 1;
 
@@ -40,9 +39,6 @@ class StudyRoomMainStage extends StatelessWidget {
         .where((m) => m.userId != selfId)
         .take(availablePeerSlots)
         .toList();
-
-    // 선택한 최대 인원수만큼 항상 그리드를 구성 (빈 자리는 초대 슬롯).
-    final totalSlots = maxSlots;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -56,7 +52,7 @@ class StudyRoomMainStage extends StatelessWidget {
           selfId: selfId,
           peers: peers,
           peerSlotsCount: availablePeerSlots,
-          totalSlots: totalSlots,
+          totalSlots: maxSlots,
           maxW: maxW,
           maxH: maxH,
         );
@@ -75,18 +71,7 @@ class StudyRoomMainStage extends StatelessWidget {
   }) {
     final gap = _gap;
 
-    // 레이아웃 결정
-    final (cols, rows, hasExtra) = _layout(totalSlots);
-
-    // 메인 그리드 셀 크기
-    final mainRows = hasExtra ? rows - 1 : rows;
-    final cellW = (maxW - gap * (cols - 1)) / cols;
-    final totalGapH = gap * (rows - 1);
-    final cellH = (maxH - totalGapH) / rows;
-
-    // 전체 슬롯 목록: [나, peer0, peer1, ...]
-    final slots = <_Slot>[
-      _Slot.self(),
+    final peerSlots = <_Slot>[
       for (var i = 0; i < peerSlotsCount; i++)
         i < peers.length ? _Slot.peer(peers[i]) : _Slot.empty(),
     ];
@@ -97,8 +82,48 @@ class StudyRoomMainStage extends StatelessWidget {
           child: _slotWidget(context, slot, selfId, w, h),
         );
 
+    // 5명·7명: 맨 위 나(가로 전체) + 아래 2열 그리드
+    if (_selfOnTopLayout(totalSlots)) {
+      final gridRows = totalSlots == 5 ? 2 : 3;
+      final rowCount = 1 + gridRows;
+      final rowH = (maxH - gap * (rowCount - 1)) / rowCount;
+      final cellW = (maxW - gap) / 2;
+
+      return SizedBox(
+        width: maxW,
+        height: maxH,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            buildCell(_Slot.self(), maxW, rowH),
+            for (var r = 0; r < gridRows; r++) ...[
+              SizedBox(height: gap),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  buildCell(peerSlots[r * 2], cellW, rowH),
+                  SizedBox(width: gap),
+                  buildCell(peerSlots[r * 2 + 1], cellW, rowH),
+                ],
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final (cols, rows, hasExtra) = _layout(totalSlots);
+    final mainRows = hasExtra ? rows - 1 : rows;
+    final cellW = (maxW - gap * (cols - 1)) / cols;
+    final totalGapH = gap * (rows - 1);
+    final cellH = (maxH - totalGapH) / rows;
+
+    final slots = <_Slot>[
+      _Slot.self(),
+      ...peerSlots,
+    ];
+
     if (cols == 1) {
-      // 세로 1열
       return SizedBox(
         width: maxW,
         height: maxH,
@@ -114,7 +139,6 @@ class StudyRoomMainStage extends StatelessWidget {
       );
     }
 
-    // 2열 그리드
     final mainSlots =
         hasExtra ? slots.take(slots.length - 1).toList() : slots;
     final extraSlot = hasExtra ? slots.last : null;
@@ -145,17 +169,20 @@ class StudyRoomMainStage extends StatelessWidget {
     );
   }
 
-  /// (열 수, 행 수, 하단 단독 셀 여부)
+  bool _selfOnTopLayout(int totalSlots) =>
+      totalSlots == 5 || totalSlots == 7;
+
+  /// (열 수, 행 수, 하단 단독 셀 여부) — 5·7명은 [_selfOnTopLayout] 사용
   (int cols, int rows, bool hasExtra) _layout(int totalSlots) {
     return switch (totalSlots) {
       <= 1 => (1, 1, false),
       2 => (1, 2, false),
       3 => (1, 3, false),
       4 => (2, 2, false),
-      5 => (2, 3, true),  // 2×2 + 하단 1
+      5 => (2, 2, false),
       6 => (2, 3, false),
-      7 => (2, 4, true),  // 2×3 + 하단 1
-      _ => (2, 4, false), // 8명
+      7 => (2, 3, false),
+      _ => (2, 4, false),
     };
   }
 
@@ -199,7 +226,6 @@ class StudyRoomMainStage extends StatelessWidget {
   }
 }
 
-// ── 슬롯 모델 ────────────────────────────────────────────────
 class _Slot {
   final bool isSelf;
   final bool isEmpty;
@@ -213,7 +239,6 @@ class _Slot {
   factory _Slot.empty() => const _Slot._(isSelf: false, isEmpty: true);
 }
 
-// ── 빈 슬롯: + 친구초대 ──────────────────────────────────────
 class _EmptyPeerSlot extends StatelessWidget {
   final VoidCallback? onTap;
 

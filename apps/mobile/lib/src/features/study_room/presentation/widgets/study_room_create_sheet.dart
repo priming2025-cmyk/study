@@ -82,7 +82,7 @@ class _StudyRoomCreateSheetBodyState extends State<_StudyRoomCreateSheetBody> {
             autofocus: true,
             textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
-              hintText: '비우면 우리셋',
+              hintText: '우리셋 (변경가능)',
               border: OutlineInputBorder(),
             ),
             onSubmitted: (_) => _submit(),
