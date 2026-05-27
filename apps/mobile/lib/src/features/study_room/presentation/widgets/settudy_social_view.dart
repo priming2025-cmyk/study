@@ -16,6 +16,7 @@ class SettudySocialView extends ConsumerWidget {
   final VoidCallback onJoinByCode;
   final List<RecentStudyRoom> recentRooms;
   final void Function(RecentStudyRoom room) onJoinRoom;
+  final void Function(RecentStudyRoom room) onInviteRoom;
   final bool joining;
 
   const SettudySocialView({
@@ -24,6 +25,7 @@ class SettudySocialView extends ConsumerWidget {
     required this.onJoinByCode,
     required this.recentRooms,
     required this.onJoinRoom,
+    required this.onInviteRoom,
     this.joining = false,
   });
 
@@ -49,6 +51,7 @@ class SettudySocialView extends ConsumerWidget {
               rooms: recentRooms,
               joining: joining,
               onJoin: onJoinRoom,
+                onInvite: onInviteRoom,
             ),
           ),
         SliverToBoxAdapter(

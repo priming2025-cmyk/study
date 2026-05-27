@@ -17,6 +17,7 @@ dependencies:
   # state / routing
   flutter_riverpod: ^2.5.1
   go_router: ^14.2.0
+  app_links: ^6.4.0
 
   # supabase
   supabase_flutter: ^2.6.0

@@ -3,17 +3,19 @@ import 'package:flutter/material.dart';
 import '../../infra/study_room_recent_room.dart';
 
 /// 최근 접속한 셋을 가로 스크롤 카드로 표시.
-/// 카드 상단: 스터디 그룹 목표 / 하단: 참석자.
+/// 카드 구성: 셋 이름 / 참석자(2줄) / 최근 활동시간.
 class RecentSetsSection extends StatelessWidget {
   final List<RecentStudyRoom> rooms;
   final bool joining;
   final void Function(RecentStudyRoom room) onJoin;
+  final void Function(RecentStudyRoom room) onInvite;
 
   const RecentSetsSection({
     super.key,
     required this.rooms,
     required this.joining,
     required this.onJoin,
+    required this.onInvite,
   });
 
   @override
@@ -46,7 +48,7 @@ class RecentSetsSection extends StatelessWidget {
           builder: (context, constraints) {
             final cardWidth = (constraints.maxWidth - 32 - 8 * 2) / 3;
             return SizedBox(
-              height: 100,
+              height: 136,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -57,6 +59,7 @@ class RecentSetsSection extends StatelessWidget {
                   width: cardWidth,
                   joining: joining,
                   onTap: () => onJoin(rooms[i]),
+                  onLongPress: () => onInvite(rooms[i]),
                 ),
               ),
             );
@@ -73,19 +76,27 @@ class _RecentSetCard extends StatelessWidget {
   final double width;
   final bool joining;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   const _RecentSetCard({
     required this.room,
     required this.width,
     required this.joining,
     required this.onTap,
+    required this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final goal = room.goalText.trim().isEmpty ? '목표를 설정해 보세요' : room.goalText;
+    final title = room.roomName.trim().isNotEmpty ? room.roomName.trim() : '셋';
+    final participantCount = room.participantNames
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .length;
+    final participantsText = formatParticipantNamesTwoLines(room.participantNames);
+    final badgeText = '$participantCount/${room.maxPeers}';
 
     return SizedBox(
       width: width,
@@ -94,42 +105,68 @@ class _RecentSetCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: joining ? null : onTap,
+            onLongPress: joining ? null : onLongPress,
           borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style:
+                              tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: cs.primary.withValues(alpha: 0.35),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          badgeText,
+                          style: tt.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 10),
                 Text(
-                  goal,
-                  style: tt.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
+                  participantsText,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.25,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const Spacer(),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.people_outline_rounded,
-                      size: 12,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 3),
-                    Expanded(
-                      child: Text(
-                        room.participantsLabel,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: cs.onSurfaceVariant,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Text(
+                  room.lastActivityLabel,
+                  style: tt.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

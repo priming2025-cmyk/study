@@ -21,9 +21,20 @@ String studyRoomInviteMessage({
   String? goalText,
 }) {
   final link = studyRoomJoinLink(joinCode);
+  final iosUrl = dotenv.env['SETUDY_APP_STORE_URL']?.trim();
+  final androidUrl = dotenv.env['SETUDY_PLAY_STORE_URL']?.trim();
+
+  final installLines = <String>[];
+  if (iosUrl != null && iosUrl.isNotEmpty) installLines.add('iOS: $iosUrl');
+  if (androidUrl != null && androidUrl.isNotEmpty) {
+    installLines.add('Android: $androidUrl');
+  }
+  final installText =
+      installLines.isEmpty ? '' : '\n설치(선택)\n${installLines.join('\n')}';
+
   final goalLine =
       goalText != null && goalText.trim().isNotEmpty ? '\n목표: ${goalText.trim()}' : '';
   return '우리 같이 공부하자!$goalLine\n'
       '입장코드: ${normalizeJoinCode(joinCode)}\n'
-      '바로 입장: $link';
+      '바로 입장: $link$installText';
 }

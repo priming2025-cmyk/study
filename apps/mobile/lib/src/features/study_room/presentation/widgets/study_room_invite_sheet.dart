@@ -8,22 +8,29 @@ import '../../infra/study_room_join_link.dart';
 class StudyRoomInviteSheet extends StatelessWidget {
   final String joinCode;
   final String? goalText;
+  final bool shareOnly;
 
   const StudyRoomInviteSheet({
     super.key,
     required this.joinCode,
     this.goalText,
+    this.shareOnly = false,
   });
 
   static Future<void> show(
     BuildContext context, {
     required String joinCode,
     String? goalText,
+    bool shareOnly = false,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (_) => StudyRoomInviteSheet(joinCode: joinCode, goalText: goalText),
+      builder: (_) => StudyRoomInviteSheet(
+        joinCode: joinCode,
+        goalText: goalText,
+        shareOnly: shareOnly,
+      ),
     );
   }
 
@@ -87,17 +94,20 @@ class StudyRoomInviteSheet extends StatelessWidget {
                         letterSpacing: 2,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: Icon(Icons.copy_rounded, size: 18, color: cs.primary),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: code));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('입장코드가 복사됐어요')),
-                        );
-                      },
-                    ),
+                    if (!shareOnly) ...[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(Icons.copy_rounded,
+                            size: 18, color: cs.primary),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: code));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('입장코드가 복사됐어요')),
+                          );
+                        },
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -118,10 +128,27 @@ class StudyRoomInviteSheet extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: () {
-              SharePlus.instance.share(
-                ShareParams(text: _inviteText, subject: 'Setudy 셋터디 초대'),
-              );
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await SharePlus.instance.share(
+                  ShareParams(text: _inviteText, subject: 'Setudy 셋터디 초대'),
+                );
+              } catch (e) {
+                // 공유가 막힌 환경에서도 최소한 메시지 텍스트는 전달 가능하게 함.
+                Clipboard.setData(ClipboardData(text: _inviteText));
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: const Text('공유에 실패했어요. 초대 메시지를 복사했어요.'),
+                    action: SnackBarAction(
+                      label: '확인',
+                      onPressed: () {},
+                    ),
+                  ),
+                );
+              } finally {
+                if (context.mounted) Navigator.pop(context);
+              }
             },
             icon: const Icon(Icons.share_rounded),
             label: const Text('공유하기'),
@@ -132,24 +159,26 @@ class StudyRoomInviteSheet extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: _inviteText));
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('초대 메시지가 복사됐어요!')),
-              );
-            },
-            icon: const Icon(Icons.content_copy_rounded),
-            label: const Text('메시지 복사'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+          if (!shareOnly) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: _inviteText));
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('초대 메시지가 복사됐어요!')),
+                );
+              },
+              icon: const Icon(Icons.content_copy_rounded),
+              label: const Text('메시지 복사'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );

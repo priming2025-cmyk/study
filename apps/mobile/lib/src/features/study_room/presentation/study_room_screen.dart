@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -11,7 +10,6 @@ import '../../../core/ui/app_snacks.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/infra/web_shared_camera.dart';
-import '../../session/presentation/widgets/session_settings_sheet.dart';
 import '../../session/presentation/widgets/session_end_result_sheet.dart';
 import '../domain/study_room_reward_config.dart';
 import '../infra/study_room_controller.dart';
@@ -20,9 +18,11 @@ import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
 import 'widgets/study_room_ambient_sheet.dart';
+import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
 import 'widgets/study_room_invite_sheet.dart';
+import 'widgets/study_room_settings_sheet.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
   final bool quickJoin;
@@ -34,7 +34,6 @@ class StudyRoomScreen extends ConsumerStatefulWidget {
 
 class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
-  final _roomNameCtrl = TextEditingController(text: '우리셋');
   final _roomIdCtrl = TextEditingController();
   late Future<List<RecentStudyRoom>> _recentFuture;
 
@@ -45,6 +44,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   void initState() {
     super.initState();
     _controller.addListener(_onChanged);
+    _controller.onRecentRoomsActivityChanged = _refreshRecentRoomsList;
     _recentFuture = loadRecentStudyRooms();
     _loadEngagedScore();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -66,10 +66,10 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
 
   @override
   void dispose() {
+    _controller.onRecentRoomsActivityChanged = null;
     _controller
       ..removeListener(_onChanged)
       ..dispose();
-    _roomNameCtrl.dispose();
     _roomIdCtrl.dispose();
     _engagedMinScoreN.dispose();
     ref.read(studyRoomInRoomProvider.notifier).state = false;
@@ -83,6 +83,13 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
+  void _refreshRecentRoomsList() {
+    if (!mounted) return;
+    setState(() {
+      _recentFuture = loadRecentStudyRooms();
+    });
+  }
+
   List<String> _memberDisplayNames() {
     return _controller.members
         .map((m) => m.displayName?.trim() ?? '')
@@ -93,11 +100,19 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   Future<void> _persistRecentRoom() async {
     final id = _controller.roomId;
     if (id == null) return;
+    final activityAt = _controller.messages.isNotEmpty
+        ? _controller.messages
+            .map((m) => m.createdAt)
+            .reduce((a, b) => a.isAfter(b) ? a : b)
+        : DateTime.now();
     await saveRecentStudyRoom(
       roomId: id,
       joinCode: _controller.joinCode ?? '',
+      roomName: _controller.roomName ?? '',
+      maxPeers: _controller.maxPeers ?? 8,
       goalText: _controller.goalText,
       participantNames: _memberDisplayNames(),
+      lastActivityAt: activityAt,
     );
     if (mounted) {
       setState(() {
@@ -111,12 +126,20 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) => SessionSettingsSheet(
+      builder: (ctx) => StudyRoomSettingsSheet(
+        isRoomHost: _controller.isRoomHost,
+        initialRoomName: _controller.roomName ?? '셋',
+        initialMaxPeers: _controller.maxPeers ?? 8,
         engagedMinScore: cur,
+        onUpdateRoomSettings: (name, maxPeers) async {
+          return _controller.updateRoomSettings(
+            newName: name,
+            newMaxPeers: maxPeers,
+          );
+        },
         onSelectSensitivity: (v) async {
           await saveEngagedMinScore(v);
           _engagedMinScoreN.value = v;
-          if (ctx.mounted) Navigator.of(ctx).pop();
         },
       ),
     );
@@ -124,13 +147,16 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
 
   Future<void> _createRoom() async {
     final messenger = ScaffoldMessenger.of(context);
-    final goal = await showStudyRoomGoalSheet(context);
-    if (!mounted || goal == null) return;
+    final req = await showStudyRoomCreateSheet(context, initialMaxPeers: 4);
+    if (!mounted || req == null) return;
     try {
-      final created = await _controller.createRoom(name: _roomNameCtrl.text);
+      final created = await _controller.createRoom(
+        name: req.name,
+        maxPeers: req.maxPeers,
+      );
       final ok = await _controller.joinRoom(
         roomIdOrCode: created.roomId,
-        goalText: goal,
+        goalText: '',
       );
       if (ok && _controller.roomId != null) {
         _controller.startFocusTracking(_engagedMinScoreN.value);
@@ -148,10 +174,10 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     final code = normalizeJoinCode(entry);
     if (code.isEmpty) return;
 
-    final goal = savedGoal?.isNotEmpty == true
-        ? savedGoal!
-        : (await showStudyRoomGoalSheet(context)) ?? '';
-    if (!mounted || goal.isEmpty) return;
+    // `savedGoal`이 null이면(값 미제공)만 목표 시트를 보여줍니다.
+    // 딥링크/최근 셋처럼 값이 이미 있는 경우에는 시트 없이 바로 입장합니다.
+    final goal = savedGoal ?? (await showStudyRoomGoalSheet(context)) ?? '';
+    if (!mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
     final ok = await _controller.joinRoom(roomIdOrCode: code, goalText: goal);
@@ -166,7 +192,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   Future<void> _joinRoom() => _joinWithEntry(_roomIdCtrl.text.trim());
 
   Future<void> _joinFromInviteLink(String code) async {
-    await _joinWithEntry(code);
+    await _joinWithEntry(code, savedGoal: '');
     if (!mounted) return;
     final uri = GoRouterState.of(context).uri;
     if (uri.queryParameters.containsKey('join')) {
@@ -202,35 +228,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
         _controller.error!,
       );
     }
-  }
-
-  Future<void> _showJoinByIdDialog(BuildContext context) async {
-    final id = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('ID로 참여'),
-          content: TextField(
-            controller: _roomIdCtrl,
-            decoration: const InputDecoration(hintText: '셋 ID'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('취소'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, _roomIdCtrl.text.trim()),
-              child: const Text('참여'),
-            ),
-          ],
-        );
-      },
-    );
-    if (id == null || id.isEmpty || !mounted) return;
-    _roomIdCtrl.text = id;
-    if (kIsWeb) WebSharedCamera.instance.openFromUserGesture();
-    await _joinRoom();
   }
 
   Future<void> _leaveAndSettle() async {
@@ -270,15 +267,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
-  void _copyRoomId() {
-    final id = _controller.roomId;
-    if (id == null) return;
-    Clipboard.setData(ClipboardData(text: id));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('방 ID가 클립보드에 복사됐어요.'), duration: Duration(seconds: 2)),
-    );
-  }
-
   void _showInviteSheet() {
     final code = _controller.joinCode;
     if (code == null || code.isEmpty) return;
@@ -286,6 +274,18 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       context,
       joinCode: code,
       goalText: _controller.goalText,
+      shareOnly: true,
+    );
+  }
+
+  void _showInviteSheetForRecent(RecentStudyRoom room) {
+    final code = room.joinCode.isNotEmpty ? room.joinCode : room.displayCode;
+    if (code.trim().isEmpty) return;
+    StudyRoomInviteSheet.show(
+      context,
+      joinCode: code,
+      goalText: room.goalText,
+      shareOnly: true,
     );
   }
 
@@ -496,6 +496,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                     }
                     unawaited(_joinRoomById(room));
                   },
+                  onInviteRoom: (room) => _showInviteSheetForRecent(room),
                   onJoinByCode: () => _showJoinCodeDialog(),
                 );
               },

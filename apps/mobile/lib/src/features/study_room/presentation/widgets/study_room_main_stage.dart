@@ -28,21 +28,23 @@ class StudyRoomMainStage extends StatelessWidget {
   });
 
   static const double _gap = 6.0;
-  // 최대 표시 슬롯 = 자기 자신(1) + 피어 최대(7)
-  static const int _maxSlots = 8;
 
   @override
   Widget build(BuildContext context) {
     final selfId = controller.selfId ?? '';
+    // `max_peers`는 "나 포함 총 인원 수"로 가정.
+    final maxSlots = (controller.maxPeers ?? 8).clamp(2, 8);
+    final availablePeerSlots = maxSlots - 1;
+
     final peers = controller.members
         .where((m) => m.userId != selfId)
-        .take(_maxSlots - 1)
+        .take(availablePeerSlots)
         .toList();
 
-    // 전체 슬롯 수: 나(1) + 피어 + 빈 슬롯(최대 7칸 채움)
-    // 사용자가 보는 총 칸 수는 max(현재인원, 최소표시) 이상으로 할 수 있지만
-    // 현 요구사항: 빈 슬롯은 "대기 중/초대" 카드로 채움 (최대 7개 피어 슬롯)
-    final totalPeerSlots = peers.length < 7 ? peers.length + 1 : 7; // +1 = 빈 초대 슬롯
+    // 빈 슬롯은 "대기 중/초대" 카드로 1칸만 보여줍니다(여유가 있을 때).
+    final totalPeerSlots = peers.length < availablePeerSlots
+        ? peers.length + 1
+        : availablePeerSlots;
     final totalSlots = 1 + totalPeerSlots; // 나 포함
 
     return LayoutBuilder(
@@ -56,6 +58,7 @@ class StudyRoomMainStage extends StatelessWidget {
           context,
           selfId: selfId,
           peers: peers,
+          peerSlotsCount: totalPeerSlots,
           totalSlots: totalSlots,
           maxW: maxW,
           maxH: maxH,
@@ -68,6 +71,7 @@ class StudyRoomMainStage extends StatelessWidget {
     BuildContext context, {
     required String selfId,
     required List<StudyRoomMember> peers,
+    required int peerSlotsCount,
     required int totalSlots,
     required double maxW,
     required double maxH,
@@ -86,7 +90,7 @@ class StudyRoomMainStage extends StatelessWidget {
     // 전체 슬롯 목록: [나, peer0, peer1, ...]
     final slots = <_Slot>[
       _Slot.self(),
-      for (var i = 0; i < totalPeerSlots(peers); i++)
+      for (var i = 0; i < peerSlotsCount; i++)
         i < peers.length ? _Slot.peer(peers[i]) : _Slot.empty(),
     ];
 
@@ -144,9 +148,6 @@ class StudyRoomMainStage extends StatelessWidget {
     );
   }
 
-  int totalPeerSlots(List<StudyRoomMember> peers) =>
-      peers.length < 7 ? peers.length + 1 : 7;
-
   /// (열 수, 행 수, 하단 단독 셀 여부)
   (int cols, int rows, bool hasExtra) _layout(int totalSlots) {
     return switch (totalSlots) {
@@ -185,6 +186,7 @@ class StudyRoomMainStage extends StatelessWidget {
                   context,
                   joinCode: controller.joinCode!,
                   goalText: controller.goalText,
+                  shareOnly: true,
                 ),
       );
     }

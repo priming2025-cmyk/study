@@ -29,10 +29,15 @@ SUPABASE_URL=${SUPABASE_URL}
 SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 SETUDY_WEB_URL=${SETUDY_WEB_URL:-https://setudy.vercel.app}
 PREMIUM_VIDEO_ENABLED=${PREMIUM}
+SETUDY_APP_STORE_URL=${SETUDY_APP_STORE_URL:-}
+SETUDY_PLAY_STORE_URL=${SETUDY_PLAY_STORE_URL:-}
 TURN_URL=${TURN_URL:-}
 TURN_USERNAME=${TURN_USERNAME:-}
 TURN_CREDENTIAL=${TURN_CREDENTIAL:-}
 EOF
+
+chmod +x tool/generate_well_known.sh
+bash tool/generate_well_known.sh
 
 flutter pub get
 flutter build web --release --no-tree-shake-icons --no-web-resources-cdn

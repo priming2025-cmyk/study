@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/routing/app_deep_link_listener.dart';
 import 'core/routing/go_router_refresh_stream.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_provider.dart';
@@ -210,6 +211,7 @@ class SetudyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(_routerProvider);
+    bindAppDeepLinks(router);
     final themeId = ref.watch(appThemeIdProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,

@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show ChangeNotifier, VoidCallback, debugPrint, kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
@@ -14,6 +15,7 @@ import '../domain/study_room_join_code.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'study_room_ambient_player.dart';
+import 'study_room_recent_room.dart';
 
 class StudyRoomCreated {
   final String roomId;
@@ -41,6 +43,9 @@ class StudyRoomController extends ChangeNotifier {
   String? roomId;
   /// 화면·공유용 6자리 입장코드.
   String? joinCode;
+  String? roomName;
+  /// 방 인원수 제한(최대 참여 가능 인원).
+  int? maxPeers;
   String? _selfId;
   String? get selfId => _selfId;
   String? selfSnapshotUrl;
@@ -57,6 +62,9 @@ class StudyRoomController extends ChangeNotifier {
 
   bool joining = false;
   String? error;
+
+  /// 최근 셋 목록(활동시간·정렬) 갱신 시 UI에서 다시 로드할 때 사용.
+  VoidCallback? onRecentRoomsActivityChanged;
 
   /// 웹 본인 카메라 위젯 재마운트용 (방 퇴장·재입장 시 정지 화면 방지).
   int webSelfCamEpoch = 0;
@@ -185,11 +193,16 @@ class StudyRoomController extends ChangeNotifier {
 
   // ── 방 만들기 ──────────────────────────────────────────────────────────────
 
-  Future<StudyRoomCreated> createRoom({required String name}) async {
+  Future<StudyRoomCreated> createRoom({
+    required String name,
+    int maxPeers = 8,
+  }) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw StateError('로그인이 필요합니다.');
 
     await _ensureProfile(userId);
+    final cappedPeers = maxPeers.clamp(2, 8);
+    this.maxPeers = cappedPeers;
 
     Object? lastError;
     for (var attempt = 0; attempt < 6; attempt++) {
@@ -199,8 +212,8 @@ class StudyRoomController extends ChangeNotifier {
             .from('study_rooms')
             .insert({
               'owner_id': userId,
-              'name': name.trim().isEmpty ? '우리셋' : name.trim(),
-              'max_peers': 8,
+              'name': name.trim().isEmpty ? '셋' : name.trim(),
+              'max_peers': cappedPeers,
               'join_code': code,
             })
             .select('id, join_code')
@@ -209,6 +222,8 @@ class StudyRoomController extends ChangeNotifier {
         final savedCode =
             normalizeJoinCode('${row['join_code'] ?? code}');
         joinCode = savedCode;
+        roomName = name.trim().isEmpty ? '셋' : name.trim();
+        this.maxPeers = cappedPeers;
         return StudyRoomCreated(roomId: id, joinCode: savedCode);
       } catch (e) {
         lastError = e;
@@ -221,20 +236,58 @@ class StudyRoomController extends ChangeNotifier {
               .from('study_rooms')
               .insert({
                 'owner_id': userId,
-                'name': name.trim().isEmpty ? '우리셋' : name.trim(),
-                'max_peers': 8,
+                'name': name.trim().isEmpty ? '셋' : name.trim(),
+                'max_peers': cappedPeers,
               })
               .select('id')
               .single();
           final id = '${row['id']}';
           final fallback = normalizeJoinCode(id.replaceAll('-', '').substring(0, 6));
           joinCode = fallback;
+          roomName = name.trim().isEmpty ? '셋' : name.trim();
+          this.maxPeers = cappedPeers;
           return StudyRoomCreated(roomId: id, joinCode: fallback);
         }
         rethrow;
       }
     }
     throw StateError('입장코드 생성에 실패했어요: $lastError');
+  }
+
+  // ── 방 설정(이름/인원수) 변경 ───────────────────────────────────────────
+
+  /// 방장만 가능. [study_rooms]의 `name`, `max_peers`를 변경합니다.
+  Future<bool> updateRoomSettings({
+    required String newName,
+    required int newMaxPeers,
+  }) async {
+    final rid = roomId;
+    final userId = supabase.auth.currentUser?.id;
+    if (rid == null) return false;
+    if (userId == null) throw StateError('로그인이 필요합니다.');
+    if (!isRoomHost) return false;
+
+    final cappedPeers = newMaxPeers.clamp(2, 8);
+    final name = newName.trim().isEmpty ? '셋' : newName.trim();
+
+    try {
+      await supabase
+          .from('study_rooms')
+          .update({
+            'name': name,
+            'max_peers': cappedPeers,
+          })
+          .eq('id', rid);
+
+      roomName = name;
+      maxPeers = cappedPeers;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      error = '설정 변경 실패: $e';
+      notifyListeners();
+      return false;
+    }
   }
 
   /// 입장코드 또는 UUID → 방 id. 없으면 null.
@@ -292,7 +345,7 @@ class StudyRoomController extends ChangeNotifier {
 
       final roomRow = await supabase
           .from('study_rooms')
-          .select('owner_id, join_code')
+          .select('owner_id, join_code, name, max_peers')
           .eq('id', resolvedId)
           .maybeSingle();
       if (roomRow == null) {
@@ -304,6 +357,8 @@ class StudyRoomController extends ChangeNotifier {
       joinCode = roomRow['join_code'] != null
           ? normalizeJoinCode('${roomRow['join_code']}')
           : normalizeJoinCode(roomIdOrCode);
+      roomName = '${roomRow['name'] ?? ''}'.trim();
+      maxPeers = (roomRow['max_peers'] as int?)?.clamp(2, 8) ?? 8;
       _selfId = userId;
       _messages = [];
       _selfGoalText = goalText.trim();
@@ -565,10 +620,19 @@ class StudyRoomController extends ChangeNotifier {
           .order('created_at', ascending: true)
           .limit(100);
       _messages = rows.map((r) => StudyRoomMessage.fromJson(r)).toList();
+      final last = _messages.isNotEmpty ? _messages.last.createdAt : null;
+      if (last != null) unawaited(_touchRecentActivity(last));
       notifyListeners();
     } catch (e) {
       debugPrint('[StudyRoomController] fetch messages error: $e');
     }
+  }
+
+  Future<void> _touchRecentActivity(DateTime at) async {
+    final rid = roomId;
+    if (rid == null) return;
+    final ok = await touchRecentStudyRoomActivity(roomId: rid, activityAt: at);
+    if (ok) onRecentRoomsActivityChanged?.call();
   }
 
   Future<void> _joinMessageChannel(String roomId) async {
@@ -587,6 +651,7 @@ class StudyRoomController extends ChangeNotifier {
           callback: (payload) {
             final newMsg = StudyRoomMessage.fromJson(payload.newRecord);
             _messages.add(newMsg);
+            unawaited(_touchRecentActivity(newMsg.createdAt));
             notifyListeners();
           },
         )
