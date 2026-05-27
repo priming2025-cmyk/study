@@ -10,6 +10,7 @@ import '../data/daily_focus_stat.dart';
 import 'dream_city_screen.dart';
 import 'widgets/city_progress_card.dart';
 import 'widgets/dream_city_isometric_view.dart';
+import 'widgets/profile_name_editor.dart';
 import 'widgets/weekly_focus_chart.dart';
 
 String formatFocusDuration(int seconds) {
@@ -24,6 +25,7 @@ class _StatsPayload {
   final List<DailyFocusStat> stats;
   final WalletBalances wallet;
   final ProfileRpgSummary? rpg;
+  final MyProfileSummary? profile;
   final List<FriendRankRow> ranks;
   final List<SquadRow> squads;
   final Map<String, Map<String, dynamic>> squadProgress;
@@ -32,6 +34,7 @@ class _StatsPayload {
     required this.stats,
     required this.wallet,
     required this.rpg,
+    required this.profile,
     required this.ranks,
     required this.squads,
     required this.squadProgress,
@@ -60,6 +63,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
     final stats = await sessionRepo.fetchDailyFocusLastDays(7);
     final wallet = await sessionRepo.fetchWalletBalances();
     final rpg = await motivationRepo.fetchMyProfileRpg();
+    final profile = await motivationRepo.fetchMyProfile();
     final ranks = await motivationRepo.friendWeekRankings();
     final squads = await motivationRepo.mySquads();
     final prog = <String, Map<String, dynamic>>{};
@@ -70,6 +74,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
       stats: stats,
       wallet: wallet,
       rpg: rpg,
+      profile: profile,
       ranks: ranks,
       squads: squads,
       squadProgress: prog,
@@ -94,7 +99,6 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final email = supabase.auth.currentUser?.email;
     // 계급은 자동으로 올라가며, 기록 화면에서는 별도 "착용" UI를 노출하지 않습니다.
 
     return Scaffold(
@@ -129,6 +133,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
           }
           final p = snapshot.data!;
           final stats = p.stats;
+          final email = p.profile?.email ?? supabase.auth.currentUser?.email;
           final total = stats.fold<int>(0, (a, e) => a + e.focusedSeconds);
 
           return RefreshIndicator(
@@ -164,20 +169,20 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (p.rpg != null)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  p.rpg!.currentRankKo ?? '집중 중',
-                                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                        color: scheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                        ProfileNameEditor(
+                          initialName: p.profile?.displayName,
+                          onSaved: _onRefresh,
+                        ),
+                        if (p.rpg != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            p.rpg!.currentRankKo ?? '집중 중',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                              ),
-                            ],
                           ),
+                        ],
                         if (email != null) ...[
                           const SizedBox(height: 6),
                           Text(

@@ -21,14 +21,14 @@ class SocialPeopleTab extends StatelessWidget {
     return FutureBuilder<List<Object>>(
       future: Future.wait([
         repo.listFriends(),
-        repo.pendingFriendRequestsIncoming(),
+        repo.listIncomingFriendRequests(),
       ]),
       builder: (context, snap) {
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         final friends = snap.data![0] as List<FriendRow>;
-        final incoming = snap.data![1] as List<Map<String, dynamic>>;
+        final incoming = snap.data![1] as List<IncomingFriendRequest>;
 
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -60,12 +60,13 @@ class SocialPeopleTab extends StatelessWidget {
                     final id = peerIdCtrl.text.trim();
                     if (id.isEmpty) return;
                     try {
-                      await repo.sendFriendRequest(toUserId: id);
+                      final result =
+                          await repo.sendFriendRequestSafe(toUserId: id);
                       peerIdCtrl.clear();
                       onChanged();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('친구 요청을 보냈어요.')),
+                          SnackBar(content: Text(result.message)),
                         );
                       }
                     } catch (e) {
@@ -85,10 +86,11 @@ class SocialPeopleTab extends StatelessWidget {
               Text('받은 요청', style: Theme.of(context).textTheme.titleSmall),
               ...incoming.map((r) {
                 return ListTile(
-                  title: Text('from ${r['from_user_id']}'),
+                  title: Text(r.fromDisplayName),
+                  subtitle: const Text('친구 요청'),
                   trailing: FilledButton(
                     onPressed: () async {
-                      await repo.acceptFriendRequest(r['id'] as String);
+                      await repo.acceptFriendRequest(r.id);
                       onChanged();
                     },
                     child: const Text('수락'),

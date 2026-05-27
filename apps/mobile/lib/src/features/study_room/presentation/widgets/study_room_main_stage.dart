@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/study_room_models.dart';
 import '../../infra/study_room_controller.dart';
+import 'study_room_invite_sheet.dart';
 import 'study_room_member_card.dart';
 import 'study_room_self_live_panel.dart';
 import 'study_room_self_public_mode_sheet.dart';
@@ -19,14 +20,14 @@ class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
   final bool studyCameraSlotActive;
-  final VoidCallback? onOpenChat;
+  final void Function(String peerUserId)? onOpenDmChat;
 
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
     required this.studyCameraSlotActive,
-    this.onOpenChat,
+    this.onOpenDmChat,
   });
 
   static const double _gap = 6.0;
@@ -207,20 +208,24 @@ class StudyRoomMainStage extends StatelessWidget {
           current: controller.selfPublicViewerMode,
           onSelect: controller.setSelfPublicViewerMode,
         ),
+        onOpenDmChat: onOpenDmChat,
       );
     }
     if (slot.isEmpty) {
-      return const _EmptyPeerSlot();
+      return _EmptyPeerSlot(joinCode: controller.joinCode);
     }
     final m = slot.member!;
+    final latestDm = controller.latestMessageWithUser(m.userId);
     return StudyRoomMemberCard(
       member: m,
       isSelf: false,
       compact: true,
       floatingReaction: controller.reactionEmojiFor(m.userId),
+      dmPreview: latestDm?.content,
+      dmHasUnread: controller.hasUnreadFromUser(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
-      onChat: onOpenChat,
+      onChat: onOpenDmChat == null ? null : () => onOpenDmChat!(m.userId),
     );
   }
 }
@@ -239,12 +244,15 @@ class _Slot {
 }
 
 class _EmptyPeerSlot extends StatelessWidget {
-  const _EmptyPeerSlot();
+  final String? joinCode;
+
+  const _EmptyPeerSlot({this.joinCode});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final code = joinCode?.trim() ?? '';
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -257,7 +265,13 @@ class _EmptyPeerSlot extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        onTap: null,
+        onTap: code.isEmpty
+            ? null
+            : () => StudyRoomInviteSheet.show(
+                  context,
+                  joinCode: code,
+                  shareOnly: true,
+                ),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,

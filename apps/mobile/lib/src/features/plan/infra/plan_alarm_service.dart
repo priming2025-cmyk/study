@@ -17,6 +17,19 @@ abstract final class PlanAlarmService {
         planItemId: planItemId,
         subject: subject,
         whenLocal: whenLocal,
+        fiveMinBefore: false,
+      );
+
+  static Future<void> schedulePlanFiveMinBefore({
+    required String planItemId,
+    required String subject,
+    required DateTime whenLocal,
+  }) =>
+      impl.planAlarmSchedule(
+        planItemId: planItemId,
+        subject: subject,
+        whenLocal: whenLocal,
+        fiveMinBefore: true,
       );
 
   static Future<void> cancel(String planItemId) =>
@@ -32,12 +45,21 @@ abstract final class PlanAlarmService {
     for (final item in plan.items) {
       if (!item.reminderEnabled || item.scheduledStartAt == null) continue;
       final local = item.scheduledStartAt!.toLocal();
-      if (!local.isAfter(now)) continue;
-      await schedulePlanStart(
-        planItemId: item.id,
-        subject: item.subject,
-        whenLocal: local,
-      );
+      final fiveMinBefore = local.subtract(const Duration(minutes: 5));
+      if (fiveMinBefore.isAfter(now)) {
+        await schedulePlanFiveMinBefore(
+          planItemId: item.id,
+          subject: item.subject,
+          whenLocal: fiveMinBefore,
+        );
+      }
+      if (local.isAfter(now)) {
+        await schedulePlanStart(
+          planItemId: item.id,
+          subject: item.subject,
+          whenLocal: local,
+        );
+      }
     }
   }
 }

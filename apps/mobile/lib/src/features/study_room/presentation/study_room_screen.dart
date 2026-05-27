@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/shell_branch_index_provider.dart';
+import '../../../core/study/study_activity_gate.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../../core/widgets/sheet_header_bar.dart';
 import '../../session/data/session_repository.dart';
@@ -18,6 +19,7 @@ import '../domain/study_room_join_code.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
+import 'widgets/study_room_dm_chat_screen.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
@@ -41,7 +43,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   late final ValueNotifier<int> _engagedMinScoreN =
       ValueNotifier(kDefaultEngagedMinScore);
 
-  bool _chatOpen = false;
   String? _lastCheerKey;
 
   @override
@@ -77,6 +78,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     _roomIdCtrl.dispose();
     _engagedMinScoreN.dispose();
     ref.read(studyRoomInRoomProvider.notifier).state = false;
+    unawaited(StudyActivityGate.setInStudyRoom(false));
     super.dispose();
   }
 
@@ -84,6 +86,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (mounted) {
       setState(() {});
       ref.read(studyRoomInRoomProvider.notifier).state = _controller.roomId != null;
+      unawaited(StudyActivityGate.setInStudyRoom(_controller.roomId != null));
 
       final selfId = _controller.selfId;
       if (selfId != null) {
@@ -105,10 +108,16 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
-  void _toggleChat() {
-    setState(() {
-      _chatOpen = !_chatOpen;
-    });
+  void _openDmChat(String peerUserId) {
+    _controller.markDmThreadRead(peerUserId);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StudyRoomDmChatScreen(
+          controller: _controller,
+          peerUserId: peerUserId,
+        ),
+      ),
+    );
   }
 
   void _refreshRecentRoomsList() {
@@ -504,8 +513,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
               engagedMinListenable: _engagedMinScoreN,
-              chatOpen: _chatOpen,
-              onToggleChat: _toggleChat,
+              onOpenDmChat: _openDmChat,
             )
           : FutureBuilder<List<RecentStudyRoom>>(
               future: _recentFuture,

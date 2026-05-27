@@ -53,6 +53,46 @@ class FriendSearchResult {
   });
 }
 
+class IncomingFriendRequest {
+  final String id;
+  final String fromUserId;
+  final String fromDisplayName;
+  final DateTime createdAt;
+
+  const IncomingFriendRequest({
+    required this.id,
+    required this.fromUserId,
+    required this.fromDisplayName,
+    required this.createdAt,
+  });
+}
+
+class FriendRequestSendResult {
+  final bool success;
+  final String message;
+  final bool offerAccept;
+  final String? incomingRequestId;
+
+  const FriendRequestSendResult({
+    required this.success,
+    required this.message,
+    this.offerAccept = false,
+    this.incomingRequestId,
+  });
+}
+
+class MyProfileSummary {
+  final String? displayName;
+  final String? email;
+  final ProfileRpgSummary? rpg;
+
+  const MyProfileSummary({
+    this.displayName,
+    this.email,
+    this.rpg,
+  });
+}
+
 class FriendRow {
   final String peerId;
   final String displayName;

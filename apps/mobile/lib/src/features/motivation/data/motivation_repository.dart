@@ -132,6 +132,140 @@ class MotivationRepository {
     });
   }
 
+  /// 친구 요청 전 상태 확인 + 사용자 친화 메시지.
+  Future<FriendRequestSendResult> sendFriendRequestSafe({
+    required String toUserId,
+  }) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) {
+      return const FriendRequestSendResult(
+        success: false,
+        message: '로그인이 필요해요',
+      );
+    }
+    if (uid == toUserId) {
+      return const FriendRequestSendResult(
+        success: false,
+        message: '본인은 추가할 수 없어요',
+      );
+    }
+
+    final friend = await supabase
+        .from('friend_links')
+        .select('peer_id')
+        .eq('user_id', uid)
+        .eq('peer_id', toUserId)
+        .maybeSingle();
+    if (friend != null) {
+      return const FriendRequestSendResult(
+        success: false,
+        message: '이미 친구예요',
+      );
+    }
+
+    final outgoing = await supabase
+        .from('friend_requests')
+        .select('id')
+        .eq('from_user_id', uid)
+        .eq('to_user_id', toUserId)
+        .eq('status', 'pending')
+        .maybeSingle();
+    if (outgoing != null) {
+      return const FriendRequestSendResult(
+        success: false,
+        message: '이미 상대방에게 친구 추가 메시지를 보냈어요',
+      );
+    }
+
+    final incoming = await supabase
+        .from('friend_requests')
+        .select('id')
+        .eq('from_user_id', toUserId)
+        .eq('to_user_id', uid)
+        .eq('status', 'pending')
+        .maybeSingle();
+    if (incoming != null) {
+      return FriendRequestSendResult(
+        success: false,
+        message: '상대방이 이미 요청을 보냈어요. 수락해 주세요.',
+        offerAccept: true,
+        incomingRequestId: incoming['id'] as String,
+      );
+    }
+
+    try {
+      await sendFriendRequest(toUserId: toUserId);
+      return const FriendRequestSendResult(
+        success: true,
+        message: '친구 요청을 보냈어요',
+      );
+    } catch (e) {
+      final err = '$e';
+      if (err.contains('23505') || err.contains('duplicate')) {
+        return const FriendRequestSendResult(
+          success: false,
+          message: '이미 상대방에게 친구 추가 메시지를 보냈어요',
+        );
+      }
+      return FriendRequestSendResult(
+        success: false,
+        message: '요청 실패: $e',
+      );
+    }
+  }
+
+  Future<List<IncomingFriendRequest>> listIncomingFriendRequests() async {
+    try {
+      final rows = await supabase.rpc('list_incoming_friend_requests');
+      if (rows is! List) return const [];
+      return rows
+          .map(
+            (e) => IncomingFriendRequest(
+              id: e['id'] as String,
+              fromUserId: e['from_user_id'] as String,
+              fromDisplayName: e['from_display_name'] as String? ?? '사용자',
+              createdAt: DateTime.parse(e['created_at'] as String),
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<MyProfileSummary?> fetchMyProfile() async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return null;
+    final row = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('id', uid)
+        .maybeSingle();
+    final rpg = await fetchMyProfileRpg();
+    return MyProfileSummary(
+      displayName: row?['display_name'] as String?,
+      email: supabase.auth.currentUser?.email,
+      rpg: rpg,
+    );
+  }
+
+  Future<String?> updateDisplayName(String name) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return '로그인이 필요해요';
+    final trimmed = name.trim();
+    if (trimmed.length < 2) return '2글자 이상 입력해 주세요';
+    if (trimmed.length > 20) return '20자 이내로 입력해 주세요';
+    try {
+      await supabase.from('profiles').update({
+        'display_name': trimmed,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', uid);
+      return null;
+    } catch (e) {
+      return '저장 실패: $e';
+    }
+  }
+
   Future<void> acceptFriendRequest(String requestId) async {
     await supabase.rpc('accept_friend_request', params: {'p_request_id': requestId});
   }

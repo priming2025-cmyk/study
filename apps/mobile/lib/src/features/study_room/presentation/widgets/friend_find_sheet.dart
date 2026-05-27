@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/widgets/sheet_header_bar.dart';
+import '../../../social/data/friend_dm_providers.dart';
 import '../../../motivation/domain/motivation_models.dart';
-import 'friend_status_section.dart';
+import 'friend_incoming_requests_section.dart';
 
 /// 이름·이메일로 친구를 검색해 요청을 보내는 시트.
 class FriendFindSheet extends ConsumerStatefulWidget {
@@ -27,8 +28,10 @@ class FriendFindSheet extends ConsumerStatefulWidget {
 class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
   final _queryCtrl = TextEditingController();
   List<FriendSearchResult> _results = const [];
+  final Set<String> _sentUserIds = {};
   bool _searching = false;
   String? _error;
+  int _incomingKey = 0;
 
   @override
   void dispose() {
@@ -61,19 +64,26 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
 
   Future<void> _sendRequest(FriendSearchResult user) async {
     final repo = ref.read(motivationRepositoryProvider);
-    try {
-      await repo.sendFriendRequest(toUserId: user.userId);
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${user.displayName}에게 친구 요청을 보냈어요')),
-      );
-      ref.invalidate(settudyDmFriendsProvider);
-    } catch (e) {
+    final result = await repo.sendFriendRequestSafe(toUserId: user.userId);
+    if (!mounted) return;
+
+    if (result.offerAccept && result.incomingRequestId != null) {
+      await repo.acceptFriendRequest(result.incomingRequestId!);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('요청 실패: $e')),
+        SnackBar(content: Text('${user.displayName}님과 친구가 됐어요')),
       );
+      setState(() => _incomingKey++);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+
+    if (result.success) {
+      setState(() => _sentUserIds.add(user.userId));
+      ref.invalidate(friendDmThreadsProvider);
     }
   }
 
@@ -86,11 +96,15 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.55,
+        height: MediaQuery.of(context).size.height * 0.62,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SheetHeaderBar(title: '친구 찾기'),
+            FriendIncomingRequestsSection(
+              key: ValueKey('find_incoming_$_incomingKey'),
+              onChanged: () => setState(() => _incomingKey++),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -101,7 +115,7 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
                       textInputAction: TextInputAction.search,
                       onSubmitted: (_) => _search(),
                       decoration: InputDecoration(
-                        hintText: '이름 또는 이메일',
+                        hintText: '이름 · 이메일 · 아이디',
                         filled: true,
                         fillColor: cs.surfaceContainerHighest,
                         border: OutlineInputBorder(
@@ -142,9 +156,11 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 itemCount: _results.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, indent: 72),
                 itemBuilder: (context, i) {
                   final u = _results[i];
+                  final alreadySent = _sentUserIds.contains(u.userId);
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: cs.secondaryContainer,
@@ -163,21 +179,32 @@ class _FriendFindSheetState extends ConsumerState<FriendFindSheet> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      u.userId,
+                      u.userId.length > 8
+                          ? u.userId.substring(0, 8)
+                          : u.userId,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: tt.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
                     ),
-                    trailing: FilledButton.tonal(
-                      onPressed: () => _sendRequest(u),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(64, 36),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      child: const Text('추가'),
-                    ),
+                    trailing: alreadySent
+                        ? Text(
+                            '요청 보냄',
+                            style: tt.labelMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : FilledButton.tonal(
+                            onPressed: () => _sendRequest(u),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(64, 36),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                            ),
+                            child: const Text('추가'),
+                          ),
                   );
                 },
               ),

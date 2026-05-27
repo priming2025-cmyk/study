@@ -13,6 +13,8 @@ class StudyRoomMemberCard extends StatelessWidget {
   final void Function(String emoji)? onQuickReact;
   /// DM 채팅 열기
   final VoidCallback? onChat;
+  final String? dmPreview;
+  final bool dmHasUnread;
 
   const StudyRoomMemberCard({
     super.key,
@@ -22,6 +24,8 @@ class StudyRoomMemberCard extends StatelessWidget {
     this.floatingReaction,
     this.onQuickReact,
     this.onChat,
+    this.dmPreview,
+    this.dmHasUnread = false,
   });
 
   @override
@@ -156,7 +160,19 @@ class StudyRoomMemberCard extends StatelessWidget {
               child: _SnapshotAge(at: member.snapshotAt!),
             ),
 
-          // 피어 카드에만 표시: 우측 아이콘 열 (말풍선 / 하트 / 모니터)
+          if (!isSelf && onChat != null)
+            Positioned(
+              left: 6,
+              top: 36,
+              right: 44,
+              child: _PeerDmBubble(
+                preview: dmPreview,
+                hasUnread: dmHasUnread,
+                onTap: onChat!,
+              ),
+            ),
+
+          // 피어 카드에만 표시: 우측 아이콘 열 (말풍선 / 하트)
           if (!isSelf)
             Positioned(
               right: 4,
@@ -201,6 +217,65 @@ class StudyRoomMemberCard extends StatelessWidget {
           '${member.displayName ?? '친구'}에게 메시지를 보냈어요',
         ),
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
+
+class _PeerDmBubble extends StatelessWidget {
+  final String? preview;
+  final bool hasUnread;
+  final VoidCallback onTap;
+
+  const _PeerDmBubble({
+    required this.preview,
+    required this.hasUnread,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = (preview ?? '').trim();
+    final label = text.isEmpty ? '채팅하기' : text;
+    final show = hasUnread || text.isNotEmpty;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: hasUnread
+            ? Theme.of(context).colorScheme.primary.withAlpha(220)
+            : Colors.black.withAlpha(150),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.chat_bubble_rounded,
+                  size: 14,
+                  color: Colors.white.withAlpha(show ? 255 : 180),
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withAlpha(show ? 255 : 200),
+                      fontSize: 11,
+                      fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

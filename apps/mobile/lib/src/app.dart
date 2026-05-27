@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/routing/app_deep_link_listener.dart';
+import 'core/routing/root_navigator_key.dart';
 import 'core/routing/go_router_refresh_stream.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_provider.dart';
@@ -26,8 +27,6 @@ import 'features/stats/presentation/stats_screen.dart';
 import 'features/study_room/presentation/study_room_screen.dart';
 import 'shell/app_shell.dart';
 
-final _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
-
 /// Supabase Site URL 등으로 들어오는 잘못된 경로를 정규화합니다.
 String? _normalizeUnknownEntryPath(String path, {required bool authed}) {
   final trimmed = path.trim();
@@ -44,7 +43,7 @@ String? _normalizeUnknownEntryPath(String path, {required bool authed}) {
 final _routerProvider = Provider<GoRouter>((ref) {
   final authStream = Supabase.instance.client.auth.onAuthStateChange;
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/session',
     refreshListenable: GoRouterRefreshStream(authStream),
     redirect: (context, state) {
@@ -127,31 +126,31 @@ final _routerProvider = Provider<GoRouter>((ref) {
           builder: (context, state) => const ThemeLabScreen(),
         ),
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         path: '/coins',
         builder: (context, state) => const CoinHistoryScreen(),
       ),
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         path: '/coins/how',
         builder: (context, state) => const CoinEarningGuideScreen(),
       ),
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         path: '/family',
         builder: (context, state) => const FamilyHubScreen(),
       ),
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         path: '/gacha',
         builder: (context, state) => const GachaShopScreen(),
       ),
       GoRoute(
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         path: '/social',
         builder: (context, state) => const SocialHubScreen(),
       ),
-      ...buildLegalRoutes(_rootNavigatorKey),
+      ...buildLegalRoutes(rootNavigatorKey),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             AppShell(navigationShell: navigationShell),

@@ -23,6 +23,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final bool cameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
   final VoidCallback? onOpenPublicMode;
+  final void Function(String peerUserId)? onOpenDmChat;
 
   const StudyRoomSelfLivePanel({
     super.key,
@@ -32,6 +33,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.cameraSlotActive,
     required this.engagedMinListenable,
     this.onOpenPublicMode,
+    this.onOpenDmChat,
   });
 
   @override
@@ -91,10 +93,15 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
     if (mounted) setState(() {});
   }
 
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     widget.engagedMinListenable.addListener(_onEngagedChanged);
+    widget.controller.addListener(_onControllerChanged);
     WidgetsBinding.instance.addObserver(_life);
     if (widget.cameraSlotActive) {
       unawaited(_boot());
@@ -214,6 +221,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   @override
   void dispose() {
     widget.engagedMinListenable.removeListener(_onEngagedChanged);
+    widget.controller.removeListener(_onControllerChanged);
     WidgetsBinding.instance.removeObserver(_life);
     unawaited(_releaseCameraFully());
     super.dispose();
@@ -248,41 +256,10 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     ),
                   ),
                   StudyRoomSelfFocusBadge(score: score, status: status),
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: Material(
-                      color: Colors.black.withAlpha(140),
-                      borderRadius: BorderRadius.circular(999),
-                      child: InkWell(
-                        onTap: widget.onOpenPublicMode,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.visibility_outlined,
-                                  size: 16, color: Colors.white),
-                              const SizedBox(width: 6),
-                              Text(
-                                switch (widget.controller.selfPublicViewerMode) {
-                                  'video' => '2초 영상',
-                                  'rest' => '휴식',
-                                  _ => '캡쳐',
-                                },
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  _SelfPanelBottomOverlays(
+                    controller: widget.controller,
+                    onOpenPublicMode: widget.onOpenPublicMode,
+                    onOpenDmChat: widget.onOpenDmChat,
                   ),
                 ],
               ),
@@ -315,47 +292,146 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     height: widget.height,
                   ),
                 StudyRoomSelfFocusBadge(score: score, status: status),
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Material(
-                    color: Colors.black.withAlpha(140),
-                    borderRadius: BorderRadius.circular(999),
-                    child: InkWell(
-                      onTap: widget.onOpenPublicMode,
-                      borderRadius: BorderRadius.circular(999),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.visibility_outlined,
-                                size: 16, color: Colors.white),
-                            const SizedBox(width: 6),
-                            Text(
-                              switch (widget.controller.selfPublicViewerMode) {
-                                'video' => '2초 영상',
-                                'rest' => '휴식',
-                                _ => '캡쳐',
-                              },
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                _SelfPanelBottomOverlays(
+                  controller: widget.controller,
+                  onOpenPublicMode: widget.onOpenPublicMode,
+                  onOpenDmChat: widget.onOpenDmChat,
                 ),
               ],
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _SelfPanelBottomOverlays extends StatelessWidget {
+  final StudyRoomController controller;
+  final VoidCallback? onOpenPublicMode;
+  final void Function(String peerUserId)? onOpenDmChat;
+
+  const _SelfPanelBottomOverlays({
+    required this.controller,
+    this.onOpenPublicMode,
+    this.onOpenDmChat,
+  });
+
+  String _publicModeLabel(String mode) => switch (mode) {
+        'video' => '2초 영상',
+        'rest' => '휴식',
+        _ => '캡쳐',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final incoming = controller.latestUnreadIncoming();
+    final senderLabel = incoming == null
+        ? ''
+        : (incoming.userId.length > 8
+            ? incoming.userId.substring(0, 8)
+            : incoming.userId);
+    final preview = incoming?.content.trim() ?? '';
+
+    return Stack(
+      children: [
+        if (incoming != null && onOpenDmChat != null)
+          Positioned(
+            right: 8,
+            left: 8,
+            bottom: 46,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Material(
+                color: Theme.of(context).colorScheme.primary.withAlpha(230),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => onOpenDmChat!(incoming.userId),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.chat_bubble_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              senderLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (preview.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 180),
+                            child: Text(
+                              preview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withAlpha(230),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          right: 8,
+          bottom: 8,
+          child: Material(
+            color: Colors.black.withAlpha(140),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              onTap: onOpenPublicMode,
+              borderRadius: BorderRadius.circular(999),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.visibility_outlined,
+                        size: 16, color: Colors.white),
+                    const SizedBox(width: 6),
+                    Text(
+                      _publicModeLabel(controller.selfPublicViewerMode),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

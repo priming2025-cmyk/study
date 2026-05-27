@@ -6,7 +6,10 @@ import 'package:timezone/timezone.dart' as tz;
 bool _inited = false;
 final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
-int _notificationId(String planItemId) => planItemId.hashCode & 0x7fffffff;
+int _notificationId(String planItemId, {required bool fiveMinBefore}) {
+  final base = planItemId.hashCode & 0x7fffffff;
+  return fiveMinBefore ? base + 1 : base;
+}
 
 Future<void> planAlarmInit() async {
   if (_inited) return;
@@ -30,6 +33,7 @@ Future<void> planAlarmSchedule({
   required String planItemId,
   required String subject,
   required DateTime whenLocal,
+  bool fiveMinBefore = false,
 }) async {
   await planAlarmInit();
   if (whenLocal.isBefore(DateTime.now().subtract(const Duration(seconds: 3)))) {
@@ -45,9 +49,9 @@ Future<void> planAlarmSchedule({
   );
   const ios = DarwinNotificationDetails();
   await _plugin.zonedSchedule(
-    _notificationId(planItemId),
-    '공부 시작',
-    subject,
+    _notificationId(planItemId, fiveMinBefore: fiveMinBefore),
+    fiveMinBefore ? '셋터디 5분 전입니다' : '공부 시작',
+    fiveMinBefore ? '$subject · 5분 후 시작' : subject,
     when,
     const NotificationDetails(android: android, iOS: ios),
     androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -57,5 +61,6 @@ Future<void> planAlarmSchedule({
 }
 
 Future<void> planAlarmCancel(String planItemId) async {
-  await _plugin.cancel(_notificationId(planItemId));
+  await _plugin.cancel(_notificationId(planItemId, fiveMinBefore: false));
+  await _plugin.cancel(_notificationId(planItemId, fiveMinBefore: true));
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/providers/shell_branch_index_provider.dart';
+import '../features/social/presentation/friend_dm_listener.dart';
 
 enum _LeaveSessionChoice { saveAndLeave, cancel }
 
@@ -37,7 +38,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: widget.navigationShell,
+      body: FriendDmListener(
+        child: widget.navigationShell,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: (index) async {

@@ -67,6 +67,7 @@ class StudyRoomMessage {
   final String id;
   final String roomId;
   final String userId;
+  final String? recipientUserId;
   final String content;
   final DateTime createdAt;
 
@@ -74,6 +75,7 @@ class StudyRoomMessage {
     required this.id,
     required this.roomId,
     required this.userId,
+    this.recipientUserId,
     required this.content,
     required this.createdAt,
   });
@@ -82,6 +84,7 @@ class StudyRoomMessage {
         id: j['id'] as String,
         roomId: j['room_id'] as String,
         userId: j['user_id'] as String,
+        recipientUserId: j['recipient_user_id'] as String?,
         content: j['content'] as String,
         createdAt: DateTime.parse(j['created_at'] as String),
       );

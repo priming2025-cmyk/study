@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'src/app.dart';
 import 'src/core/push/push_notifications.dart';
 import 'src/core/supabase/supabase_config.dart';
+import 'src/core/study/study_activity_gate.dart';
 import 'src/features/auth/auth_feature_flags.dart';
 import 'src/features/plan/infra/plan_alarm_service.dart';
 import 'src/features/session/infra/web_platform_bootstrap.dart';
@@ -20,6 +21,7 @@ Future<void> main() async {
   await dotenv.load(fileName: '.env');
   SupabaseConfig.validateForRun();
 
+  await StudyActivityGate.init();
   await PushNotifications.initAfterLaunch();
   await PlanAlarmService.init();
 

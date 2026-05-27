@@ -65,6 +65,9 @@ class StudyRoomController extends ChangeNotifier {
   List<StudyRoomMessage> _messages = [];
   List<StudyRoomMessage> get messages => _messages;
 
+  /// DM 스레드별 마지막 읽은 시각 (세션 내).
+  final Map<String, DateTime> _dmReadAtByUser = {};
+
   bool joining = false;
   String? error;
 
@@ -361,6 +364,7 @@ class StudyRoomController extends ChangeNotifier {
       maxPeers = (roomRow['max_peers'] as num?)?.toInt().clamp(2, 8) ?? 8;
       _selfId = userId;
       _messages = [];
+      _dmReadAtByUser.clear();
       _selfGoalText = goalText.trim();
       _selfJoinAtUtc = DateTime.now().toUtc();
       _selfStatus = 'focus';
@@ -464,6 +468,7 @@ class StudyRoomController extends ChangeNotifier {
     _selfId = null;
     _members = const [];
     _messages = [];
+    _dmReadAtByUser.clear();
     selfSnapshotUrl = null;
 
     if (rid != null && uid != null) {
@@ -515,6 +520,79 @@ class StudyRoomController extends ChangeNotifier {
     } catch (e) {
       debugPrint('[StudyRoomController] sendMessage error: $e');
     }
+  }
+
+  Future<void> sendDirectMessage({
+    required String recipientUserId,
+    required String content,
+  }) async {
+    final rid = roomId;
+    final uid = _selfId;
+    if (rid == null || uid == null || content.trim().isEmpty) return;
+    if (recipientUserId == uid) return;
+
+    try {
+      await supabase.from('study_room_messages').insert({
+        'room_id': rid,
+        'user_id': uid,
+        'recipient_user_id': recipientUserId,
+        'content': content.trim(),
+      });
+    } catch (e) {
+      debugPrint('[StudyRoomController] sendDirectMessage error: $e');
+    }
+  }
+
+  /// 나와 [otherUserId] 사이 1:1 메시지 (시간순).
+  List<StudyRoomMessage> messagesWithUser(String otherUserId) {
+    final self = _selfId;
+    if (self == null) return const [];
+
+    return _messages
+        .where((m) {
+          if (m.recipientUserId == null) return false;
+          return (m.userId == self && m.recipientUserId == otherUserId) ||
+              (m.userId == otherUserId && m.recipientUserId == self);
+        })
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  StudyRoomMessage? latestUnreadIncoming() {
+    final self = _selfId;
+    if (self == null) return null;
+
+    StudyRoomMessage? best;
+    for (final m in _messages) {
+      if (m.recipientUserId != self || m.userId == self) continue;
+      final readAt = _dmReadAtByUser[m.userId];
+      if (readAt != null && !m.createdAt.isAfter(readAt)) continue;
+      if (best == null || m.createdAt.isAfter(best.createdAt)) {
+        best = m;
+      }
+    }
+    return best;
+  }
+
+  bool hasUnreadFromUser(String otherUserId) {
+    final self = _selfId;
+    if (self == null) return false;
+    final readAt = _dmReadAtByUser[otherUserId];
+    for (final m in _messages) {
+      if (m.userId != otherUserId || m.recipientUserId != self) continue;
+      if (readAt == null || m.createdAt.isAfter(readAt)) return true;
+    }
+    return false;
+  }
+
+  StudyRoomMessage? latestMessageWithUser(String otherUserId) {
+    final thread = messagesWithUser(otherUserId);
+    return thread.isEmpty ? null : thread.last;
+  }
+
+  void markDmThreadRead(String otherUserId) {
+    _dmReadAtByUser[otherUserId] = DateTime.now();
+    notifyListeners();
   }
 
   Future<void> setSelfPublicViewerMode(String mode) async {

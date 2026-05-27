@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
+import '../../../core/study/study_activity_gate.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../plan/data/plan_models.dart';
 import '../../plan/data/plan_repeat_config.dart';
@@ -98,6 +99,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     setState(() {});
     // 공부 세션 실행 상태를 전역 Provider에 동기화 (AppShell이 탭 전환 시 확인에 사용)
     ref.read(sessionRunningProvider.notifier).state = _c.running;
+    unawaited(StudyActivityGate.setSessionRunning(_c.running));
   }
 
   void _openSessionAddSheet() {
@@ -291,6 +293,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     ref.listen<int>(shellBranchIndexProvider, (prev, next) {
       // AppShell 탭 전환 가드가 최신 running 값을 읽을 수 있도록 항상 동기화
       ref.read(sessionRunningProvider.notifier).state = _c.running;
+    unawaited(StudyActivityGate.setSessionRunning(_c.running));
       if (prev == null) return;
       if (prev == kShellBranchSession && next != kShellBranchSession) {
         unawaited(_c.suspendCameraForShellNavigation());
