@@ -1,43 +1,17 @@
 part of 'study_room_member_card.dart';
 
-class _ReactChip extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _ReactChip({required this.label, required this.onTap});
+class _FloatingHeart extends StatefulWidget {
+  const _FloatingHeart();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Material(
-        color: Colors.black.withAlpha(120),
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Text(label, style: const TextStyle(fontSize: 14)),
-          ),
-        ),
-      ),
-    );
-  }
+  State<_FloatingHeart> createState() => _FloatingHeartState();
 }
 
-class _FloatingReaction extends StatefulWidget {
-  final String emoji;
-  const _FloatingReaction({super.key, required this.emoji});
-
-  @override
-  State<_FloatingReaction> createState() => _FloatingReactionState();
-}
-
-class _FloatingReactionState extends State<_FloatingReaction> with SingleTickerProviderStateMixin {
+class _FloatingHeartState extends State<_FloatingHeart>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2200),
+    duration: const Duration(milliseconds: 1500),
   )..forward();
 
   @override
@@ -54,12 +28,19 @@ class _FloatingReactionState extends State<_FloatingReaction> with SingleTickerP
           child: AnimatedBuilder(
             animation: _c,
             builder: (_, __) {
-              final t = Curves.easeOut.transform(_c.value);
+              final t = Curves.easeOutCubic.transform(_c.value);
               return Opacity(
                 opacity: (1 - t).clamp(0.0, 1.0),
                 child: Transform.translate(
-                  offset: Offset(0, -80 * t),
-                  child: Text(widget.emoji, style: const TextStyle(fontSize: 42)),
+                  offset: Offset(0, -70 * t),
+                  child: Transform.scale(
+                    scale: 0.9 + 0.25 * (1 - t),
+                    child: const Icon(
+                      Icons.favorite,
+                      size: 44,
+                      color: Color(0xFFFF4D6D),
+                    ),
+                  ),
                 ),
               );
             },

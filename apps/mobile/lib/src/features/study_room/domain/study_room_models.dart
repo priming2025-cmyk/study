@@ -25,6 +25,10 @@ class StudyRoomMember {
   final String? snapshotUrl;
   final DateTime? snapshotAt;
   final String? status; // 'focus' | 'rest' | null
+  /// 0~100 (내부 집중 점수). 없으면 null.
+  final int? focusScore;
+  /// 사용자가 선택한 공개 모드. 예) capture/video/rest
+  final String? publicViewerMode;
   final String? subjectName;
   final String? goalText;
   final DateTime? joinAt;
@@ -43,6 +47,8 @@ class StudyRoomMember {
     this.snapshotUrl,
     this.snapshotAt,
     this.status,
+    this.focusScore,
+    this.publicViewerMode,
     this.subjectName,
     this.goalText,
     this.joinAt,
@@ -83,10 +89,12 @@ class StudyRoomMessage {
 
 class StudyRoomReactionOverlay {
   final String emoji;
+  final String? fromUserId;
   final DateTime receivedAt;
 
   const StudyRoomReactionOverlay({
     required this.emoji,
+    this.fromUserId,
     required this.receivedAt,
   });
 }

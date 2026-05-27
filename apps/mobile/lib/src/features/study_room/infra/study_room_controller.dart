@@ -52,6 +52,10 @@ class StudyRoomController extends ChangeNotifier {
   String? selfSnapshotUrl;
 
   String? roomOwnerId;
+
+  // ── 공개 모드(캡쳐/2초영상/휴식) ────────────────────────────────────────────
+  String _selfPublicViewerMode = 'capture';
+  String get selfPublicViewerMode => _selfPublicViewerMode;
   bool get isRoomHost =>
       roomOwnerId != null && _selfId != null && roomOwnerId == _selfId;
 
@@ -123,7 +127,10 @@ class StudyRoomController extends ChangeNotifier {
     return null;
   }
 
-  String? reactionEmojiFor(String userId) => _reactions[userId]?.overlay.emoji;
+  StudyRoomReactionOverlay? reactionOverlayFor(String userId) =>
+      _reactions[userId]?.overlay;
+
+  String? reactionEmojiFor(String userId) => reactionOverlayFor(userId)?.emoji;
 
   // ── 집중 추적 (공부 탭과 동일 AttentionScoring) ───────────────────────────
 
@@ -510,6 +517,15 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
+  Future<void> setSelfPublicViewerMode(String mode) async {
+    final m = mode.trim();
+    if (m.isEmpty) return;
+    if (_selfPublicViewerMode == m) return;
+    _selfPublicViewerMode = m;
+    notifyListeners();
+    await _trackSelfFull();
+  }
+
   /// 방장을 다른 참가자에게 넘깁니다. (DB RPC, RLS 우회)
   Future<String?> transferRoomHostTo(String newOwnerUserId) async {
     final rid = roomId;
@@ -569,6 +585,8 @@ class StudyRoomController extends ChangeNotifier {
       'snapshot_url': snap,
       'snapshot_at': DateTime.now().toUtc().toIso8601String(),
       'status': _selfStatus,
+      'focus_score': focusAverageScore,
+      'public_viewer_mode': _selfPublicViewerMode,
       'subject_name': _selfSubjectName,
       'goal_text': _selfGoalText,
       'join_at': _selfJoinAtUtc.toIso8601String(),
@@ -587,6 +605,7 @@ class StudyRoomController extends ChangeNotifier {
   void _onReactionBroadcast(Map<String, dynamic> payload) {
     final target = payload['target_user_id'] as String?;
     final emoji = payload['emoji'] as String?;
+    final fromUserId = payload['from_user_id'] as String?;
     if (target == null || emoji == null) return;
 
     _reactions[target]?.timer.cancel();
@@ -594,6 +613,7 @@ class StudyRoomController extends ChangeNotifier {
 
     final overlay = StudyRoomReactionOverlay(
       emoji: emoji,
+      fromUserId: fromUserId,
       receivedAt: DateTime.now(),
     );
     final timer = Timer(const Duration(milliseconds: 2400), () {
@@ -747,6 +767,8 @@ class StudyRoomController extends ChangeNotifier {
         final snapshotUrl = p['snapshot_url'] as String?;
         final snapshotAtRaw = p['snapshot_at'] as String?;
         final status = p['status'] as String?;
+        final focusScore = (p['focus_score'] as num?)?.toInt();
+        final publicViewerMode = p['public_viewer_mode'] as String?;
         final subjectName = p['subject_name'] as String?;
         final goalText = p['goal_text'] as String?;
         final joinAtRaw = p['join_at'] as String?;
@@ -779,6 +801,8 @@ class StudyRoomController extends ChangeNotifier {
             snapshotUrl: (snapshotUrl?.isNotEmpty ?? false) ? snapshotUrl : null,
             snapshotAt: snapshotAt,
             status: status,
+            focusScore: focusScore,
+            publicViewerMode: publicViewerMode,
             subjectName: subjectName,
             goalText: (goalText?.isNotEmpty ?? false) ? goalText : null,
             joinAt: joinAt,

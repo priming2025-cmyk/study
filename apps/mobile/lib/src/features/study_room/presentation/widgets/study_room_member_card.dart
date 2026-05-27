@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
-import 'study_room_member_viewer_sheet.dart';
 
 part 'study_room_member_card_part.dart';
 
@@ -62,11 +61,10 @@ class StudyRoomMemberCard extends StatelessWidget {
               child: _JoinElapsedBadge(joinAt: member.joinAt!),
             ),
 
-          if (floatingReaction != null && floatingReaction!.isNotEmpty)
-            _FloatingReaction(
-              key: ValueKey(floatingReaction),
-              emoji: floatingReaction!,
-            ),
+          if (floatingReaction != null &&
+              floatingReaction!.isNotEmpty &&
+              floatingReaction == '❤️')
+            const _FloatingHeart(),
 
           Positioned(
             left: 0,
@@ -85,22 +83,11 @@ class StudyRoomMemberCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (onQuickReact != null)
-                    Padding(
-                      padding: EdgeInsets.only(bottom: compact ? 2 : 4),
-                      child: Row(
-                        children: [
-                          _ReactChip(label: '🔥', onTap: () => onQuickReact!('🔥')),
-                          _ReactChip(label: '👍', onTap: () => onQuickReact!('👍')),
-                          _ReactChip(label: '💪', onTap: () => onQuickReact!('💪')),
-                        ],
-                      ),
-                    ),
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          isSelf ? '나' : member.displayName ?? member.userId.substring(0, 8),
+                          isSelf ? '나' : member.userId.substring(0, 8),
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: compact ? 11 : 13,
@@ -109,10 +96,23 @@ class StudyRoomMemberCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (member.status == 'focus')
-                        const Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 14)
-                      else if (member.status == 'rest')
-                        const Icon(Icons.coffee, color: Colors.blueAccent, size: 14),
+                      if (member.focusScore != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withAlpha(140),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${member.focusScore}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
                       if (isSelf)
                         Container(
                           margin: const EdgeInsets.only(left: 4),
@@ -125,19 +125,6 @@ class StudyRoomMemberCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  if (member.publicLevel != null || (member.publicTitleKo != null && member.publicTitleKo!.isNotEmpty))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        [
-                          if (member.publicLevel != null) 'Lv.${member.publicLevel}',
-                          if (member.publicTitleKo != null && member.publicTitleKo!.isNotEmpty)
-                            member.publicTitleKo!,
-                        ].join(' · '),
-                        style: const TextStyle(color: Colors.amberAccent, fontSize: 11),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
                   if (!compact && member.goalText != null && member.goalText!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 2),
@@ -198,15 +185,6 @@ class StudyRoomMemberCard extends StatelessWidget {
                         onQuickReact!('❤️');
                       }
                     },
-                  ),
-                  const SizedBox(height: 6),
-                  _IconBtn(
-                    icon: Icons.monitor_outlined,
-                    tooltip: '영상/사진 보기',
-                    onTap: () => StudyRoomMemberViewerSheet.show(
-                      context,
-                      member: member,
-                    ),
                   ),
                 ],
               ),

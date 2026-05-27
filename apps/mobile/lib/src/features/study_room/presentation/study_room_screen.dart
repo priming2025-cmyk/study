@@ -41,6 +41,9 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   late final ValueNotifier<int> _engagedMinScoreN =
       ValueNotifier(kDefaultEngagedMinScore);
 
+  bool _chatOpen = false;
+  String? _lastCheerKey;
+
   @override
   void initState() {
     super.initState();
@@ -81,7 +84,31 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (mounted) {
       setState(() {});
       ref.read(studyRoomInRoomProvider.notifier).state = _controller.roomId != null;
+
+      final selfId = _controller.selfId;
+      if (selfId != null) {
+        final overlay = _controller.reactionOverlayFor(selfId);
+        if (overlay != null && overlay.emoji == '❤️') {
+          final key = '${overlay.fromUserId ?? 'anon'}-${overlay.receivedAt.toIso8601String()}';
+          if (_lastCheerKey != key) {
+            _lastCheerKey = key;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('누군가가 나를 응원했어요'),
+                behavior: SnackBarBehavior.floating,
+                duration: const Duration(milliseconds: 1600),
+              ),
+            );
+          }
+        }
+      }
     }
+  }
+
+  void _toggleChat() {
+    setState(() {
+      _chatOpen = !_chatOpen;
+    });
   }
 
   void _refreshRecentRoomsList() {
@@ -477,6 +504,8 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
               engagedMinListenable: _engagedMinScoreN,
+              chatOpen: _chatOpen,
+              onToggleChat: _toggleChat,
             )
           : FutureBuilder<List<RecentStudyRoom>>(
               future: _recentFuture,

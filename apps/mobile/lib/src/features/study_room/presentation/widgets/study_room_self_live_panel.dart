@@ -22,6 +22,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final double height;
   final bool cameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
+  final VoidCallback? onOpenPublicMode;
 
   const StudyRoomSelfLivePanel({
     super.key,
@@ -30,6 +31,7 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.height,
     required this.cameraSlotActive,
     required this.engagedMinListenable,
+    this.onOpenPublicMode,
   });
 
   @override
@@ -246,6 +248,42 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     ),
                   ),
                   StudyRoomSelfFocusBadge(score: score, status: status),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Material(
+                      color: Colors.black.withAlpha(140),
+                      borderRadius: BorderRadius.circular(999),
+                      child: InkWell(
+                        onTap: widget.onOpenPublicMode,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.visibility_outlined,
+                                  size: 16, color: Colors.white),
+                              const SizedBox(width: 6),
+                              Text(
+                                switch (widget.controller.selfPublicViewerMode) {
+                                  'video' => '2초 영상',
+                                  'rest' => '휴식',
+                                  _ => '캡쳐',
+                                },
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -277,6 +315,42 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     height: widget.height,
                   ),
                 StudyRoomSelfFocusBadge(score: score, status: status),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: Material(
+                    color: Colors.black.withAlpha(140),
+                    borderRadius: BorderRadius.circular(999),
+                    child: InkWell(
+                      onTap: widget.onOpenPublicMode,
+                      borderRadius: BorderRadius.circular(999),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.visibility_outlined,
+                                size: 16, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              switch (widget.controller.selfPublicViewerMode) {
+                                'video' => '2초 영상',
+                                'rest' => '휴식',
+                                _ => '캡쳐',
+                              },
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

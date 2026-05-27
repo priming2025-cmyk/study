@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../domain/study_room_models.dart';
 import '../../infra/study_room_controller.dart';
-import 'study_room_invite_sheet.dart';
 import 'study_room_member_card.dart';
 import 'study_room_self_live_panel.dart';
+import 'study_room_self_public_mode_sheet.dart';
 
 /// 인원수에 따른 가변 레이아웃 (Flutter 공통 — iOS · Android · Web 동일):
 ///   2명 → 1열 세로 (나, 1)
@@ -19,12 +19,14 @@ class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
   final bool studyCameraSlotActive;
+  final VoidCallback? onOpenChat;
 
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
     required this.studyCameraSlotActive,
+    this.onOpenChat,
   });
 
   static const double _gap = 6.0;
@@ -200,19 +202,15 @@ class StudyRoomMainStage extends StatelessWidget {
         height: h,
         cameraSlotActive: studyCameraSlotActive,
         engagedMinListenable: engagedMinListenable,
+        onOpenPublicMode: () => showStudyRoomSelfPublicModeSheet(
+          context,
+          current: controller.selfPublicViewerMode,
+          onSelect: controller.setSelfPublicViewerMode,
+        ),
       );
     }
     if (slot.isEmpty) {
-      return _EmptyPeerSlot(
-        onTap: controller.joinCode == null
-            ? null
-            : () => StudyRoomInviteSheet.show(
-                  context,
-                  joinCode: controller.joinCode!,
-                  goalText: controller.goalText,
-                  shareOnly: true,
-                ),
-      );
+      return const _EmptyPeerSlot();
     }
     final m = slot.member!;
     return StudyRoomMemberCard(
@@ -222,6 +220,7 @@ class StudyRoomMainStage extends StatelessWidget {
       floatingReaction: controller.reactionEmojiFor(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
+      onChat: onOpenChat,
     );
   }
 }
@@ -240,9 +239,7 @@ class _Slot {
 }
 
 class _EmptyPeerSlot extends StatelessWidget {
-  final VoidCallback? onTap;
-
-  const _EmptyPeerSlot({this.onTap});
+  const _EmptyPeerSlot();
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +257,7 @@ class _EmptyPeerSlot extends StatelessWidget {
         ),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: null,
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
