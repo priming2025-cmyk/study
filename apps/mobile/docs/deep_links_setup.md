@@ -1,5 +1,7 @@
 # 셋터디 딥링크 (Universal Links / App Links)
 
+> **iOS · Android 배포·딥링크 전체 절차**: [ios.md](./ios.md)
+
 초대 링크 `https://setudy.vercel.app/room/join?code=XXXXXX` 를 탭하면:
 
 - **앱 설치됨** → 네이티브 앱이 열리고 셋터디 탭에서 자동 입장 시도
@@ -29,6 +31,15 @@ keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -sto
    `applinks:setudy.vercel.app` (이미 `Runner.entitlements` 에 포함)
 2. Apple Developer에서 App ID에 Associated Domains 활성화
 3. 실제 기기에서 링크 탭 테스트 (시뮬레이터는 제한적)
+
+## Vercel에 Team ID / Android SHA 반영
+
+`.env`에 `SETUDY_APPLE_TEAM_ID` 및/또는 `SETUDY_ANDROID_SHA256_FINGERPRINT`를 넣은 뒤:
+
+```bash
+cd apps/mobile
+bash tool/apply_native_vercel_env.sh
+```
 
 ## 로컬에서 well-known 생성
 
