@@ -20,11 +20,11 @@ import '../../session/infra/web_shared_camera.dart';
 import '../../session/presentation/widgets/session_end_result_sheet.dart';
 import '../domain/study_room_reward_config.dart';
 import '../infra/study_room_controller.dart';
+import 'widgets/study_room_group_chat_app_bar_button.dart';
 import '../domain/study_room_join_code.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
-import '../../social/presentation/friend_dm_listener.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
@@ -161,27 +161,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
         }
       }
     }
-  }
-
-  Future<void> _openDmChat(String peerUserId) async {
-    final rid = _controller.roomId;
-    if (rid != null) {
-      await _controller.ensureRoomMatesFriends();
-    }
-    final name = _controller.displayNameFor(peerUserId)?.trim();
-    final label = (name != null && name.isNotEmpty)
-        ? name
-        : (peerUserId.length > 8 ? peerUserId.substring(0, 8) : peerUserId);
-
-    if (!mounted) return;
-    openFriendDmChat(
-      context,
-      ref,
-      peerId: peerUserId,
-      peerDisplayName: label,
-      peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
-    );
-    _controller.markFriendDmThreadRead(peerUserId);
   }
 
   Future<void> _showLeaveConfirmDialog() async {
@@ -582,6 +561,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
           ? AppBar(
               title: const Text('셋터디'),
               actions: [
+                StudyRoomGroupChatAppBarButton(controller: _controller),
                 IconButton(
                   tooltip: '셀로그 갤러리 저장',
                   icon: _celologExporting
@@ -662,7 +642,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
               engagedMinListenable: _engagedMinScoreN,
-              onOpenDmChat: _openDmChat,
             )
           : FutureBuilder<List<RecentStudyRoom>>(
               future: _recentFuture,

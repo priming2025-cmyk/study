@@ -13,8 +13,6 @@ import '../../../session/infra/web_camera.dart';
 import '../../infra/study_room_controller.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
-import 'study_room_group_chat_screen.dart';
-
 /// 스터디방 본인 실시간 프리뷰 — [AttentionCameraService] 단일 인스턴스 공유.
 /// 다른 탭으로 나갈 때는 카메라를 **끄지 않고** 구독만 끊습니다(공부 탭과 동일).
 class StudyRoomSelfLivePanel extends StatefulWidget {
@@ -24,7 +22,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final bool cameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
   final VoidCallback? onOpenPublicMode;
-  final void Function(String peerUserId)? onOpenDmChat;
 
   const StudyRoomSelfLivePanel({
     super.key,
@@ -34,7 +31,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.cameraSlotActive,
     required this.engagedMinListenable,
     this.onOpenPublicMode,
-    this.onOpenDmChat,
   });
 
   @override
@@ -256,7 +252,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                   _SelfPanelBottomOverlays(
                     controller: widget.controller,
                     onOpenPublicMode: widget.onOpenPublicMode,
-                    onOpenDmChat: widget.onOpenDmChat,
                   ),
                 ],
               ),
@@ -317,7 +312,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                 _SelfPanelBottomOverlays(
                   controller: widget.controller,
                   onOpenPublicMode: widget.onOpenPublicMode,
-                  onOpenDmChat: widget.onOpenDmChat,
                 ),
               ],
             ),
@@ -331,12 +325,10 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 class _SelfPanelBottomOverlays extends StatelessWidget {
   final StudyRoomController controller;
   final VoidCallback? onOpenPublicMode;
-  final void Function(String peerUserId)? onOpenDmChat;
 
   const _SelfPanelBottomOverlays({
     required this.controller,
     this.onOpenPublicMode,
-    this.onOpenDmChat,
   });
 
   String _publicModeLabel(String mode) => switch (mode) {
@@ -404,48 +396,10 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
     }
   }
 
-  void _openGroupChat(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => StudyRoomGroupChatScreen(controller: controller),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final group = controller.roomChatMessages;
-    final groupPreview =
-        group.isEmpty ? '' : (group.last.content.trim());
-
     return Stack(
       children: [
-        // 최신 단체 채팅 미리보기 (내 카드 좌측)
-        Positioned(
-          left: 6,
-          top: 36,
-          right: 44,
-          child: _SelfGroupChatPreview(
-            preview: groupPreview,
-            onTap: () => _openGroupChat(context),
-          ),
-        ),
-        // 말풍선 버튼 → 단체 채팅 전체 화면
-        Positioned(
-          right: 4,
-          top: 0,
-          bottom: 0,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _SelfOverlayIconBtn(
-                icon: Icons.chat_bubble_outline_rounded,
-                tooltip: '단체 채팅',
-                onTap: () => _openGroupChat(context),
-              ),
-            ],
-          ),
-        ),
         Positioned(
           right: 8,
           bottom: 54,
@@ -509,91 +463,6 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SelfGroupChatPreview extends StatelessWidget {
-  final String preview;
-  final VoidCallback onTap;
-
-  const _SelfGroupChatPreview({
-    required this.preview,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final text = preview.trim();
-    final label = text.isEmpty ? '단체 채팅하기' : text;
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Material(
-        color: Colors.black.withAlpha(150),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.chat_bubble_rounded,
-                  size: 14,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SelfOverlayIconBtn extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _SelfOverlayIconBtn({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: Colors.black.withAlpha(100),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 16, color: Colors.white),
-        ),
-      ),
     );
   }
 }

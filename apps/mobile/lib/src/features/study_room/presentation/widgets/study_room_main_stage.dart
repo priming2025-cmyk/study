@@ -20,14 +20,11 @@ class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
   final bool studyCameraSlotActive;
-  final void Function(String peerUserId)? onOpenDmChat;
-
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
     required this.studyCameraSlotActive,
-    this.onOpenDmChat,
   });
 
   static const double _gap = 6.0;
@@ -208,26 +205,19 @@ class StudyRoomMainStage extends StatelessWidget {
           current: controller.selfPublicViewerMode,
           onSelect: controller.setSelfPublicViewerMode,
         ),
-        onOpenDmChat: onOpenDmChat,
       );
     }
     if (slot.isEmpty) {
       return _EmptyPeerSlot(joinCode: controller.joinCode);
     }
     final m = slot.member!;
-    final latestDmText = controller.friendDmPreviewWithUser(m.userId) ??
-        controller.latestMessageWithUser(m.userId)?.content;
     return StudyRoomMemberCard(
       member: m,
       isSelf: false,
       compact: true,
       floatingReaction: controller.reactionEmojiFor(m.userId),
-      dmPreview: latestDmText,
-      dmHasUnread: controller.hasFriendDmUnreadFromUser(m.userId) ||
-          controller.hasUnreadFromUser(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
-      onChat: onOpenDmChat == null ? null : () => onOpenDmChat!(m.userId),
     );
   }
 }

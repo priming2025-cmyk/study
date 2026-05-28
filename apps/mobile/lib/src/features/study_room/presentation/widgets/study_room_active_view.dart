@@ -9,14 +9,11 @@ class StudyRoomActiveView extends StatelessWidget {
   final StudyRoomController controller;
   final bool studyCameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
-  final void Function(String peerUserId)? onOpenDmChat;
-
   const StudyRoomActiveView({
     super.key,
     required this.controller,
     required this.studyCameraSlotActive,
     required this.engagedMinListenable,
-    this.onOpenDmChat,
   });
 
   @override
@@ -45,7 +42,6 @@ class StudyRoomActiveView extends StatelessWidget {
               controller: controller,
               engagedMinListenable: engagedMinListenable,
               studyCameraSlotActive: studyCameraSlotActive,
-              onOpenDmChat: onOpenDmChat,
             ),
           );
   }
