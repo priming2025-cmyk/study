@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
@@ -44,6 +45,9 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
   final _roomIdCtrl = TextEditingController();
   late Future<List<RecentStudyRoom>> _recentFuture;
+  bool _wakeLockOn = false;
+  bool _resumePromptPending = false;
+  late final _LifecycleObserver _lifecycleObserver;
 
   late final ValueNotifier<int> _engagedMinScoreN =
       ValueNotifier(kDefaultEngagedMinScore);
@@ -57,6 +61,23 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     _controller.onRecentRoomsActivityChanged = _refreshRecentRoomsList;
     _recentFuture = loadRecentStudyRooms();
     _loadEngagedScore();
+    _lifecycleObserver = _LifecycleObserver(
+      onChanged: (inForeground) {
+        if (!mounted) return;
+        final inRoom = _controller.roomId != null;
+        if (!inForeground && inRoom) {
+          _resumePromptPending = true;
+        }
+        if (inForeground && _resumePromptPending && inRoom) {
+          _resumePromptPending = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(_showLeaveConfirmDialog());
+          });
+        }
+      },
+    );
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final params = GoRouterState.of(context).uri.queryParameters;
@@ -83,6 +104,11 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     _controller
       ..removeListener(_onChanged)
       ..dispose();
+    WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    if (_wakeLockOn) {
+      _wakeLockOn = false;
+      unawaited(WakelockPlus.disable());
+    }
     _roomIdCtrl.dispose();
     _engagedMinScoreN.dispose();
     ref.read(studyRoomInRoomProvider.notifier).state = false;
@@ -95,6 +121,16 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       setState(() {});
       ref.read(studyRoomInRoomProvider.notifier).state = _controller.roomId != null;
       unawaited(StudyActivityGate.setInStudyRoom(_controller.roomId != null));
+
+      // 방에 있는 동안 화면 꺼짐 방지 (자리이탈이어도 타이머는 계속)
+      final inRoom = _controller.roomId != null;
+      if (inRoom && !_wakeLockOn) {
+        _wakeLockOn = true;
+        unawaited(WakelockPlus.enable());
+      } else if (!inRoom && _wakeLockOn) {
+        _wakeLockOn = false;
+        unawaited(WakelockPlus.disable());
+      }
 
       final selfId = _controller.selfId;
       if (selfId != null) {
@@ -135,6 +171,33 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
     );
     _controller.markFriendDmThreadRead(peerUserId);
+  }
+
+  Future<void> _showLeaveConfirmDialog() async {
+    if (!mounted) return;
+    if (_controller.roomId == null) return;
+
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('공부중이에요'),
+        content: const Text('셋터디 방을 나갈까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('계속하기'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('나가기'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (shouldLeave == true) {
+      await _leaveAndSettle();
+    }
   }
 
   void _refreshRecentRoomsList() {
@@ -458,9 +521,15 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       }
     });
 
-    return Scaffold(
-      resizeToAvoidBottomInset: false,
-      appBar: inRoom
+    return PopScope(
+      canPop: !inRoom,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _showLeaveConfirmDialog();
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: false,
+        appBar: inRoom
           ? AppBar(
               title: const Text('셋터디'),
               actions: [
@@ -535,7 +604,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
             ),
       // FAB 완전 제거
       floatingActionButton: null,
-      body: inRoom
+        body: inRoom
           ? StudyRoomActiveView(
               controller: _controller,
               studyCameraSlotActive: studyCameraSlotActive,
@@ -566,7 +635,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                 );
               },
             ),
-      bottomNavigationBar: inRoom
+        bottomNavigationBar: inRoom
           ? SafeArea(
               minimum: const EdgeInsets.all(16),
               child: FilledButton.icon(
@@ -580,6 +649,17 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               ),
             )
           : null,
+      ),
     );
+  }
+}
+
+class _LifecycleObserver extends WidgetsBindingObserver {
+  final void Function(bool inForeground) onChanged;
+  _LifecycleObserver({required this.onChanged});
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    onChanged(state == AppLifecycleState.resumed);
   }
 }

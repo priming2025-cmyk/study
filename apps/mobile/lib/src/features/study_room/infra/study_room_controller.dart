@@ -125,12 +125,16 @@ class StudyRoomController extends ChangeNotifier {
   String _selfGoalText = '';
   String _selfStatusText = '';
   late DateTime _selfJoinAtUtc;
+  DateTime? _roomEnterAtUtc;
   String _selfStatus = 'focus';
   String? _selfSubjectName;
   String? _selfDisplayName;
   String? _selfAvatarUrl;
   final Map<String, String> _displayNameByUserId = {};
   final Map<String, String> _avatarUrlByUserId = {};
+  // 자리(슬롯) 고정용: 방에 들어온 뒤 최초 sync 기준으로 peer 순서를 고정한다.
+  // 이후에는 새로 들어온 peer만 뒤에 추가하고, 기존 peer의 순서는 절대 바꾸지 않는다.
+  final List<String> _fixedPeerOrder = [];
 
   int _selfPublicLevel = 1;
   String? _selfPublicTitleKo;
@@ -401,11 +405,13 @@ class StudyRoomController extends ChangeNotifier {
       _dmReadAtByUser.clear();
       _friendDmPreviewByUser.clear();
       _friendDmUnreadAtByUser.clear();
+      _fixedPeerOrder.clear();
       _selfGoalText = goalText.trim();
       if (_selfStatusText.trim().isEmpty) {
         _selfStatusText = _selfGoalText;
       }
       _selfJoinAtUtc = DateTime.now().toUtc();
+      _roomEnterAtUtc = _selfJoinAtUtc;
       _selfStatus = 'focus';
       roomOwnerId = roomRow['owner_id'] as String?;
 
@@ -416,7 +422,8 @@ class StudyRoomController extends ChangeNotifier {
         onConflict: 'room_id,user_id',
       );
 
-      await _fetchMessages(resolvedId);
+      // 요구사항: 방에 새로 들어오면 과거 채팅은 보이지 않게(새 상태로 시작)
+      await _fetchMessages(resolvedId, after: _roomEnterAtUtc);
       await _joinMessageChannel(resolvedId);
 
       await _joinPresence(
@@ -502,6 +509,7 @@ class StudyRoomController extends ChangeNotifier {
     _members = const [];
     _messages = [];
     _dmReadAtByUser.clear();
+    _fixedPeerOrder.clear();
     selfSnapshotUrl = null;
 
     if (rid != null && uid != null) {
@@ -864,14 +872,17 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _fetchMessages(String roomId) async {
+  Future<void> _fetchMessages(String roomId, {DateTime? after}) async {
     try {
-      final rows = await supabase
+      final q = supabase
           .from('study_room_messages')
           .select()
           .eq('room_id', roomId)
           .order('created_at', ascending: true)
           .limit(100);
+      final rows = after == null
+          ? await q
+          : await q.gte('created_at', after.toUtc().toIso8601String());
       _messages = rows.map((r) => StudyRoomMessage.fromJson(r)).toList();
       final last = _messages.isNotEmpty ? _messages.last.createdAt : null;
       if (last != null) unawaited(_touchRecentActivity(last));
@@ -1205,15 +1216,52 @@ class StudyRoomController extends ChangeNotifier {
       }
     }
 
-    result.sort((a, b) {
-      if (a.userId == selfId) return -1;
-      if (b.userId == selfId) return 1;
-      return 0;
-    });
+    // 1) self는 항상 첫 번째
+    // 2) peers는 최초 sync에서 결정된 순서로 “고정”
+    final self = result.where((m) => m.userId == selfId).toList();
+    final peersNow = result.where((m) => m.userId != selfId).toList();
 
-    _members = result;
+    // 최초 고정 순서가 없으면: joinAt 오름차순(없으면 userId)으로 고정 순서를 만든다.
+    if (_fixedPeerOrder.isEmpty) {
+      peersNow.sort((a, b) {
+        final aj = a.joinAt;
+        final bj = b.joinAt;
+        if (aj == null && bj == null) return a.userId.compareTo(b.userId);
+        if (aj == null) return 1;
+        if (bj == null) return -1;
+        final t = aj.compareTo(bj);
+        if (t != 0) return t;
+        return a.userId.compareTo(b.userId);
+      });
+      _fixedPeerOrder.addAll(peersNow.map((m) => m.userId));
+    } else {
+      // 이미 고정된 순서가 있으면:
+      // - 나간 사람 제거
+      final nowIds = peersNow.map((m) => m.userId).toSet();
+      _fixedPeerOrder.removeWhere((id) => !nowIds.contains(id));
+      // - 새로 들어온 사람은 뒤에 추가 (빈 슬롯 채우기 개념)
+      for (final m in peersNow) {
+        if (!_fixedPeerOrder.contains(m.userId)) _fixedPeerOrder.add(m.userId);
+      }
+    }
+
+    // 고정 순서대로 peers를 재조립
+    final byId = <String, StudyRoomMember>{
+      for (final m in peersNow) m.userId: m,
+    };
+    final orderedPeers = <StudyRoomMember>[
+      for (final id in _fixedPeerOrder)
+        if (byId[id] != null) byId[id]!,
+    ];
+
+    final merged = <StudyRoomMember>[
+      if (self.isNotEmpty) self.first,
+      ...orderedPeers,
+    ];
+
+    _members = merged;
     notifyListeners();
-    unawaited(_hydrateMemberDisplayNames(result.map((m) => m.userId)));
+    unawaited(_hydrateMemberDisplayNames(merged.map((m) => m.userId)));
   }
 
   Future<void> _hydrateMemberDisplayNames(Iterable<String> userIds) async {

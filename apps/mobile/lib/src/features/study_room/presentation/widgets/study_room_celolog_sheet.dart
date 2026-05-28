@@ -28,7 +28,7 @@ class _CelologBody extends StatefulWidget {
 }
 
 class _CelologBodyState extends State<_CelologBody> {
-  late Future<List<StudyRoomVideoClipRow>> _future;
+  late Future<({List<StudyRoomVideoClipRow> clips, int photoCount})> _future;
   bool _downloading = false;
   bool _buildingVideo = false;
 
@@ -39,7 +39,15 @@ class _CelologBodyState extends State<_CelologBody> {
   }
 
   void _reload() {
-    _future = StudyRoomVideoClipsRepository.fetchMyToday(roomId: widget.roomId);
+    _future = () async {
+      final clips = await StudyRoomVideoClipsRepository.fetchMyToday(
+        roomId: widget.roomId,
+      );
+      // 사진은 “영상 만들기” 가능 여부만 빠르게 판단하려고 개수만
+      final photos =
+          await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: widget.roomId);
+      return (clips: clips, photoCount: photos.length);
+    }();
   }
 
   Future<void> _download(List<StudyRoomVideoClipRow> clips) async {
@@ -67,10 +75,9 @@ class _CelologBodyState extends State<_CelologBody> {
           fps: 10, // 3배속: 1분=0.1초
         ),
       );
+      // 요구사항: 안내문구/팝업 최소화. 실패해도 조용히.
       if (!mounted) return;
-      if (err != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-      }
+      if (err != null) {}
     } finally {
       if (mounted) setState(() => _buildingVideo = false);
     }
@@ -98,7 +105,7 @@ class _CelologBodyState extends State<_CelologBody> {
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
-            FutureBuilder<List<StudyRoomVideoClipRow>>(
+            FutureBuilder<({List<StudyRoomVideoClipRow> clips, int photoCount})>(
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
@@ -110,17 +117,10 @@ class _CelologBodyState extends State<_CelologBody> {
                 if (snap.hasError) {
                   return Text('불러오기 실패: ${snap.error}');
                 }
-                final clips = snap.data ?? const [];
-                if (clips.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    child: Text(
-                      '아직 오늘 올린 2초 영상이 없어요.\n2초 영상 모드를 켜고 방에 머물러 주세요.',
-                      textAlign: TextAlign.center,
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  );
-                }
+                final data = snap.data ??
+                    (clips: const <StudyRoomVideoClipRow>[], photoCount: 0);
+                final clips = data.clips;
+                final photoCount = data.photoCount;
 
                 final totalKb = clips.fold<int>(
                   0,
@@ -131,33 +131,36 @@ class _CelologBodyState extends State<_CelologBody> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '${clips.length}개 클립 · 약 ${(totalKb / 1024).toStringAsFixed(0)} KB',
+                      '${clips.length}개 클립 · 사진 ${photoCount}장',
                       style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: MediaQuery.sizeOf(context).height * 0.35,
+                    if (clips.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.sizeOf(context).height * 0.35,
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: clips.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final c = clips[i];
+                            final t = c.recordedAt.toLocal();
+                            final time =
+                                '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
+                            final kb =
+                                ((c.sizeBytes ?? 0) / 1024).toStringAsFixed(0);
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.movie_outlined),
+                              title: Text(
+                                  '$time · ${c.mimeType.contains('webm') ? 'WebM' : 'MP4'}'),
+                              subtitle: Text('$kb KB · 자정에 삭제'),
+                            );
+                          },
+                        ),
                       ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: clips.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final c = clips[i];
-                          final t = c.recordedAt.toLocal();
-                          final time =
-                              '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
-                          final kb = ((c.sizeBytes ?? 0) / 1024).toStringAsFixed(0);
-                          return ListTile(
-                            dense: true,
-                            leading: const Icon(Icons.movie_outlined),
-                            title: Text('$time · ${c.mimeType.contains('webm') ? 'WebM' : 'MP4'}'),
-                            subtitle: Text('$kb KB · 자정에 삭제'),
-                          );
-                        },
-                      ),
-                    ),
                     const SizedBox(height: 12),
                     FilledButton.icon(
                       onPressed: _downloading ? null : () => _download(clips),

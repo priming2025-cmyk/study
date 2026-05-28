@@ -54,6 +54,7 @@ dependencies:
   video_compress: ^3.1.4
   flutter_quick_video_encoder: ^1.7.2
   archive: ^4.0.7
+  wakelock_plus: ^1.6.1
 
 dev_dependencies:
   flutter_test:

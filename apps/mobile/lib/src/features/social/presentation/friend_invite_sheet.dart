@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../infra/friend_invite_link.dart';
@@ -9,12 +11,30 @@ class FriendInviteSheet extends StatelessWidget {
   const FriendInviteSheet({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (_) => const FriendInviteSheet(),
-    );
+    final uid = supabase.auth.currentUser?.id;
+    final message = uid == null ? '' : friendInviteMessage();
+    if (message.trim().isEmpty) return Future.value();
+    return _nativeShare(context, message);
+  }
+
+  static Rect? _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  static Future<void> _nativeShare(BuildContext context, String text) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text.trim(),
+          subject: '셋터디 초대',
+          sharePositionOrigin: _shareOrigin(context),
+        ),
+      );
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text.trim()));
+    }
   }
 
   @override

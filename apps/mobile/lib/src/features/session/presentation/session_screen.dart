@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../infra/web_shared_camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
@@ -40,6 +41,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   bool _autoStarted = false;
   bool _autoStartOpenedAddSheet = false;
   int _subjectReloadToken = 0;
+  bool _wakeLockOn = false;
+  bool _resumePromptPending = false;
 
   @override
   void initState() {
@@ -51,6 +54,16 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       onChanged: (inForeground) {
         if (!mounted) return;
         _c.appInForeground = inForeground;
+        if (!inForeground && _c.running) {
+          _resumePromptPending = true;
+        }
+        if (inForeground && _resumePromptPending && _c.running) {
+          _resumePromptPending = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(_showLeaveConfirmDialog());
+          });
+        }
       },
     );
     WidgetsBinding.instance.addObserver(_lifecycleObserver);
@@ -62,6 +75,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     _c.dispose();
     _ambientPlayer.dispose();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
+    if (_wakeLockOn) {
+      _wakeLockOn = false;
+      unawaited(WakelockPlus.disable());
+    }
     super.dispose();
   }
 
@@ -100,6 +117,41 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     // 공부 세션 실행 상태를 전역 Provider에 동기화 (AppShell이 탭 전환 시 확인에 사용)
     ref.read(sessionRunningProvider.notifier).state = _c.running;
     unawaited(StudyActivityGate.setSessionRunning(_c.running));
+
+    // 세션 실행 중 화면 꺼짐 방지 (자리 이탈이어도 시간은 체크)
+    if (_c.running && !_wakeLockOn) {
+      _wakeLockOn = true;
+      unawaited(WakelockPlus.enable());
+    } else if (!_c.running && _wakeLockOn) {
+      _wakeLockOn = false;
+      unawaited(WakelockPlus.disable());
+    }
+  }
+
+  Future<void> _showLeaveConfirmDialog() async {
+    if (!mounted) return;
+    if (!_c.running) return;
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('공부중이에요'),
+        content: const Text('집중공부를 종료할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('계속하기'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('종료'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (shouldLeave == true) {
+      await _c.stop();
+    }
   }
 
   void _openSessionAddSheet() {
@@ -320,10 +372,16 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       }
     });
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('집중 공부'),
-        actions: [
+    return PopScope(
+      canPop: !running,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        await _showLeaveConfirmDialog();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('집중 공부'),
+          actions: [
           IconButton(
             tooltip: '카메라 새로고침',
             icon: const Icon(Icons.cameraswitch_rounded),
@@ -347,8 +405,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
               player: _ambientPlayer,
             ),
           ),
-        ],
-      ),
+          ],
+        ),
       body: LayoutBuilder(
         builder: (context, bodyConstraints) {
           final bodyH = bodyConstraints.maxHeight.isFinite
@@ -520,6 +578,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                 },
                 starting: _c.starting,
               ),
+      ),
       ),
     );
   }
