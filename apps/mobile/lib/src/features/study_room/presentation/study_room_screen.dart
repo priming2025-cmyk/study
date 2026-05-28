@@ -22,7 +22,7 @@ import '../domain/study_room_join_code.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
-import 'widgets/study_room_dm_chat_screen.dart';
+import '../../social/presentation/friend_dm_listener.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
@@ -114,14 +114,17 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   }
 
   void _openDmChat(String peerUserId) {
-    _controller.markDmThreadRead(peerUserId);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => StudyRoomDmChatScreen(
-          controller: _controller,
-          peerUserId: peerUserId,
-        ),
-      ),
+    final name = _controller.displayNameFor(peerUserId)?.trim();
+    final label = (name != null && name.isNotEmpty)
+        ? name
+        : (peerUserId.length > 8 ? peerUserId.substring(0, 8) : peerUserId);
+
+    // 친구 DM(저장·답장) 우선 — 방 메시지 RLS 이슈를 피합니다.
+    openFriendDmChat(
+      context,
+      ref,
+      peerId: peerUserId,
+      peerDisplayName: label,
     );
   }
 
@@ -333,17 +336,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
-  void _showInviteSheet() {
-    final code = _controller.joinCode;
-    if (code == null || code.isEmpty) return;
-    StudyRoomInviteSheet.show(
-      context,
-      joinCode: code,
-      goalText: _controller.goalText,
-      shareOnly: true,
-    );
-  }
-
   void _showInviteSheetForRecent(RecentStudyRoom room) {
     final code = room.joinCode.isNotEmpty ? room.joinCode : room.displayCode;
     if (code.trim().isEmpty) return;
@@ -492,15 +484,6 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                     onPressed: () =>
                         showStudyRoomHostActionsSheet(context, _controller),
                   ),
-                IconButton(
-                  tooltip: '입장코드 공유',
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  onPressed: () {
-                    if (_controller.joinCode != null) {
-                      _showInviteSheet();
-                    }
-                  },
-                ),
               ],
             )
           : AppBar(

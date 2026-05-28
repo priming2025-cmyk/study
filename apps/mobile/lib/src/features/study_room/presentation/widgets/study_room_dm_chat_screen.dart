@@ -22,9 +22,13 @@ class _StudyRoomDmChatScreenState extends State<StudyRoomDmChatScreen> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
-  String get _peerLabel => widget.peerUserId.length > 8
-      ? widget.peerUserId.substring(0, 8)
-      : widget.peerUserId;
+  String get _peerLabel {
+    final name = widget.controller.displayNameFor(widget.peerUserId)?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return widget.peerUserId.length > 8
+        ? widget.peerUserId.substring(0, 8)
+        : widget.peerUserId;
+  }
 
   @override
   void initState() {
@@ -60,17 +64,21 @@ class _StudyRoomDmChatScreenState extends State<StudyRoomDmChatScreen> {
   Future<void> _send() async {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
-    final ok = await widget.controller.sendDirectMessage(
+    final result = await widget.controller.sendDirectMessage(
       recipientUserId: widget.peerUserId,
       content: text,
     );
     if (!mounted) return;
-    if (ok) {
+    if (result.ok) {
       _textCtrl.clear();
       _scrollToBottom();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메시지를 보내지 못했어요. 방에 들어가 있는지 확인해 주세요.')),
+        SnackBar(
+          content: Text(
+            result.error ?? '메시지를 보내지 못했어요',
+          ),
+        ),
       );
     }
   }

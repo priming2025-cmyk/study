@@ -156,6 +156,15 @@ class _ModeContent extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    final peerMode = member.publicViewerMode ?? 'capture';
+    if (peerMode == 'rest') {
+      return SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _RestView(member: member, cs: cs, tt: tt),
+      );
+    }
+
     return SingleChildScrollView(
       controller: scroll,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -222,37 +231,25 @@ class _VideoView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final snapshotUrl = member.snapshotUrl;
     return Column(
       children: [
-        Container(
-          height: 260,
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: AspectRatio(
+            aspectRatio: 3 / 4,
+            child: snapshotUrl != null
+                ? Image.network(snapshotUrl, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _NoSnapshot(cs: cs))
+                : _NoSnapshot(cs: cs),
           ),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.videocam_outlined,
-                    size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-                const SizedBox(height: 12),
-                Text(
-                  '10분마다 2초 영상',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '다음 영상이 준비 중이에요',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                      ),
-                ),
-              ],
-            ),
-          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '10분마다 약 2초 구간을 촬영해 올려요',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
         ),
         const SizedBox(height: 16),
       ],

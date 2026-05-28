@@ -186,15 +186,26 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 카메라 멈춤·검은 화면 시 수동 복구.
+  /// 카메라 멈춤·검은 화면 시 수동 복구. 집중 초는 유지하고, 복구 중 구간은 비집중으로만 집계합니다.
   Future<void> refreshCamera() async {
     webCameraEpoch++;
+    final wasPaused = state?.paused ?? false;
+    if (running && state != null && !wasPaused) {
+      state = AttentionScoring.pause(state!, DateTime.now());
+    }
+    _lastSignalAt = null;
     if (kIsWeb) {
       WebSharedCamera.instance.forceRelease();
       WebSharedCamera.instance.openFromUserGesture();
     } else if (running) {
       await _releaseCamera();
       await _startNativeCameraSensor();
+      for (var i = 0; i < 20 && running && !hasRecentSignal; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    if (running && state != null && state!.paused && !wasPaused) {
+      state = AttentionScoring.resume(state!, DateTime.now());
     }
     notifyListeners();
   }

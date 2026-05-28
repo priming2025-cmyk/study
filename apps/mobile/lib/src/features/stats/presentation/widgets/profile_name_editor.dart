@@ -80,7 +80,7 @@ class _ProfileNameEditorState extends ConsumerState<ProfileNameEditor> {
               autofocus: true,
               maxLength: 20,
               decoration: InputDecoration(
-                hintText: '친구가 찾을 이름',
+                hintText: '이름',
                 isDense: true,
                 counterText: '',
                 filled: true,
@@ -122,19 +122,9 @@ class _ProfileNameEditorState extends ConsumerState<ProfileNameEditor> {
     return Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name != null && name.isNotEmpty ? name : '이름을 설정해 주세요',
-                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '친구 찾기에 사용돼요',
-                style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
+          child: Text(
+            name != null && name.isNotEmpty ? name : '이름을 설정해 주세요',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         TextButton.icon(

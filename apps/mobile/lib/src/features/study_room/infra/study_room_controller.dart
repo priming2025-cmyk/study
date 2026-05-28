@@ -26,7 +26,10 @@ class StudyRoomCreated {
 }
 
 const _snapshotBucket = 'study-snapshots';
-const _snapshotInterval = Duration(seconds: 60);
+const _captureInterval = Duration(minutes: 1);
+const _videoInterval = Duration(minutes: 10);
+const _videoBurstFrames = 4;
+const _videoBurstStep = Duration(milliseconds: 500);
 
 class _ReactionEntry {
   final StudyRoomReactionOverlay overlay;
@@ -77,14 +80,32 @@ class StudyRoomController extends ChangeNotifier {
   /// 웹 본인 카메라 위젯 재마운트용 (방 퇴장·재입장 시 정지 화면 방지).
   int webSelfCamEpoch = 0;
 
-  /// 카메라 멈춤 시 수동 복구.
+  /// 카메라 멈춤 시 수동 복구. 집중 시간은 유지하고, 복구 중 구간은 비집중으로만 집계합니다.
   Future<void> refreshSelfCamera() async {
     webSelfCamEpoch++;
+    final st = _focusState;
+    final wasPaused = st?.paused ?? false;
+    if (st != null && !wasPaused) {
+      _focusState = AttentionScoring.pause(st, DateTime.now());
+    }
+    _lastFocusSignalAt = null;
+
     if (kIsWeb) {
       WebSharedCamera.instance.forceRelease();
       WebSharedCamera.instance.openFromUserGesture();
     } else {
       await AttentionCameraService.instance.forceStop();
+    }
+    notifyListeners();
+
+    final rid = roomId;
+    final uid = _selfId;
+    if (rid != null && uid != null && _selfPublicViewerMode != 'rest') {
+      await _uploadSnapshotWhenCameraReady(roomId: rid, userId: uid);
+    }
+
+    if (_focusState != null && _focusState!.paused && !wasPaused) {
+      _focusState = AttentionScoring.resume(_focusState!, DateTime.now());
     }
     notifyListeners();
   }
@@ -98,6 +119,8 @@ class StudyRoomController extends ChangeNotifier {
   late DateTime _selfJoinAtUtc;
   String _selfStatus = 'focus';
   String? _selfSubjectName;
+  String? _selfDisplayName;
+  final Map<String, String> _displayNameByUserId = {};
 
   int _selfPublicLevel = 1;
   String? _selfPublicTitleKo;
@@ -412,18 +435,7 @@ class StudyRoomController extends ChangeNotifier {
         _snapshotInitialized = true;
       }
       await _uploadSnapshotWhenCameraReady(roomId: roomId, userId: userId);
-      _snapshotTimer?.cancel();
-      _snapshotTimer = Timer.periodic(_snapshotInterval, (_) async {
-        final rid = this.roomId;
-        final uid = _selfId;
-        if (rid == null || uid == null) return;
-        final newUrl = await _uploadSnapshot(roomId: rid, userId: uid);
-        if (newUrl != null) {
-          selfSnapshotUrl = newUrl;
-          await _trackSelfFull(snapshotUrl: newUrl);
-          notifyListeners();
-        }
-      });
+      _restartSnapshotTimer();
     } catch (e) {
       debugPrint('[StudyRoomController] snapshot: $e');
     }
@@ -522,26 +534,48 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
-  Future<bool> sendDirectMessage({
+  Future<({bool ok, String? error})> sendDirectMessage({
     required String recipientUserId,
     required String content,
   }) async {
     final rid = roomId;
     final uid = _selfId;
-    if (rid == null || uid == null || content.trim().isEmpty) return false;
-    if (recipientUserId == uid) return false;
+    final text = content.trim();
+    if (rid == null || uid == null) {
+      return (ok: false, error: '셋터디 방에 입장한 뒤 메시지를 보낼 수 있어요');
+    }
+    if (text.isEmpty) return (ok: false, error: '메시지를 입력해 주세요');
+    if (recipientUserId == uid) {
+      return (ok: false, error: '본인에게는 보낼 수 없어요');
+    }
 
     try {
-      await supabase.from('study_room_messages').insert({
-        'room_id': rid,
-        'user_id': uid,
-        'recipient_user_id': recipientUserId,
-        'content': content.trim(),
-      });
-      return true;
+      await supabase.from('study_room_members').upsert(
+        {'room_id': rid, 'user_id': uid, 'left_at': null},
+        onConflict: 'room_id,user_id',
+      );
+      final row = await supabase
+          .from('study_room_messages')
+          .insert({
+            'room_id': rid,
+            'user_id': uid,
+            'recipient_user_id': recipientUserId,
+            'content': text,
+          })
+          .select()
+          .single();
+      final msg = StudyRoomMessage.fromJson(row);
+      if (!_messages.any((m) => m.id == msg.id)) {
+        _messages.add(msg);
+        notifyListeners();
+      }
+      return (ok: true, error: null);
     } catch (e) {
       debugPrint('[StudyRoomController] sendDirectMessage error: $e');
-      return false;
+      return (
+        ok: false,
+        error: '메시지를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
     }
   }
 
@@ -602,8 +636,24 @@ class StudyRoomController extends ChangeNotifier {
     if (m.isEmpty) return;
     if (_selfPublicViewerMode == m) return;
     _selfPublicViewerMode = m;
+    if (m == 'rest') {
+      _selfStatus = 'rest';
+      selfSnapshotUrl = null;
+    } else {
+      _selfStatus = 'focus';
+    }
     notifyListeners();
-    await _trackSelfFull();
+    await _trackSelfFull(snapshotUrl: m == 'rest' ? '' : null);
+    _restartSnapshotTimer();
+  }
+
+  String? displayNameFor(String userId) {
+    for (final m in _members) {
+      if (m.userId == userId && (m.displayName?.trim().isNotEmpty ?? false)) {
+        return m.displayName!.trim();
+      }
+    }
+    return _displayNameByUserId[userId];
   }
 
   /// 방장을 다른 참가자에게 넘깁니다. (DB RPC, RLS 우회)
@@ -662,9 +712,10 @@ class StudyRoomController extends ChangeNotifier {
     final snap = snapshotUrl ?? selfSnapshotUrl ?? '';
     final payload = <String, dynamic>{
       'user_id': uid,
+      'display_name': _selfDisplayName ?? '',
       'snapshot_url': snap,
       'snapshot_at': DateTime.now().toUtc().toIso8601String(),
-      'status': _selfStatus,
+      'status': _selfPublicViewerMode == 'rest' ? 'rest' : _selfStatus,
       'focus_score': focusAverageScore,
       'public_viewer_mode': _selfPublicViewerMode,
       'subject_name': _selfSubjectName,
@@ -761,15 +812,78 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
+  void _restartSnapshotTimer() {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = null;
+    final rid = roomId;
+    final uid = _selfId;
+    if (rid == null || uid == null) return;
+
+    if (_selfPublicViewerMode == 'rest') {
+      selfSnapshotUrl = null;
+      unawaited(_trackSelfFull(snapshotUrl: ''));
+      return;
+    }
+
+    final interval =
+        _selfPublicViewerMode == 'video' ? _videoInterval : _captureInterval;
+
+    Future<void> tick() async {
+      if (this.roomId != rid || _selfId != uid) return;
+      if (_selfPublicViewerMode == 'rest') return;
+      if (_selfPublicViewerMode == 'video') {
+        final url = await _uploadVideoBurst(roomId: rid, userId: uid);
+        if (url != null) {
+          selfSnapshotUrl = url;
+          await _trackSelfFull(snapshotUrl: url);
+          notifyListeners();
+        }
+      } else {
+        final url = await _uploadSnapshot(roomId: rid, userId: uid);
+        if (url != null) {
+          selfSnapshotUrl = url;
+          await _trackSelfFull(snapshotUrl: url);
+          notifyListeners();
+        }
+      }
+    }
+
+    unawaited(tick());
+    _snapshotTimer = Timer.periodic(interval, (_) => unawaited(tick()));
+  }
+
+  /// 10분마다: 약 2초간 연속 캡처 후 마지막 프레임을 스냅샷으로 업로드.
+  Future<String?> _uploadVideoBurst({
+    required String roomId,
+    required String userId,
+  }) async {
+    String? lastUrl;
+    for (var i = 0; i < _videoBurstFrames; i++) {
+      if (this.roomId != roomId) break;
+      lastUrl = await _uploadSnapshot(
+        roomId: roomId,
+        userId: userId,
+        suffix: 'v${DateTime.now().millisecondsSinceEpoch}_$i',
+      );
+      if (i < _videoBurstFrames - 1) {
+        await Future<void>.delayed(_videoBurstStep);
+      }
+    }
+    return lastUrl;
+  }
+
   Future<String?> _uploadSnapshot({
     required String roomId,
     required String userId,
+    String suffix = '',
   }) async {
     try {
       final bytes = await _snapshot.capture();
       if (bytes == null) return null;
 
-      final path = '$roomId/$userId.jpg';
+      final path = suffix.isEmpty
+          ? '$roomId/$userId.jpg'
+          : '$roomId/${userId}_$suffix.jpg';
       await supabase.storage.from(_snapshotBucket).uploadBinary(
             path,
             bytes,
@@ -875,9 +989,15 @@ class StudyRoomController extends ChangeNotifier {
           publicLevel = publicLevelRaw.toInt();
         }
 
+        final rawName = p['display_name'] as String?;
+        final displayName = (rawName != null && rawName.trim().isNotEmpty)
+            ? rawName.trim()
+            : _displayNameByUserId[uid];
+
         result.add(
           StudyRoomMember(
             userId: uid,
+            displayName: displayName,
             snapshotUrl: (snapshotUrl?.isNotEmpty ?? false) ? snapshotUrl : null,
             snapshotAt: snapshotAt,
             status: status,
@@ -905,6 +1025,54 @@ class StudyRoomController extends ChangeNotifier {
 
     _members = result;
     notifyListeners();
+    unawaited(_hydrateMemberDisplayNames(result.map((m) => m.userId)));
+  }
+
+  Future<void> _hydrateMemberDisplayNames(Iterable<String> userIds) async {
+    final missing = userIds
+        .where((id) => !_displayNameByUserId.containsKey(id))
+        .toSet()
+        .toList();
+    if (missing.isEmpty) return;
+    try {
+      final rows = await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .inFilter('id', missing);
+      for (final row in rows) {
+        final id = row['id'] as String?;
+        final name = (row['display_name'] as String?)?.trim();
+        if (id != null && name != null && name.isNotEmpty) {
+          _displayNameByUserId[id] = name;
+        }
+      }
+      if (_members.isEmpty) return;
+      _members = _members
+          .map(
+            (m) => StudyRoomMember(
+              userId: m.userId,
+              displayName: m.displayName ?? _displayNameByUserId[m.userId],
+              snapshotUrl: m.snapshotUrl,
+              snapshotAt: m.snapshotAt,
+              status: m.status,
+              focusScore: m.focusScore,
+              publicViewerMode: m.publicViewerMode,
+              subjectName: m.subjectName,
+              goalText: m.goalText,
+              joinAt: m.joinAt,
+              timerStartAt: m.timerStartAt,
+              timerDurationSecs: m.timerDurationSecs,
+              timerPaused: m.timerPaused,
+              timerPauseRemainingSecs: m.timerPauseRemainingSecs,
+              publicLevel: m.publicLevel,
+              publicTitleKo: m.publicTitleKo,
+            ),
+          )
+          .toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[StudyRoomController] hydrate names: $e');
+    }
   }
 
   Future<void> _leavePresence() async {
@@ -932,10 +1100,15 @@ class StudyRoomController extends ChangeNotifier {
     try {
       final row = await supabase
           .from('profiles')
-          .select('level, equipped_title_id')
+          .select('level, equipped_title_id, display_name')
           .eq('id', uid)
           .maybeSingle();
       if (row == null) return;
+      final dn = (row['display_name'] as String?)?.trim();
+      if (dn != null && dn.isNotEmpty) {
+        _selfDisplayName = dn;
+        _displayNameByUserId[uid] = dn;
+      }
       _selfPublicLevel = ((row['level'] ?? 1) as num).toInt();
       final tid = row['equipped_title_id'] as String?;
       if (tid != null) {

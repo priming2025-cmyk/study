@@ -9,7 +9,6 @@ import '../../session/domain/wallet_balances.dart';
 import '../data/daily_focus_stat.dart';
 import 'dream_city_screen.dart';
 import 'widgets/city_progress_card.dart';
-import 'widgets/dream_city_isometric_view.dart';
 import 'widgets/profile_name_editor.dart';
 import 'widgets/weekly_focus_chart.dart';
 
@@ -169,44 +168,33 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          '이름',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 6),
                         ProfileNameEditor(
                           initialName: p.profile?.displayName,
                           onSaved: _onRefresh,
                         ),
-                        if (p.rpg != null) ...[
-                          const SizedBox(height: 8),
+                        if (email != null) ...[
+                          const SizedBox(height: 16),
                           Text(
-                            p.rpg!.currentRankKo ?? '집중 중',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  color: scheme.primary,
+                            '메일주소',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
-                        ],
-                        if (email != null) ...[
                           const SizedBox(height: 6),
                           Text(
                             email,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: DreamCityIsometricView(
-                            blockCount: p.wallet.blocks,
-                            height: 120,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '프로필에 노출되는 꿈의 도시 — 친구도 볼 수 있어요',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
-                        ),
                         const Divider(height: 22),
                         Row(
                           children: [

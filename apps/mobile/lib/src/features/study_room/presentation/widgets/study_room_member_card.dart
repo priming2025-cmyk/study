@@ -31,7 +31,18 @@ class StudyRoomMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final snapshotUrl = member.snapshotUrl;
+    final showSnapshot = member.publicViewerMode != 'rest' &&
+        member.snapshotUrl != null &&
+        member.snapshotUrl!.isNotEmpty;
+    final snapshotUrl = showSnapshot ? member.snapshotUrl : null;
+    final displayLabel = () {
+      final n = member.displayName?.trim();
+      if (n != null && n.isNotEmpty) return n;
+      if (isSelf) return '나';
+      return member.userId.length > 8
+          ? member.userId.substring(0, 8)
+          : member.userId;
+    }();
 
     final borderColor = member.status == 'focus'
         ? Colors.redAccent.withAlpha(200)
@@ -54,6 +65,11 @@ class StudyRoomMemberCard extends StatelessWidget {
               errorBuilder: (_, __, ___) => _Placeholder(cs: cs),
               loadingBuilder: (_, child, progress) =>
                   progress == null ? child : _Placeholder(cs: cs),
+            )
+          else if (member.publicViewerMode == 'rest')
+            _ProfilePlaceholder(
+              cs: cs,
+              label: displayLabel,
             )
           else
             _Placeholder(cs: cs),
@@ -136,7 +152,7 @@ class StudyRoomMemberCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          isSelf ? '나' : member.userId.substring(0, 8),
+                          displayLabel,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: compact ? 11 : 13,

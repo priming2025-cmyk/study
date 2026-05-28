@@ -109,6 +109,47 @@ class _Placeholder extends StatelessWidget {
       );
 }
 
+class _ProfilePlaceholder extends StatelessWidget {
+  final ColorScheme cs;
+  final String label;
+
+  const _ProfilePlaceholder({required this.cs, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: cs.surfaceContainerHighest,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 36,
+              backgroundColor: cs.secondaryContainer,
+              child: Text(
+                label.isNotEmpty ? label[0].toUpperCase() : '?',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSecondaryContainer,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '휴식 중',
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SnapshotAge extends StatefulWidget {
   final DateTime at;
   const _SnapshotAge({required this.at});

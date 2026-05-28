@@ -32,9 +32,10 @@ String studyRoomInviteMessage({
   final installText =
       installLines.isEmpty ? '' : '\n설치(선택)\n${installLines.join('\n')}';
 
+  final code = normalizeJoinCode(joinCode);
   final goalLine =
       goalText != null && goalText.trim().isNotEmpty ? '\n목표: ${goalText.trim()}' : '';
-  return '우리 같이 공부하자!$goalLine\n'
-      '입장코드: ${normalizeJoinCode(joinCode)}\n'
-      '바로 입장: $link$installText';
+  return '우리 같이 공부하자.$goalLine\n'
+      '입장코드:$code\n'
+      '$link$installText';
 }
