@@ -30,7 +30,7 @@ import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
 import 'widgets/study_room_invite_sheet.dart';
-import 'widgets/study_room_celolog_sheet.dart';
+import '../infra/study_room_celolog_export.dart';
 import 'widgets/study_room_settings_sheet.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
@@ -53,6 +53,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       ValueNotifier(kDefaultEngagedMinScore);
 
   String? _lastCheerKey;
+  bool _celologExporting = false;
 
   @override
   void initState() {
@@ -418,6 +419,44 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
+  Future<void> _downloadCelologToGallery() async {
+    if (_celologExporting) return;
+    setState(() => _celologExporting = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          kIsWeb ? '셀로그 영상 다운로드 중…' : '갤러리에 저장하는 중…',
+        ),
+        duration: const Duration(minutes: 2),
+      ),
+    );
+
+    final result = await StudyRoomCelologExport.saveTodayToGallery(
+      controller: _controller,
+      roomId: _controller.roomId,
+    );
+
+    if (!mounted) return;
+    setState(() => _celologExporting = false);
+    messenger.hideCurrentSnackBar();
+
+    final message = switch (result) {
+      CelologExportResult.success =>
+        kIsWeb ? '다운로드가 시작됐어요' : '갤러리에 저장됐어요',
+      CelologExportResult.noData =>
+        '오늘 저장된 사진·2초 영상이 없어요. 캡쳐·2초영상 모드로 공부한 뒤 다시 시도해 주세요.',
+      CelologExportResult.failed => '셀로그 영상을 만들지 못했어요',
+    };
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _showInviteSheetForRecent(RecentStudyRoom room) {
     final code = room.joinCode.isNotEmpty ? room.joinCode : room.displayCode;
     if (code.trim().isEmpty) return;
@@ -544,13 +583,16 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
               title: const Text('셋터디'),
               actions: [
                 IconButton(
-                  tooltip: '다운로드',
-                  icon: const Icon(Icons.download_rounded),
-                  onPressed: () => showStudyRoomCelologSheet(
-                    context,
-                    roomId: _controller.roomId,
-                    controller: _controller,
-                  ),
+                  tooltip: '셀로그 갤러리 저장',
+                  icon: _celologExporting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download_rounded),
+                  onPressed:
+                      _celologExporting ? null : () => unawaited(_downloadCelologToGallery()),
                 ),
                 if (kIsWeb)
                   IconButton(

@@ -5,13 +5,23 @@ import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../domain/study_room_photo_snap_row.dart';
+import '../domain/study_room_video_clip_row.dart';
 import 'setlog_grid_timelapse_builder.dart';
 import 'setlog_grid_timelapse_frames.dart';
 
 abstract final class SetlogGridTimelapseBuilderImpl {
+  static bool _hasRenderableMedia(
+    List<StudyRoomPhotoSnapRow> photos,
+    List<StudyRoomVideoClipRow> clips,
+  ) {
+    if (photos.isNotEmpty) return true;
+    return clips.any((c) => c.posterUrl?.trim().isNotEmpty == true);
+  }
+
   static Future<String?> buildAndSave({required GridBuildInput input}) async {
-    if (input.allPhotos.isEmpty && input.allClips.isEmpty) return null;
     if (input.slots.isEmpty) return null;
+    if (!_hasRenderableMedia(input.allPhotos, input.allClips)) return null;
 
     final prep = await SetlogGridTimelapseFrames.prepare(input);
     if (prep.validHours.isEmpty) return null;
@@ -56,6 +66,7 @@ abstract final class SetlogGridTimelapseBuilderImpl {
             height: input.height,
             streakDays: prep.streakDays,
             showStreak: globalFrameIndex == 0,
+            showHourLabel: minute == 0,
           );
           if (rgba != null) {
             await FlutterQuickVideoEncoder.appendVideoFrame(rgba);

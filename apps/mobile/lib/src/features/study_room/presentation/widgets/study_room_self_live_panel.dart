@@ -24,7 +24,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final bool cameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
   final VoidCallback? onOpenPublicMode;
-  final VoidCallback? onOpenCelolog;
   final void Function(String peerUserId)? onOpenDmChat;
 
   const StudyRoomSelfLivePanel({
@@ -35,7 +34,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.cameraSlotActive,
     required this.engagedMinListenable,
     this.onOpenPublicMode,
-    this.onOpenCelolog,
     this.onOpenDmChat,
   });
 
@@ -258,7 +256,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                   _SelfPanelBottomOverlays(
                     controller: widget.controller,
                     onOpenPublicMode: widget.onOpenPublicMode,
-                    onOpenCelolog: widget.onOpenCelolog,
                     onOpenDmChat: widget.onOpenDmChat,
                   ),
                 ],
@@ -320,7 +317,6 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                 _SelfPanelBottomOverlays(
                   controller: widget.controller,
                   onOpenPublicMode: widget.onOpenPublicMode,
-                  onOpenCelolog: widget.onOpenCelolog,
                   onOpenDmChat: widget.onOpenDmChat,
                 ),
               ],
@@ -335,13 +331,11 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 class _SelfPanelBottomOverlays extends StatelessWidget {
   final StudyRoomController controller;
   final VoidCallback? onOpenPublicMode;
-  final VoidCallback? onOpenCelolog;
   final void Function(String peerUserId)? onOpenDmChat;
 
   const _SelfPanelBottomOverlays({
     required this.controller,
     this.onOpenPublicMode,
-    this.onOpenCelolog,
     this.onOpenDmChat,
   });
 
@@ -452,38 +446,6 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
             ],
           ),
         ),
-        if (onOpenCelolog != null)
-          Positioned(
-            left: 8,
-            bottom: 8,
-            child: Material(
-              color: Colors.black.withAlpha(140),
-              borderRadius: BorderRadius.circular(999),
-              child: InkWell(
-                onTap: onOpenCelolog,
-                borderRadius: BorderRadius.circular(999),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.video_library_outlined,
-                          size: 16, color: Colors.white),
-                      SizedBox(width: 6),
-                      Text(
-                        '셀로그',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         Positioned(
           right: 8,
           bottom: 54,

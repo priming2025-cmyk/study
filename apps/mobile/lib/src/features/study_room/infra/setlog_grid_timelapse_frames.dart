@@ -79,20 +79,29 @@ abstract final class SetlogGridTimelapseFrames {
     final frames = <GridSlotFrame>[];
 
     for (final slot in input.slots) {
-      final photoUrl = prep.photoMap[slot.userId]?[minuteKey] ??
-          carryForward(prep.photoMap[slot.userId], minuteKey);
-      final clipUrl = prep.clipMap[slot.userId]?[clipKey];
+      // 1분 1장 사진 우선, 10분 단위 클립 포스터는 해당 분에만 사용 (캐리포워드 없음)
+      final photoUrl = prep.photoMap[slot.userId]?[minuteKey];
+      final clipUrl = photoUrl == null
+          ? (prep.clipMap[slot.userId]?[clipKey])
+          : null;
       final url = photoUrl ?? clipUrl;
 
-      final snap = url != null
+      final snap = photoUrl != null
           ? findSnap(input.allPhotos, slot.userId, minuteKey)
           : null;
-      final statusText = snap?.statusText ?? slot.statusText;
+      final imageBytes =
+          url != null ? bytesCache[url] : null;
+      final rawStatus = snap?.statusText?.trim();
+      final statusText = imageBytes != null &&
+              rawStatus != null &&
+              rawStatus.isNotEmpty
+          ? rawStatus
+          : null;
 
       frames.add(GridSlotFrame(
         displayName: slot.displayName,
         statusText: statusText,
-        imageBytes: url != null ? bytesCache[url] : null,
+        imageBytes: imageBytes,
         focusPercent: prep.focusByUserHour[slot.userId]?[hour],
       ));
     }
@@ -123,17 +132,6 @@ abstract final class SetlogGridTimelapseFrames {
       (map[c.userId] ??= {})[key] = url;
     }
     return map;
-  }
-
-  static String? carryForward(Map<int, String>? userMap, int minuteKey) {
-    if (userMap == null) return null;
-    final hour = minuteKey ~/ 60;
-    String? last;
-    for (int m = hour * 60; m <= minuteKey; m++) {
-      final url = userMap[m];
-      if (url != null) last = url;
-    }
-    return last;
   }
 
   static StudyRoomPhotoSnapRow? findSnap(
@@ -280,6 +278,7 @@ abstract final class SetlogGridTimelapseFrames {
     required int height,
     required int streakDays,
     required bool showStreak,
+    bool showHourLabel = true,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
@@ -365,7 +364,9 @@ abstract final class SetlogGridTimelapseFrames {
       );
     }
 
-    _drawTopHourLabel(canvas, hourLabel, width.toDouble());
+    if (showHourLabel) {
+      _drawTopHourLabel(canvas, hourLabel, width.toDouble());
+    }
 
     if (showStreak && streakDays >= 2) {
       _drawStreakBadge(canvas, streakDays);

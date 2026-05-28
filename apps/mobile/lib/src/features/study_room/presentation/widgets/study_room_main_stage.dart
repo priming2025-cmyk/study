@@ -6,7 +6,6 @@ import '../../infra/study_room_controller.dart';
 import 'study_room_invite_sheet.dart';
 import 'study_room_member_card.dart';
 import 'study_room_self_live_panel.dart';
-import 'study_room_celolog_sheet.dart';
 import 'study_room_self_public_mode_sheet.dart';
 
 /// 인원수에 따른 가변 레이아웃 (Flutter 공통 — iOS · Android · Web 동일):
@@ -204,13 +203,6 @@ class StudyRoomMainStage extends StatelessWidget {
         height: h,
         cameraSlotActive: studyCameraSlotActive,
         engagedMinListenable: engagedMinListenable,
-        onOpenCelolog: controller.selfPublicViewerMode == 'video'
-            ? () => showStudyRoomCelologSheet(
-                  context,
-                  roomId: controller.roomId,
-                  controller: controller,
-                )
-            : null,
         onOpenPublicMode: () => showStudyRoomSelfPublicModeSheet(
           context,
           current: controller.selfPublicViewerMode,

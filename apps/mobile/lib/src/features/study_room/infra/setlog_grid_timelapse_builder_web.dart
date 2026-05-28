@@ -11,8 +11,11 @@ import 'setlog_grid_timelapse_frames.dart';
 /// 웹: iOS/Android와 동일한 그리드 합성 → Canvas + MediaRecorder → WebM 다운로드
 abstract final class SetlogGridTimelapseBuilderImpl {
   static Future<String?> buildAndSave({required GridBuildInput input}) async {
-    if (input.allPhotos.isEmpty && input.allClips.isEmpty) return null;
     if (input.slots.isEmpty) return null;
+    if (input.allPhotos.isEmpty &&
+        !input.allClips.any((c) => c.posterUrl?.trim().isNotEmpty == true)) {
+      return null;
+    }
 
     final prep = await SetlogGridTimelapseFrames.prepare(input);
     if (prep.validHours.isEmpty) return null;
@@ -69,6 +72,7 @@ abstract final class SetlogGridTimelapseBuilderImpl {
             height: input.height,
             streakDays: prep.streakDays,
             showStreak: globalFrameIndex == 0,
+            showHourLabel: minute == 0,
           );
 
           if (rgba != null) {
