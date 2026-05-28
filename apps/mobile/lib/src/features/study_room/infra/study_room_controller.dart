@@ -874,15 +874,17 @@ class StudyRoomController extends ChangeNotifier {
 
   Future<void> _fetchMessages(String roomId, {DateTime? after}) async {
     try {
-      final q = supabase
+      // postgrest 버전에 따라 gte() 체인이 지원되지 않는 경우가 있어 filter로 통일합니다.
+      final base = supabase
           .from('study_room_messages')
           .select()
-          .eq('room_id', roomId)
+          .eq('room_id', roomId);
+      final q = after == null
+          ? base
+          : base.filter('created_at', 'gte', after.toUtc().toIso8601String());
+      final rows = await q
           .order('created_at', ascending: true)
           .limit(100);
-      final rows = after == null
-          ? await q
-          : await q.gte('created_at', after.toUtc().toIso8601String());
       _messages = rows.map((r) => StudyRoomMessage.fromJson(r)).toList();
       final last = _messages.isNotEmpty ? _messages.last.createdAt : null;
       if (last != null) unawaited(_touchRecentActivity(last));
