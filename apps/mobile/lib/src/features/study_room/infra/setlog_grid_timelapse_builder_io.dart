@@ -7,6 +7,7 @@ import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/study_room_photo_snap_row.dart';
 import '../domain/study_room_video_clip_row.dart';
@@ -20,11 +21,13 @@ class _SlotFrame {
   final String? displayName;
   final String? statusText;
   final Uint8List? imageBytes; // null → "자리비움"
+  final int? activityPercent; // 0..100
 
   const _SlotFrame({
     this.displayName,
     this.statusText,
     this.imageBytes,
+    this.activityPercent,
   });
 }
 
@@ -43,6 +46,16 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     // 2. 데이터가 있는 시간대(hour) 수집
     final validHours = _getValidHours(input.allPhotos, input.allClips);
     if (validHours.isEmpty) return null;
+
+    // 2.5 바이럴 #2: 연속 공부(스트릭) 배지 (로컬)
+    final streakDays = await _updateAndGetStreakDays(input.downloadedAt);
+
+    // 2.6 바이럴 #4: 멤버별 활동률(%) 계산 (시간별)
+    final activityByUserHour = _buildActivityByUserHour(
+      slots: input.slots,
+      photos: input.allPhotos,
+      clips: input.allClips,
+    );
 
     // 3. 사용할 모든 URL 수집 → 병렬 다운로드
     final allUrls = <String>{};
@@ -68,11 +81,13 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     );
 
     try {
+      var globalFrameIndex = 0;
       for (final hour in validHours) {
         final hourLabel =
             '${hour.toString().padLeft(2, '0')}:00';
 
         for (int minute = 0; minute < 60; minute++) {
+          final isFirstFrame = globalFrameIndex == 0;
           final minuteKey = hour * 60 + minute;
           // 10분 단위 클립 포스터 키
           final clipKey = hour * 60 + (minute ~/ 10) * 10;
@@ -96,6 +111,7 @@ abstract final class SetlogGridTimelapseBuilderImpl {
               displayName: slot.displayName,
               statusText: statusText,
               imageBytes: url != null ? bytesCache[url] : null,
+              activityPercent: activityByUserHour[slot.userId]?[hour],
             ));
           }
 
@@ -104,10 +120,13 @@ abstract final class SetlogGridTimelapseBuilderImpl {
             hourLabel: hourLabel,
             width: input.width,
             height: input.height,
+            streakDays: streakDays,
+            showStreak: isFirstFrame,
           );
           if (rgba != null) {
             await FlutterQuickVideoEncoder.appendVideoFrame(rgba);
           }
+          globalFrameIndex++;
         }
       }
     } catch (e, st) {
@@ -201,6 +220,94 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     return hours.toList()..sort();
   }
 
+  static Map<String, Map<int, int>> _buildActivityByUserHour({
+    required List<GridMemberSlot> slots,
+    required List<StudyRoomPhotoSnapRow> photos,
+    required List<StudyRoomVideoClipRow> clips,
+  }) {
+    // 활동률 정의: 해당 시간대(1시간)에서 “콘텐츠가 존재한 분(minute)” 비율 기반.
+    // - photos: 실제 분 단위로 1분=1장이라 가장 정확
+    // - clips: 10분=1개 → 해당 시간에 clip이 있으면 그 10분 구간은 활동으로 간주
+    final photoMinutesByUserHour = <String, Map<int, Set<int>>>{};
+    for (final p in photos) {
+      final l = p.recordedAt.toLocal();
+      final h = l.hour;
+      final m = l.minute;
+      (photoMinutesByUserHour[p.userId] ??= {})[h] ??= <int>{};
+      photoMinutesByUserHour[p.userId]![h]!.add(m);
+    }
+
+    final clipBlocksByUserHour = <String, Map<int, Set<int>>>{};
+    for (final c in clips) {
+      if (c.posterUrl?.isNotEmpty != true) continue;
+      final l = c.recordedAt.toLocal();
+      final h = l.hour;
+      final block = (l.minute ~/ 10) * 10; // 0,10,20...
+      (clipBlocksByUserHour[c.userId] ??= {})[h] ??= <int>{};
+      clipBlocksByUserHour[c.userId]![h]!.add(block);
+    }
+
+    final out = <String, Map<int, int>>{};
+    for (final s in slots) {
+      final userId = s.userId;
+      final byHour = <int, int>{};
+      for (int h = 0; h < 24; h++) {
+        final mins = photoMinutesByUserHour[userId]?[h]?.length ?? 0;
+        final blocks = clipBlocksByUserHour[userId]?[h]?.length ?? 0;
+        // clip 1개는 10분 활동으로 환산
+        final clipAsMinutes = blocks * 10;
+        final active = (mins + clipAsMinutes).clamp(0, 60);
+        final percent = ((active / 60.0) * 100).round();
+        if (active > 0) byHour[h] = percent;
+      }
+      out[userId] = byHour;
+    }
+    return out;
+  }
+
+  static Future<int> _updateAndGetStreakDays(DateTime downloadedAt) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const kCount = 'setudy.study_streak.count';
+      const kLast = 'setudy.study_streak.last_day_yyyymmdd';
+
+      final today = downloadedAt.toLocal();
+      final todayKey =
+          today.year * 10000 + today.month * 100 + today.day; // yyyymmdd
+
+      final lastKey = prefs.getInt(kLast);
+      var count = prefs.getInt(kCount) ?? 0;
+
+      if (lastKey == null) {
+        count = 1;
+      } else if (lastKey == todayKey) {
+        // same day: no change
+      } else {
+        final lastDate = DateTime(
+          lastKey ~/ 10000,
+          (lastKey % 10000) ~/ 100,
+          lastKey % 100,
+        );
+        final diffDays = today
+            .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0)
+            .difference(lastDate.copyWith(
+                hour: 0, minute: 0, second: 0, millisecond: 0))
+            .inDays;
+        if (diffDays == 1) {
+          count = (count <= 0 ? 1 : count + 1);
+        } else {
+          count = 1;
+        }
+      }
+
+      await prefs.setInt(kLast, todayKey);
+      await prefs.setInt(kCount, count);
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   static Future<Map<String, Uint8List>> _fetchAllBytes(
     Set<String> urls,
   ) async {
@@ -275,6 +382,8 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     required String hourLabel,
     required int width,
     required int height,
+    required int streakDays,
+    required bool showStreak,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
@@ -343,6 +452,16 @@ abstract final class SetlogGridTimelapseBuilderImpl {
         _drawCornerLabel(canvas, name, Offset(rect.left + 8, rect.top + 8));
       }
 
+      // 활동률(%) 레이블 (우하단)
+      final p = slot.activityPercent;
+      if (p != null) {
+        _drawBottomRightPill(
+          canvas,
+          '활동 ${p.clamp(0, 100)}%',
+          rect,
+        );
+      }
+
       // 셀 구분선
       canvas.drawRect(
         rect,
@@ -355,6 +474,11 @@ abstract final class SetlogGridTimelapseBuilderImpl {
 
     // 시간 레이블 (중앙 상단, 내 상태와 같은 스타일)
     _drawTopHourLabel(canvas, hourLabel, width.toDouble());
+
+    // 바이럴 #2: 스트릭 배지 (첫 프레임 1회)
+    if (showStreak && streakDays >= 2) {
+      _drawStreakBadge(canvas, streakDays);
+    }
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(width, height);
@@ -420,6 +544,35 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     tp.paint(canvas, topLeft);
   }
 
+  static void _drawBottomRightPill(Canvas canvas, String text, Rect rect) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          shadows: [Shadow(blurRadius: 3, color: Color(0xBB000000))],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: rect.width - 16);
+
+    final padX = 8.0;
+    final padY = 5.0;
+    final pillW = tp.width + padX * 2;
+    final pillH = tp.height + padY * 2;
+    final x = rect.right - pillW - 8;
+    final y = rect.bottom - pillH - 8;
+    final r = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, pillW, pillH),
+      const Radius.circular(999),
+    );
+    canvas.drawRRect(r, Paint()..color = const Color(0x66000000));
+    tp.paint(canvas, Offset(x + padX, y + padY));
+  }
+
   /// 중앙 상단 시간 레이블 (내 상태 텍스트와 동일 스타일)
   static void _drawTopHourLabel(Canvas canvas, String label, double width) {
     final tp = TextPainter(
@@ -447,6 +600,32 @@ abstract final class SetlogGridTimelapseBuilderImpl {
       Paint()..color = const Color(0x88000000),
     );
     tp.paint(canvas, Offset((width - tp.width) / 2, 12));
+  }
+
+  static void _drawStreakBadge(Canvas canvas, int days) {
+    final text = '🔥 ${days}일 연속 공부중';
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          shadows: [Shadow(blurRadius: 6, color: Color(0xAA000000))],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: 320);
+
+    final x = 12.0;
+    final y = 54.0; // 시간 레이블과 겹치지 않게
+    final bg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x - 8, y - 6, tp.width + 16, tp.height + 12),
+      const Radius.circular(12),
+    );
+    canvas.drawRRect(bg, Paint()..color = const Color(0xAA000000));
+    tp.paint(canvas, Offset(x, y));
   }
 
   static String _nowTag(DateTime dt) {
