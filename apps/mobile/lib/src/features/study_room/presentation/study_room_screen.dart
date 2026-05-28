@@ -20,7 +20,7 @@ import '../../session/infra/web_shared_camera.dart';
 import '../../session/presentation/widgets/session_end_result_sheet.dart';
 import '../domain/study_room_reward_config.dart';
 import '../infra/study_room_controller.dart';
-import '../../social/presentation/friend_dm_listener.dart';
+import '../../social/presentation/friend_dm_chat_screen.dart';
 import '../domain/study_room_join_code.dart';
 import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
@@ -174,14 +174,18 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
         : (peerUserId.length > 8 ? peerUserId.substring(0, 8) : peerUserId);
 
     if (!mounted) return;
-    openFriendDmChat(
-      context,
-      ref,
-      peerId: peerUserId,
-      peerDisplayName: label,
-      peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FriendDmChatScreen(
+          peerId: peerUserId,
+          peerDisplayName: label,
+          peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
+        ),
+      ),
     );
+    if (!mounted) return;
     _controller.markFriendDmThreadRead(peerUserId);
+    await _controller.refreshFriendDmPreviews();
   }
 
   Future<void> _showLeaveConfirmDialog() async {

@@ -13,6 +13,7 @@ import '../../session/infra/session_media_lifecycle.dart';
 import '../../session/infra/web_camera.dart';
 import '../domain/study_room_default_name.dart';
 import '../domain/study_room_join_code.dart';
+import '../../social/domain/friend_dm_models.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
 import 'room_video_recorder.dart';
@@ -467,6 +468,7 @@ class StudyRoomController extends ChangeNotifier {
         snapshotUrl: '',
       );
       await _joinFriendDmChannel();
+      unawaited(_refreshFriendDmPreviews());
       unawaited(_finishJoinSnapshot(roomId: resolvedId, userId: userId));
       unawaited(ensureRoomMatesFriends());
       webSelfCamEpoch++;
@@ -713,10 +715,67 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _applyFriendDmPreview({
+    required String peerUserId,
+    required String content,
+    bool markUnread = false,
+  }) {
+    final text = content.trim();
+    if (text.isEmpty) return;
+    if (!_members.any((m) => m.userId == peerUserId)) return;
+    _friendDmPreviewByUser[peerUserId] = text;
+    if (markUnread) {
+      _friendDmUnreadAtByUser[peerUserId] = DateTime.now();
+    }
+    notifyListeners();
+  }
+
+  /// 방 멤버와의 친구 DM 최신 글을 카드 미리보기에 반영합니다.
+  Future<void> refreshFriendDmPreviews() => _refreshFriendDmPreviews();
+
+  Future<void> _refreshFriendDmPreviews() async {
+    if (_selfId == null || roomId == null) return;
+    try {
+      final rows = await supabase.rpc('list_friend_dm_threads');
+      if (rows is! List) return;
+      var changed = false;
+      for (final row in rows) {
+        final thread =
+            FriendDmThread.fromJson(row as Map<String, dynamic>);
+        if (!_members.any((m) => m.userId == thread.peerId)) continue;
+        final content = thread.lastContent?.trim() ?? '';
+        if (content.isEmpty) continue;
+        _friendDmPreviewByUser[thread.peerId] = content;
+        changed = true;
+      }
+      if (changed) notifyListeners();
+    } catch (e) {
+      debugPrint('[StudyRoomController] refreshFriendDmPreviews: $e');
+    }
+  }
+
   Future<void> _joinFriendDmChannel() async {
     final uid = _selfId;
     if (uid == null) return;
     await _leaveFriendDmChannel();
+
+    void onFriendDmInsert(Map<String, dynamic> row) {
+      final senderId = row['sender_id'] as String?;
+      final recipientId = row['recipient_id'] as String?;
+      final content = (row['content'] as String?)?.trim() ?? '';
+      if (senderId == null || recipientId == null || content.isEmpty) {
+        return;
+      }
+      if (senderId == uid) {
+        _applyFriendDmPreview(peerUserId: recipientId, content: content);
+      } else if (recipientId == uid) {
+        _applyFriendDmPreview(
+          peerUserId: senderId,
+          content: content,
+          markUnread: true,
+        );
+      }
+    }
 
     _friendDmChannel = supabase
         .channel('friend_messages_inbox:$uid')
@@ -729,20 +788,18 @@ class StudyRoomController extends ChangeNotifier {
             column: 'recipient_id',
             value: uid,
           ),
-          callback: (payload) {
-            final row = payload.newRecord;
-            final senderId = row['sender_id'] as String?;
-            final content = (row['content'] as String?)?.trim() ?? '';
-            if (senderId == null || senderId.isEmpty) return;
-
-            // 같은 방 멤버일 때만 셋터디 화면에 미리보기 표시
-            final inRoom = _members.any((m) => m.userId == senderId);
-            if (!inRoom) return;
-
-            _friendDmPreviewByUser[senderId] = content;
-            _friendDmUnreadAtByUser[senderId] = DateTime.now();
-            notifyListeners();
-          },
+          callback: (payload) => onFriendDmInsert(payload.newRecord),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'friend_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'sender_id',
+            value: uid,
+          ),
+          callback: (payload) => onFriendDmInsert(payload.newRecord),
         )
         .subscribe();
   }

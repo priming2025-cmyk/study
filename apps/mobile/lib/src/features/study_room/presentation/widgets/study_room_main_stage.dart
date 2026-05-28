@@ -221,6 +221,8 @@ class StudyRoomMainStage extends StatelessWidget {
       floatingReaction: controller.reactionEmojiFor(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
+      dmPreview: controller.friendDmPreviewWithUser(m.userId),
+      dmHasUnread: controller.hasFriendDmUnreadFromUser(m.userId),
       onChat: onOpenDmChat == null ? null : () => onOpenDmChat!(m.userId),
     );
   }

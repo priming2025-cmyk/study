@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
+import 'study_room_peer_dm_chip.dart';
 
 part 'study_room_member_card_part.dart';
 
@@ -12,6 +13,8 @@ class StudyRoomMemberCard extends StatelessWidget {
   final String? floatingReaction;
   final void Function(String emoji)? onQuickReact;
   final VoidCallback? onChat;
+  final String? dmPreview;
+  final bool dmHasUnread;
 
   const StudyRoomMemberCard({
     super.key,
@@ -21,6 +24,8 @@ class StudyRoomMemberCard extends StatelessWidget {
     this.floatingReaction,
     this.onQuickReact,
     this.onChat,
+    this.dmPreview,
+    this.dmHasUnread = false,
   });
 
   @override
@@ -219,21 +224,18 @@ class StudyRoomMemberCard extends StatelessWidget {
             ),
           ),
 
-          if (member.snapshotAt != null)
-            Positioned(
-              top: 6,
-              right: 6,
-              child: _SnapshotAge(at: member.snapshotAt!),
-            ),
-
           if (!isSelf && onChat != null)
             Positioned(
               top: 8,
-              right: 4,
-              child: _IconBtn(
-                icon: Icons.chat_bubble_outline_rounded,
-                tooltip: '메시지',
-                onTap: onChat!,
+              right: 8,
+              left: 40,
+              child: Align(
+                alignment: Alignment.topRight,
+                child: StudyRoomPeerDmChip(
+                  preview: dmPreview,
+                  hasUnread: dmHasUnread,
+                  onTap: onChat!,
+                ),
               ),
             ),
           if (!isSelf)
