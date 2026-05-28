@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// 삼성·안드로이드 「텍스트 공유」 스타일: 미리보기 카드 + 링크 복사 + 앱 아이콘 행.
+/// 안드로이드/ios 기본 공유 시트 스타일:
+/// - 상단: 텍스트 미리보기 + 복사
+/// - 하단: OS 네이티브 공유 시트 열기
 class ShareMessageChannels extends StatelessWidget {
   /// 공유 시트에 넣을 전체 텍스트
   final String message;
@@ -63,54 +65,68 @@ class ShareMessageChannels extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 미리보기 카드 (텍스트 공유 상단 카드) — 탭하면 전체 텍스트 복사
+        // 미리보기 카드 (스크린샷 상단 카드) — 탭/복사 아이콘으로 전체 텍스트 복사
         Material(
-          color: cs.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(16),
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(14),
           child: InkWell(
             onTap: _text.isEmpty ? null : () => _copyMessage(context),
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 64),
               padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.outlineVariant),
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.notes_rounded,
-                    color: cs.onSurfaceVariant,
-                    size: 22,
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Icon(
+                      Icons.subject_rounded,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           previewLine1,
-                          style: tt.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            height: 1.3,
+                          style: tt.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
                           ),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (previewLine2.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            previewLine2,
-                            style: tt.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              height: 1.3,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 4),
+                        Text(
+                          previewLine2,
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            height: 1.2,
                           ),
-                        ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                    tooltip: '메시지 복사',
+                    tooltip: '복사',
                     onPressed: _text.isEmpty ? null : () => _copyMessage(context),
                     icon: Icon(Icons.copy_rounded, color: cs.onSurfaceVariant),
                   ),
@@ -119,16 +135,16 @@ class ShareMessageChannels extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
-        // 시스템 공유 시트 (첨부 사진과 동일 — 카톡·연락처 등)
+        // OS 기본 공유 시트 (카톡/메시지/인스타 등은 OS가 알아서 라우팅)
         Builder(
           builder: (btnContext) => OutlinedButton.icon(
             onPressed: _text.isEmpty ? null : () => _nativeShare(btnContext),
             icon: const Icon(Icons.ios_share_rounded),
-            label: const Text('공유하기'),
+            label: const Text('공유'),
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
+              minimumSize: const Size(double.infinity, 52),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
               ),

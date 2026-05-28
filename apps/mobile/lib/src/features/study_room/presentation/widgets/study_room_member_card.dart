@@ -126,6 +126,33 @@ class StudyRoomMemberCard extends StatelessWidget {
             ),
           ),
 
+          // 상태 텍스트 (상대에게도 보이도록 중앙 오버레이)
+          if (member.statusText != null && member.statusText!.trim().isNotEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Text(
+                  member.statusText!.trim(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    height: 1.15,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 18,
+                        color: Colors.black54,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+
           if (floatingReaction != null &&
               floatingReaction!.isNotEmpty &&
               floatingReaction == '❤️')

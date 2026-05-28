@@ -222,14 +222,16 @@ class StudyRoomMainStage extends StatelessWidget {
       return _EmptyPeerSlot(joinCode: controller.joinCode);
     }
     final m = slot.member!;
-    final latestDm = controller.latestMessageWithUser(m.userId);
+    final latestDmText = controller.friendDmPreviewWithUser(m.userId) ??
+        controller.latestMessageWithUser(m.userId)?.content;
     return StudyRoomMemberCard(
       member: m,
       isSelf: false,
       compact: true,
       floatingReaction: controller.reactionEmojiFor(m.userId),
-      dmPreview: latestDm?.content,
-      dmHasUnread: controller.hasUnreadFromUser(m.userId),
+      dmPreview: latestDmText,
+      dmHasUnread: controller.hasFriendDmUnreadFromUser(m.userId) ||
+          controller.hasUnreadFromUser(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
       onChat: onOpenDmChat == null ? null : () => onOpenDmChat!(m.userId),

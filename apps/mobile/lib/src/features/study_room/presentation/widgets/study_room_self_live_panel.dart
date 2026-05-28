@@ -294,12 +294,12 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     width: widget.width,
                     height: widget.height,
                   ),
-                if (widget.controller.goalText.trim().isNotEmpty)
+                if (widget.controller.statusText.trim().isNotEmpty)
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 18),
                       child: Text(
-                        widget.controller.goalText.trim(),
+                        widget.controller.statusText.trim(),
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white70,
@@ -355,7 +355,7 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
       };
 
   Future<void> _editStatus(BuildContext context) async {
-    final ctrl = TextEditingController(text: controller.goalText);
+    final ctrl = TextEditingController(text: controller.statusText);
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,

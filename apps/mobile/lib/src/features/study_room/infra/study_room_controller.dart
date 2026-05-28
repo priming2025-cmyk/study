@@ -72,6 +72,10 @@ class StudyRoomController extends ChangeNotifier {
 
   /// DM 스레드별 마지막 읽은 시각 (세션 내).
   final Map<String, DateTime> _dmReadAtByUser = {};
+  // 친구 DM(=friend_messages) 미리보기/읽음 (셋터디 화면 표시용)
+  final Map<String, String> _friendDmPreviewByUser = {};
+  final Map<String, DateTime> _friendDmUnreadAtByUser = {};
+  RealtimeChannel? _friendDmChannel;
 
   bool joining = false;
   String? error;
@@ -119,6 +123,7 @@ class StudyRoomController extends ChangeNotifier {
   bool _snapshotInitialized = false;
 
   String _selfGoalText = '';
+  String _selfStatusText = '';
   late DateTime _selfJoinAtUtc;
   String _selfStatus = 'focus';
   String? _selfSubjectName;
@@ -145,6 +150,7 @@ class StudyRoomController extends ChangeNotifier {
   StudyRoomAmbientPlayer get ambient => _ambient;
 
   String get goalText => _selfGoalText;
+  String get statusText => _selfStatusText;
   bool get isFocusTracking => _focusState != null;
   int get focusAverageScore => _focusState?.averageScore ?? 0;
   AttentionSignals get focusSignals => _focusSignals;
@@ -393,7 +399,12 @@ class StudyRoomController extends ChangeNotifier {
       _selfId = userId;
       _messages = [];
       _dmReadAtByUser.clear();
+      _friendDmPreviewByUser.clear();
+      _friendDmUnreadAtByUser.clear();
       _selfGoalText = goalText.trim();
+      if (_selfStatusText.trim().isEmpty) {
+        _selfStatusText = _selfGoalText;
+      }
       _selfJoinAtUtc = DateTime.now().toUtc();
       _selfStatus = 'focus';
       roomOwnerId = roomRow['owner_id'] as String?;
@@ -413,6 +424,7 @@ class StudyRoomController extends ChangeNotifier {
         userId: userId,
         snapshotUrl: '',
       );
+      await _joinFriendDmChannel();
       unawaited(_finishJoinSnapshot(roomId: resolvedId, userId: userId));
       unawaited(ensureRoomMatesFriends());
       webSelfCamEpoch++;
@@ -504,6 +516,7 @@ class StudyRoomController extends ChangeNotifier {
 
     await _leaveMessageChannel();
     await _leavePresence();
+    await _leaveFriendDmChannel();
     try {
       await _snapshot.dispose();
       await _videoRecorder.dispose();
@@ -642,6 +655,61 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> _joinFriendDmChannel() async {
+    final uid = _selfId;
+    if (uid == null) return;
+    await _leaveFriendDmChannel();
+
+    _friendDmChannel = supabase
+        .channel('friend_messages_inbox:$uid')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'friend_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'recipient_id',
+            value: uid,
+          ),
+          callback: (payload) {
+            final row = payload.newRecord;
+            final senderId = row['sender_id'] as String?;
+            final content = (row['content'] as String?)?.trim() ?? '';
+            if (senderId == null || senderId.isEmpty) return;
+
+            // 같은 방 멤버일 때만 셋터디 화면에 미리보기 표시
+            final inRoom = _members.any((m) => m.userId == senderId);
+            if (!inRoom) return;
+
+            _friendDmPreviewByUser[senderId] = content;
+            _friendDmUnreadAtByUser[senderId] = DateTime.now();
+            notifyListeners();
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _leaveFriendDmChannel() async {
+    final ch = _friendDmChannel;
+    _friendDmChannel = null;
+    if (ch != null) {
+      try {
+        await ch.unsubscribe();
+      } catch (_) {}
+    }
+  }
+
+  String? friendDmPreviewWithUser(String otherUserId) =>
+      _friendDmPreviewByUser[otherUserId];
+
+  bool hasFriendDmUnreadFromUser(String otherUserId) =>
+      _friendDmUnreadAtByUser.containsKey(otherUserId);
+
+  void markFriendDmThreadRead(String otherUserId) {
+    _friendDmUnreadAtByUser.remove(otherUserId);
+    notifyListeners();
+  }
+
   Future<void> setSelfPublicViewerMode(String mode) async {
     final m = mode.trim();
     if (m.isEmpty) return;
@@ -760,6 +828,7 @@ class StudyRoomController extends ChangeNotifier {
       'public_viewer_mode': _selfPublicViewerMode,
       'subject_name': _selfSubjectName,
       'goal_text': _selfGoalText,
+      'status_text': _selfStatusText,
       'join_at': _selfJoinAtUtc.toIso8601String(),
     };
 
@@ -897,7 +966,7 @@ class StudyRoomController extends ChangeNotifier {
 
   Future<void> setMyStatusText(String text) async {
     final t = text.trim();
-    _selfGoalText = t;
+    _selfStatusText = t;
     await _trackSelfFull();
     notifyListeners();
   }
@@ -1082,6 +1151,7 @@ class StudyRoomController extends ChangeNotifier {
         final publicViewerMode = p['public_viewer_mode'] as String?;
         final subjectName = p['subject_name'] as String?;
         final goalText = p['goal_text'] as String?;
+        final statusText = p['status_text'] as String?;
         final joinAtRaw = p['join_at'] as String?;
         final publicLevelRaw = p['public_level'];
         final publicTitleKo = p['public_title_ko'] as String?;
@@ -1122,6 +1192,7 @@ class StudyRoomController extends ChangeNotifier {
             publicViewerMode: publicViewerMode,
             subjectName: subjectName,
             goalText: (goalText?.isNotEmpty ?? false) ? goalText : null,
+            statusText: (statusText?.isNotEmpty ?? false) ? statusText : null,
             joinAt: joinAt,
             timerStartAt: null,
             timerDurationSecs: null,
@@ -1186,6 +1257,7 @@ class StudyRoomController extends ChangeNotifier {
               publicViewerMode: m.publicViewerMode,
               subjectName: m.subjectName,
               goalText: m.goalText,
+              statusText: m.statusText,
               joinAt: m.joinAt,
               timerStartAt: m.timerStartAt,
               timerDurationSecs: m.timerDurationSecs,

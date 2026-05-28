@@ -21,7 +21,7 @@ class FriendInviteSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final uid = supabase.auth.currentUser?.id;
-        final message = uid == null ? '' : friendInviteMessage();
+    final message = uid == null ? '' : friendInviteMessage();
 
     return Padding(
       padding: EdgeInsets.only(
@@ -35,9 +35,12 @@ class FriendInviteSheet extends StatelessWidget {
         children: [
           Text(
             '텍스트 공유',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (uid == null)
             const Text('로그인 후 초대 링크를 만들 수 있어요')
           else

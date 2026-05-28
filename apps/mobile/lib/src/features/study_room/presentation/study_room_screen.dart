@@ -134,6 +134,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       peerDisplayName: label,
       peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
     );
+    _controller.markFriendDmThreadRead(peerUserId);
   }
 
   void _refreshRecentRoomsList() {

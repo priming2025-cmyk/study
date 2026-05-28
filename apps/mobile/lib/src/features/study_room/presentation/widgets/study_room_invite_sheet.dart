@@ -43,7 +43,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final code = joinCode.trim().toUpperCase();
-        final goal = goalText?.trim();
+    final goal = goalText?.trim();
     final line1 = goal != null && goal.isNotEmpty
         ? '우리 같이 공부하자! (목표: $goal)'
         : '우리 같이 공부하자!';
@@ -60,9 +60,12 @@ class StudyRoomInviteSheet extends StatelessWidget {
         children: [
           Text(
             '텍스트 공유',
-            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (code.isEmpty)
             const Text('입장코드가 없어요. 방에 입장한 뒤 다시 시도해 주세요.')
           else

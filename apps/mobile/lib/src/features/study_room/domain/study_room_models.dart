@@ -31,6 +31,8 @@ class StudyRoomMember {
   final String? publicViewerMode;
   final String? subjectName;
   final String? goalText;
+  /// 셋터디 내 공개 “내 상태” (예: 수학 공부 중)
+  final String? statusText;
   final DateTime? joinAt;
   /// 방장만 유효. 다른 멤버는 null.
   final DateTime? timerStartAt;
@@ -51,6 +53,7 @@ class StudyRoomMember {
     this.publicViewerMode,
     this.subjectName,
     this.goalText,
+    this.statusText,
     this.joinAt,
     this.timerStartAt,
     this.timerDurationSecs,
