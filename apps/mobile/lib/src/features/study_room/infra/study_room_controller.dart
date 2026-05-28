@@ -975,20 +975,43 @@ class StudyRoomController extends ChangeNotifier {
       final bytes = await _snapshot.capture();
       if (bytes == null) return null;
 
-      final path = suffix.isEmpty
-          ? '$roomId/$userId.jpg'
-          : '$roomId/${userId}_$suffix.jpg';
+      // 캡쳐 모드에서는 1분 사진 히스토리를 쌓아 셋로그(타임랩스)로 만들 수 있게 합니다.
+      final nowUtc = DateTime.now().toUtc();
+      final ts = nowUtc.millisecondsSinceEpoch;
+      final keepHistory = _selfPublicViewerMode == 'capture' && roomId == this.roomId;
+
+      final path = keepHistory
+          ? 'snaps/$roomId/$userId/$ts.jpg'
+          : (suffix.isEmpty ? '$roomId/$userId.jpg' : '$roomId/${userId}_$suffix.jpg');
       await supabase.storage.from(_snapshotBucket).uploadBinary(
             path,
             bytes,
-            fileOptions: const FileOptions(
+            fileOptions: FileOptions(
               contentType: 'image/jpeg',
-              upsert: true,
+              upsert: !keepHistory,
             ),
           );
 
       final base = supabase.storage.from(_snapshotBucket).getPublicUrl(path);
-      return '$base?t=${DateTime.now().millisecondsSinceEpoch}';
+      final url = '$base?t=$ts';
+
+      if (keepHistory) {
+        try {
+          await supabase.from('study_room_photo_snaps').insert({
+            'room_id': roomId,
+            'user_id': userId,
+            'storage_path': path,
+            'public_url': url,
+            'recorded_at': nowUtc.toIso8601String(),
+            'expires_at': nowUtc.add(const Duration(days: 1)).toIso8601String(),
+            'size_bytes': bytes.length,
+          });
+        } catch (e) {
+          debugPrint('[StudyRoomController] photo_snaps insert error: $e');
+        }
+      }
+
+      return url;
     } catch (e) {
       debugPrint('[StudyRoomController] snapshot upload error: $e');
       return null;

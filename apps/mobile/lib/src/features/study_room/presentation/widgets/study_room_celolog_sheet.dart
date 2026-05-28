@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../domain/study_room_video_clip_row.dart';
 import '../../infra/celolog_download_service.dart';
 import '../../infra/study_room_video_clips_repository.dart';
+import '../../infra/study_room_photo_snaps_repository.dart';
+import '../../infra/setlog_timelapse_builder.dart';
 
 Future<void> showStudyRoomCelologSheet(
   BuildContext context, {
@@ -28,6 +30,7 @@ class _CelologBody extends StatefulWidget {
 class _CelologBodyState extends State<_CelologBody> {
   late Future<List<StudyRoomVideoClipRow>> _future;
   bool _downloading = false;
+  bool _buildingVideo = false;
 
   @override
   void initState() {
@@ -47,6 +50,29 @@ class _CelologBodyState extends State<_CelologBody> {
     setState(() => _downloading = false);
     if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  Future<void> _buildSetlogVideo(List<StudyRoomVideoClipRow> clips) async {
+    if (_buildingVideo) return;
+    setState(() => _buildingVideo = true);
+    try {
+      final photos =
+          await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: widget.roomId);
+      final err = await SetlogTimelapseBuilder.buildAndShare(
+        input: SetlogBuildInput(
+          photos: photos,
+          clips: clips,
+          downloadedAt: DateTime.now(),
+          fps: 10, // 3배속: 1분=0.1초
+        ),
+      );
+      if (!mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      }
+    } finally {
+      if (mounted) setState(() => _buildingVideo = false);
     }
   }
 
@@ -143,6 +169,18 @@ class _CelologBodyState extends State<_CelologBody> {
                             )
                           : const Icon(Icons.download_rounded),
                       label: Text(_downloading ? '만드는 중…' : '셀로그 ZIP 다운로드'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _buildingVideo ? null : () => _buildSetlogVideo(clips),
+                      icon: _buildingVideo
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.movie_creation_outlined),
+                      label: Text(_buildingVideo ? '공부 끝! 만드는 중…' : '공부 끝! 영상 만들기 (3배속)'),
                     ),
                   ],
                 );

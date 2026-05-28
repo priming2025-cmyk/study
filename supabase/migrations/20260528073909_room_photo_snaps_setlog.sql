@@ -1,0 +1,2 @@
+-- (빈 마이그레이션) Supabase CLI가 생성한 placeholder 입니다.
+-- 실질 스키마 변경은 `0036_room_photo_snaps_setlog.sql`에 있습니다.

@@ -1,4 +1,4 @@
-// 만료된 study_room_video_clips — Storage 삭제 후 DB 행 제거
+// 만료된 study_room_video_clips / study_room_photo_snaps — Storage 삭제 후 DB 행 제거
 // Supabase Dashboard → Edge Functions → Cron: 0 * * * * (매시간)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -33,11 +33,25 @@ Deno.serve(async (req) => {
   }
 
   const expired = (rows ?? []) as { id: string; storage_path: string }[];
-  if (expired.length === 0) {
+
+  const { data: photoRows, error: photoListErr } = await supabase.rpc(
+    "list_expired_study_room_photo_snaps",
+    { p_limit: 500 },
+  );
+
+  if (photoListErr) {
+    return new Response(JSON.stringify({ error: photoListErr.message }), {
+      status: 500,
+    });
+  }
+
+  const expiredPhotos = (photoRows ?? []) as { id: string; storage_path: string }[];
+
+  if (expired.length === 0 && expiredPhotos.length === 0) {
     return new Response(JSON.stringify({ deleted: 0, storage: 0 }));
   }
 
-  const paths = expired
+  const paths = [...expired, ...expiredPhotos]
     .map((r) => r.storage_path?.trim())
     .filter((p) => p && p.length > 0);
 
@@ -61,11 +75,22 @@ Deno.serve(async (req) => {
     });
   }
 
+  const photoIds = expiredPhotos.map((r) => r.id);
+  const { data: deletedPhotoCount, error: delPhotoErr } = await supabase.rpc(
+    "delete_study_room_photo_snap_rows",
+    { p_ids: photoIds },
+  );
+  if (delPhotoErr) {
+    return new Response(JSON.stringify({ error: delPhotoErr.message }), {
+      status: 500,
+    });
+  }
+
   return new Response(
     JSON.stringify({
-      deleted: deletedCount ?? 0,
+      deleted: (deletedCount ?? 0) + (deletedPhotoCount ?? 0),
       storage: storageRemoved,
-      scanned: expired.length,
+      scanned: expired.length + expiredPhotos.length,
     }),
     { headers: { "Content-Type": "application/json" } },
   );
