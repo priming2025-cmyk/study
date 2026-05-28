@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../domain/study_room_photo_snap_row.dart';
 import '../../domain/study_room_video_clip_row.dart';
 import '../../infra/study_room_controller.dart';
 import '../../infra/study_room_celolog_repository.dart';
@@ -64,13 +65,75 @@ class _CelologBodyState extends State<_CelologBody> {
     // 방 전체 멤버 데이터
     final roomData = await StudyRoomCelologRepository.fetchRoomToday(
         roomId: rid);
+    final slots = _resolveGridSlots(
+      controllerSlots: widget.controller.celologMemberSlots,
+      photos: roomData.photos,
+      clips: roomData.clips,
+    );
     return _CelologData(
       clips: roomData.clips,
       photoCount: roomData.photos.length,
-      memberCount: widget.controller.celologMemberSlots.length,
+      memberCount: slots.length,
       allPhotos: roomData.photos,
       allClips: roomData.clips,
+      gridSlots: slots,
     );
+  }
+
+  /// Presence에 아직 없는 멤버도 사진/클립 데이터 기준으로 슬롯에 포함
+  List<GridMemberSlot> _resolveGridSlots({
+    required List<({String userId, String? displayName, String? statusText})>
+        controllerSlots,
+    required List<StudyRoomPhotoSnapRow> photos,
+    required List<StudyRoomVideoClipRow> clips,
+  }) {
+    final slotByUser = <String, GridMemberSlot>{};
+
+    void put(String userId, {String? displayName, String? statusText}) {
+      slotByUser[userId] = GridMemberSlot(
+        userId: userId,
+        displayName: displayName ?? widget.controller.displayNameFor(userId),
+        statusText: statusText,
+      );
+    }
+
+    for (final s in controllerSlots) {
+      put(s.userId, displayName: s.displayName, statusText: s.statusText);
+    }
+
+    for (final p in photos) {
+      slotByUser.putIfAbsent(
+        p.userId,
+        () => GridMemberSlot(
+          userId: p.userId,
+          displayName: widget.controller.displayNameFor(p.userId),
+          statusText: p.statusText,
+        ),
+      );
+    }
+    for (final c in clips) {
+      slotByUser.putIfAbsent(
+        c.userId,
+        () => GridMemberSlot(
+          userId: c.userId,
+          displayName: widget.controller.displayNameFor(c.userId),
+        ),
+      );
+    }
+
+    final selfId = widget.controller.selfId;
+    final ordered = <GridMemberSlot>[];
+    if (selfId != null) {
+      final self = slotByUser.remove(selfId);
+      if (self != null) ordered.add(self);
+    }
+    for (final s in controllerSlots) {
+      if (s.userId == selfId) continue;
+      final slot = slotByUser.remove(s.userId);
+      if (slot != null) ordered.add(slot);
+    }
+    ordered.addAll(slotByUser.values);
+    return ordered;
   }
 
   Future<void> _buildGridVideo() async {
@@ -82,13 +145,13 @@ class _CelologBodyState extends State<_CelologBody> {
 
     try {
       final data = await _future;
-      final slots = widget.controller.celologMemberSlots
-          .map((s) => GridMemberSlot(
-                userId: s.userId,
-                displayName: s.displayName,
-                statusText: s.statusText,
-              ))
-          .toList();
+      final slots = data.gridSlots.isNotEmpty
+          ? data.gridSlots
+          : _resolveGridSlots(
+              controllerSlots: widget.controller.celologMemberSlots,
+              photos: data.allPhotos,
+              clips: data.allClips,
+            );
 
       final result = await SetlogGridTimelapseBuilder.buildAndSave(
         input: GridBuildInput(
@@ -300,8 +363,9 @@ class _CelologData {
   final List<StudyRoomVideoClipRow> clips;
   final int photoCount;
   final int memberCount;
-  final allPhotos;
-  final allClips;
+  final List<StudyRoomPhotoSnapRow> allPhotos;
+  final List<StudyRoomVideoClipRow> allClips;
+  final List<GridMemberSlot> gridSlots;
 
   _CelologData({
     required this.clips,
@@ -309,5 +373,6 @@ class _CelologData {
     required this.memberCount,
     this.allPhotos = const [],
     this.allClips = const [],
+    this.gridSlots = const [],
   });
 }

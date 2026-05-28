@@ -1131,6 +1131,8 @@ class StudyRoomController extends ChangeNotifier {
             'expires_at': nowUtc.add(const Duration(days: 1)).toIso8601String(),
             'size_bytes': bytes.length,
             if (_selfStatusText.trim().isNotEmpty) 'status_text': _selfStatusText.trim(),
+            // 집중도(0..100): StudyRoomController 내부 AttentionScoring 평균값
+            if (focusAverageScore > 0) 'focus_score': focusAverageScore,
           });
         } catch (e) {
           debugPrint('[StudyRoomController] photo_snaps insert error: $e');

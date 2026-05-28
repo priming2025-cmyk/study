@@ -9,6 +9,8 @@ class StudyRoomPhotoSnapRow {
   final DateTime expiresAt;
   /// 사진 촬영 시점의 공부 상태 텍스트 (셀로그 오버레이용)
   final String? statusText;
+  /// 사진 촬영 시점의 집중도(0..100) — 셀로그/바이럴 오버레이용
+  final int? focusScore;
 
   const StudyRoomPhotoSnapRow({
     required this.id,
@@ -20,6 +22,7 @@ class StudyRoomPhotoSnapRow {
     required this.recordedAt,
     required this.expiresAt,
     this.statusText,
+    this.focusScore,
   });
 
   factory StudyRoomPhotoSnapRow.fromJson(Map<String, dynamic> j) =>
@@ -33,6 +36,7 @@ class StudyRoomPhotoSnapRow {
         recordedAt: DateTime.parse(j['recorded_at'] as String),
         expiresAt: DateTime.parse(j['expires_at'] as String),
         statusText: j['status_text'] as String?,
+        focusScore: (j['focus_score'] as num?)?.toInt(),
       );
 }
 
