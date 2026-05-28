@@ -589,14 +589,25 @@ class StudyRoomController extends ChangeNotifier {
   Future<void> sendMessage(String content) async {
     final rid = roomId;
     final uid = _selfId;
-    if (rid == null || uid == null || content.trim().isEmpty) return;
+    final text = content.trim();
+    if (rid == null || uid == null || text.isEmpty) return;
 
     try {
-      await supabase.from('study_room_messages').insert({
-        'room_id': rid,
-        'user_id': uid,
-        'content': content.trim(),
-      });
+      final row = await supabase
+          .from('study_room_messages')
+          .insert({
+            'room_id': rid,
+            'user_id': uid,
+            'content': text,
+          })
+          .select()
+          .single();
+      final msg = StudyRoomMessage.fromJson(row);
+      if (!_messages.any((m) => m.id == msg.id)) {
+        _messages.add(msg);
+        _roomChatMessagesCache.add(msg);
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('[StudyRoomController] sendMessage error: $e');
     }

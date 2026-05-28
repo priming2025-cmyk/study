@@ -414,131 +414,48 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
     }
   }
 
+  void _openGroupChat(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => StudyRoomGroupChatScreen(controller: controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final incoming = controller.latestUnreadIncoming();
-    final senderLabel = incoming == null
-        ? ''
-        : (incoming.userId.length > 8
-            ? incoming.userId.substring(0, 8)
-            : incoming.userId);
-    final preview = incoming?.content.trim() ?? '';
-
     final group = controller.roomChatMessages;
-    final groupLast = group.isEmpty ? null : group.last;
-    final groupPreview = groupLast?.content.trim() ?? '';
+    final groupPreview =
+        group.isEmpty ? '' : (group.last.content.trim());
 
     return Stack(
       children: [
-        if (onOpenDmChat != null && groupLast != null)
-          Positioned(
-            left: 8,
-            top: 8,
-            child: Material(
-              color: Colors.black.withAlpha(140),
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        StudyRoomGroupChatScreen(controller: controller),
-                  ),
-                ),
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.forum_outlined,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 6),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 200),
-                        child: Text(
-                          groupPreview.isEmpty ? '단체 채팅' : groupPreview,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+        // 최신 단체 채팅 미리보기 (내 카드 좌측)
+        Positioned(
+          left: 6,
+          top: 36,
+          right: 44,
+          child: _SelfGroupChatPreview(
+            preview: groupPreview,
+            onTap: () => _openGroupChat(context),
           ),
-        if (incoming != null && onOpenDmChat != null)
-          Positioned(
-            right: 8,
-            left: 8,
-            bottom: 46,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Material(
-                color: Theme.of(context).colorScheme.primary.withAlpha(230),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: () => onOpenDmChat!(incoming.userId),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.chat_bubble_rounded,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              senderLabel,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (preview.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 180),
-                            child: Text(
-                              preview,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withAlpha(230),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+        ),
+        // 말풍선 버튼 → 단체 채팅 전체 화면
+        Positioned(
+          right: 4,
+          top: 0,
+          bottom: 0,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _SelfOverlayIconBtn(
+                icon: Icons.chat_bubble_outline_rounded,
+                tooltip: '단체 채팅',
+                onTap: () => _openGroupChat(context),
               ),
-            ),
+            ],
           ),
+        ),
         if (onOpenCelolog != null)
           Positioned(
             left: 8,
@@ -634,6 +551,91 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SelfGroupChatPreview extends StatelessWidget {
+  final String preview;
+  final VoidCallback onTap;
+
+  const _SelfGroupChatPreview({
+    required this.preview,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = preview.trim();
+    final label = text.isEmpty ? '단체 채팅하기' : text;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Material(
+        color: Colors.black.withAlpha(150),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.chat_bubble_rounded,
+                  size: 14,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelfOverlayIconBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _SelfOverlayIconBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Colors.black.withAlpha(100),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 16, color: Colors.white),
+        ),
+      ),
     );
   }
 }
