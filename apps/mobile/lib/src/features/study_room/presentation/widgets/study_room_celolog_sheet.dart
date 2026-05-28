@@ -1,36 +1,40 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/study_room_video_clip_row.dart';
-import '../../infra/celolog_download_service.dart';
-import '../../infra/study_room_video_clips_repository.dart';
+import '../../infra/study_room_controller.dart';
+import '../../infra/study_room_celolog_repository.dart';
 import '../../infra/study_room_photo_snaps_repository.dart';
-import '../../infra/setlog_timelapse_builder.dart';
+import '../../infra/study_room_video_clips_repository.dart';
+import '../../infra/setlog_grid_timelapse_builder.dart';
 
 Future<void> showStudyRoomCelologSheet(
   BuildContext context, {
   required String? roomId,
+  required StudyRoomController controller,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (ctx) => _CelologBody(roomId: roomId),
+    builder: (ctx) => _CelologBody(roomId: roomId, controller: controller),
   );
 }
 
 class _CelologBody extends StatefulWidget {
   final String? roomId;
+  final StudyRoomController controller;
 
-  const _CelologBody({this.roomId});
+  const _CelologBody({this.roomId, required this.controller});
 
   @override
   State<_CelologBody> createState() => _CelologBodyState();
 }
 
 class _CelologBodyState extends State<_CelologBody> {
-  late Future<({List<StudyRoomVideoClipRow> clips, int photoCount})> _future;
-  bool _downloading = false;
+  late Future<_CelologData> _future;
   bool _buildingVideo = false;
+  String? _successMsg;
 
   @override
   void initState() {
@@ -39,45 +43,67 @@ class _CelologBodyState extends State<_CelologBody> {
   }
 
   void _reload() {
-    _future = () async {
-      final clips = await StudyRoomVideoClipsRepository.fetchMyToday(
-        roomId: widget.roomId,
+    _future = _loadData();
+  }
+
+  Future<_CelologData> _loadData() async {
+    final rid = widget.roomId;
+    if (rid == null) {
+      // 방 정보 없으면 내 것만
+      final myClips = await StudyRoomVideoClipsRepository.fetchMyToday(
+          roomId: null);
+      final myPhotos =
+          await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: null);
+      return _CelologData(
+        clips: myClips,
+        photoCount: myPhotos.length,
+        memberCount: 1,
       );
-      // 사진은 “영상 만들기” 가능 여부만 빠르게 판단하려고 개수만
-      final photos =
-          await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: widget.roomId);
-      return (clips: clips, photoCount: photos.length);
-    }();
-  }
-
-  Future<void> _download(List<StudyRoomVideoClipRow> clips) async {
-    if (_downloading) return;
-    setState(() => _downloading = true);
-    final err = await CelologDownloadService.buildAndShareZip(clips: clips);
-    if (!mounted) return;
-    setState(() => _downloading = false);
-    if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     }
+
+    // 방 전체 멤버 데이터
+    final roomData = await StudyRoomCelologRepository.fetchRoomToday(
+        roomId: rid);
+    return _CelologData(
+      clips: roomData.clips,
+      photoCount: roomData.photos.length,
+      memberCount: widget.controller.celologMemberSlots.length,
+      allPhotos: roomData.photos,
+      allClips: roomData.clips,
+    );
   }
 
-  Future<void> _buildSetlogVideo(List<StudyRoomVideoClipRow> clips) async {
+  Future<void> _buildGridVideo() async {
     if (_buildingVideo) return;
-    setState(() => _buildingVideo = true);
+    setState(() {
+      _buildingVideo = true;
+      _successMsg = null;
+    });
+
     try {
-      final photos =
-          await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: widget.roomId);
-      final err = await SetlogTimelapseBuilder.buildAndShare(
-        input: SetlogBuildInput(
-          photos: photos,
-          clips: clips,
+      final data = await _future;
+      final slots = widget.controller.celologMemberSlots
+          .map((s) => GridMemberSlot(
+                userId: s.userId,
+                displayName: s.displayName,
+                statusText: s.statusText,
+              ))
+          .toList();
+
+      final result = await SetlogGridTimelapseBuilder.buildAndSave(
+        input: GridBuildInput(
+          slots: slots,
+          allPhotos: data.allPhotos,
+          allClips: data.allClips,
           downloadedAt: DateTime.now(),
-          fps: 10, // 3배속: 1분=0.1초
         ),
       );
-      // 요구사항: 안내문구/팝업 최소화. 실패해도 조용히.
+
       if (!mounted) return;
-      if (err != null) {}
+      if (result != null) {
+        setState(() => _successMsg = '갤러리에 저장됐어요 🎉');
+      }
+      // 결과 없어도 조용히 처리 (데이터 없음)
     } finally {
       if (mounted) setState(() => _buildingVideo = false);
     }
@@ -101,11 +127,11 @@ class _CelologBodyState extends State<_CelologBody> {
             ),
             const SizedBox(height: 4),
             Text(
-              '24시간 동안만 보관돼요. ZIP으로 받으면 시간순 클립이 들어 있어요.',
+              '24시간 동안만 보관돼요. 함께 공부한 모든 멤버의 사진·영상을 1시간=4초로 합칩니다.',
               style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
-            FutureBuilder<({List<StudyRoomVideoClipRow> clips, int photoCount})>(
+            FutureBuilder<_CelologData>(
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
@@ -117,73 +143,86 @@ class _CelologBodyState extends State<_CelologBody> {
                 if (snap.hasError) {
                   return Text('불러오기 실패: ${snap.error}');
                 }
-                final data = snap.data ??
-                    (clips: const <StudyRoomVideoClipRow>[], photoCount: 0);
+                final data = snap.data!;
                 final clips = data.clips;
-                final photoCount = data.photoCount;
-
-                final totalKb = clips.fold<int>(
-                  0,
-                  (a, c) => a + (c.sizeBytes ?? 0),
-                );
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '${clips.length}개 클립 · 사진 ${photoCount}장',
-                      style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                    // 통계
+                    Row(
+                      children: [
+                        _statChip(
+                          icon: Icons.group_outlined,
+                          label: '${data.memberCount}명',
+                          cs: cs,
+                        ),
+                        const SizedBox(width: 8),
+                        _statChip(
+                          icon: Icons.photo_outlined,
+                          label: '사진 ${data.photoCount}장',
+                          cs: cs,
+                        ),
+                        const SizedBox(width: 8),
+                        _statChip(
+                          icon: Icons.movie_outlined,
+                          label: '영상 ${clips.length}개',
+                          cs: cs,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    if (clips.isNotEmpty)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MediaQuery.sizeOf(context).height * 0.35,
+                    // 시간 범위 표시
+                    if (data.photoCount > 0 || clips.isNotEmpty)
+                      _buildHourChips(data, tt, cs),
+                    const SizedBox(height: 14),
+
+                    // 성공 메시지
+                    if (_successMsg != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: clips.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, i) {
-                            final c = clips[i];
-                            final t = c.recordedAt.toLocal();
-                            final time =
-                                '${t.hour}:${t.minute.toString().padLeft(2, '0')}';
-                            final kb =
-                                ((c.sizeBytes ?? 0) / 1024).toStringAsFixed(0);
-                            return ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.movie_outlined),
-                              title: Text(
-                                  '$time · ${c.mimeType.contains('webm') ? 'WebM' : 'MP4'}'),
-                              subtitle: Text('$kb KB · 자정에 삭제'),
-                            );
-                          },
+                        child: Text(
+                          _successMsg!,
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 10),
+                    ],
+
+                    // 갤러리 저장 버튼
                     FilledButton.icon(
-                      onPressed: _downloading ? null : () => _download(clips),
-                      icon: _downloading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.download_rounded),
-                      label: Text(_downloading ? '만드는 중…' : '셀로그 ZIP 다운로드'),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _buildingVideo ? null : () => _buildSetlogVideo(clips),
+                      onPressed: _buildingVideo ? null : _buildGridVideo,
                       icon: _buildingVideo
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.movie_creation_outlined),
-                      label: Text(_buildingVideo ? '공부 끝! 만드는 중…' : '공부 끝! 영상 만들기 (3배속)'),
+                          : const Icon(Icons.video_library_rounded),
+                      label: Text(
+                        _buildingVideo
+                            ? '영상 만드는 중… (잠시 기다려 주세요)'
+                            : kIsWeb
+                                ? '셀로그 영상 다운로드 (WebM)'
+                                : '셀로그 영상 갤러리에 저장',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '3배속 · 1시간 = 약 4초 · 멤버 그리드 영상',
+                      style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant, fontSize: 11),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 );
@@ -194,4 +233,81 @@ class _CelologBodyState extends State<_CelologBody> {
       ),
     );
   }
+
+  Widget _statChip({
+    required IconData icon,
+    required String label,
+    required ColorScheme cs,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHourChips(
+    _CelologData data,
+    TextTheme tt,
+    ColorScheme cs,
+  ) {
+    // 사진/영상의 시간대를 수집해 표시
+    final hours = <int>{};
+    for (final p in data.allPhotos) {
+      hours.add(p.recordedAt.toLocal().hour);
+    }
+    for (final c in data.allClips) {
+      hours.add(c.recordedAt.toLocal().hour);
+    }
+    if (hours.isEmpty) return const SizedBox.shrink();
+
+    final sorted = hours.toList()..sort();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: sorted
+          .map((h) => Chip(
+                padding: EdgeInsets.zero,
+                label: Text('${h.toString().padLeft(2, '0')}:00',
+                    style: const TextStyle(fontSize: 11)),
+                backgroundColor: cs.secondaryContainer,
+                labelPadding:
+                    const EdgeInsets.symmetric(horizontal: 8),
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _CelologData {
+  final List<StudyRoomVideoClipRow> clips;
+  final int photoCount;
+  final int memberCount;
+  final allPhotos;
+  final allClips;
+
+  _CelologData({
+    required this.clips,
+    required this.photoCount,
+    required this.memberCount,
+    this.allPhotos = const [],
+    this.allClips = const [],
+  });
 }

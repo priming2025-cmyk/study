@@ -14,6 +14,7 @@ import '../../../core/ui/app_snacks.dart';
 import '../../social/infra/pending_friend_invite.dart';
 import '../infra/pending_study_room_join.dart';
 import '../../../core/widgets/sheet_header_bar.dart';
+import '../../../core/platform/kiosk_lock.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
 import '../../session/infra/web_shared_camera.dart';
@@ -127,9 +128,11 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       if (inRoom && !_wakeLockOn) {
         _wakeLockOn = true;
         unawaited(WakelockPlus.enable());
+        unawaited(KioskLock.enableIfPossible());
       } else if (!inRoom && _wakeLockOn) {
         _wakeLockOn = false;
         unawaited(WakelockPlus.disable());
+        unawaited(KioskLock.disableIfPossible());
       }
 
       final selfId = _controller.selfId;
@@ -539,6 +542,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
                   onPressed: () => showStudyRoomCelologSheet(
                     context,
                     roomId: _controller.roomId,
+                    controller: _controller,
                   ),
                 ),
                 if (kIsWeb)

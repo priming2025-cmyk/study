@@ -7,6 +7,7 @@ class StudyRoomChatPanel extends StatefulWidget {
   final String selfId;
   final Future<void> Function(String content) onSendMessage;
   final bool isFocusMode;
+  final String Function(String userId)? displayNameForUser;
 
   /// 말풍선 리스트 영역 높이(텍스트 약 [lines]줄 분량 + 여백).
   static double messageListHeightForLines(BuildContext context, {int lines = 3}) {
@@ -35,6 +36,7 @@ class StudyRoomChatPanel extends StatefulWidget {
     required this.selfId,
     required this.onSendMessage,
     required this.isFocusMode,
+    this.displayNameForUser,
   });
 
   @override
@@ -154,27 +156,59 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                         final isMine = msg.userId == widget.selfId;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            mainAxisAlignment:
-                                isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                          child: Column(
+                            crossAxisAlignment:
+                                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                constraints: BoxConstraints(
-                                  maxWidth: MediaQuery.of(context).size.width * 0.72,
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isMine
-                                      ? Theme.of(context).colorScheme.primaryContainer
-                                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(12),
-                                    topRight: const Radius.circular(12),
-                                    bottomLeft: isMine ? const Radius.circular(12) : Radius.zero,
-                                    bottomRight: isMine ? Radius.zero : const Radius.circular(12),
+                              if (!isMine && widget.displayNameForUser != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 2, bottom: 2),
+                                  child: Text(
+                                    widget.displayNameForUser!(msg.userId),
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                child: Text(msg.content),
+                              Row(
+                                mainAxisAlignment: isMine
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    constraints: BoxConstraints(
+                                      maxWidth:
+                                          MediaQuery.of(context).size.width * 0.72,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isMine
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primaryContainer
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .surfaceContainerHighest,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(12),
+                                        topRight: const Radius.circular(12),
+                                        bottomLeft: isMine
+                                            ? const Radius.circular(12)
+                                            : Radius.zero,
+                                        bottomRight: isMine
+                                            ? Radius.zero
+                                            : const Radius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(msg.content),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

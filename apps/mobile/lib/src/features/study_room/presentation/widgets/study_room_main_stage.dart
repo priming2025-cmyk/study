@@ -208,6 +208,7 @@ class StudyRoomMainStage extends StatelessWidget {
             ? () => showStudyRoomCelologSheet(
                   context,
                   roomId: controller.roomId,
+                  controller: controller,
                 )
             : null,
         onOpenPublicMode: () => showStudyRoomSelfPublicModeSheet(

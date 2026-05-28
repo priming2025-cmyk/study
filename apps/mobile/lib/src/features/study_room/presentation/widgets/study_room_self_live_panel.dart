@@ -13,6 +13,7 @@ import '../../../session/infra/web_camera.dart';
 import '../../infra/study_room_controller.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_self_focus_badge.dart';
+import 'study_room_group_chat_screen.dart';
 
 /// 스터디방 본인 실시간 프리뷰 — [AttentionCameraService] 단일 인스턴스 공유.
 /// 다른 탭으로 나갈 때는 카메라를 **끄지 않고** 구독만 끊습니다(공부 탭과 동일).
@@ -423,8 +424,57 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
             : incoming.userId);
     final preview = incoming?.content.trim() ?? '';
 
+    final group = controller.roomChatMessages;
+    final groupLast = group.isEmpty ? null : group.last;
+    final groupPreview = groupLast?.content.trim() ?? '';
+
     return Stack(
       children: [
+        if (onOpenDmChat != null && groupLast != null)
+          Positioned(
+            left: 8,
+            top: 8,
+            child: Material(
+              color: Colors.black.withAlpha(140),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        StudyRoomGroupChatScreen(controller: controller),
+                  ),
+                ),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.forum_outlined,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text(
+                          groupPreview.isEmpty ? '단체 채팅' : groupPreview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (incoming != null && onOpenDmChat != null)
           Positioned(
             right: 8,

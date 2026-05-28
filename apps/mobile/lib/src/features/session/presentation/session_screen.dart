@@ -20,6 +20,7 @@ import '../../study_room/infra/study_room_ambient_player.dart';
 import '../../study_room/presentation/widgets/study_room_ambient_sheet.dart';
 import '../domain/attention_scoring.dart';
 import '../infra/session_self_camera.dart';
+import '../../../core/platform/kiosk_lock.dart';
 import 'session_controller.dart';
 import 'widgets/session_settings_sheet.dart';
 import 'widgets/session_end_result_sheet.dart';
@@ -122,9 +123,11 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     if (_c.running && !_wakeLockOn) {
       _wakeLockOn = true;
       unawaited(WakelockPlus.enable());
+      unawaited(KioskLock.enableIfPossible());
     } else if (!_c.running && _wakeLockOn) {
       _wakeLockOn = false;
       unawaited(WakelockPlus.disable());
+      unawaited(KioskLock.disableIfPossible());
     }
   }
 

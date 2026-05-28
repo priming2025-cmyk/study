@@ -67,8 +67,42 @@ class StudyRoomController extends ChangeNotifier {
   List<StudyRoomMember> _members = const [];
   List<StudyRoomMember> get members => _members;
 
+  /// 셀로그 그리드 빌더용 슬롯 목록.
+  /// 자신이 맨 앞, 이후 peers를 입장 순서로 반환합니다.
+  List<({String userId, String? displayName, String? statusText})>
+      get celologMemberSlots {
+    final result =
+        <({String userId, String? displayName, String? statusText})>[];
+    final self = _selfId;
+    if (self != null) {
+      result.add((
+        userId: self,
+        displayName: displayNameFor(self),
+        statusText: _selfStatusText.trim().isEmpty ? null : _selfStatusText.trim(),
+      ));
+    }
+    for (final m in _members) {
+      if (m.userId == self) continue;
+      result.add((
+        userId: m.userId,
+        displayName: m.displayName ?? displayNameFor(m.userId),
+        statusText: m.statusText,
+      ));
+    }
+    return result;
+  }
+
   List<StudyRoomMessage> _messages = [];
   List<StudyRoomMessage> get messages => _messages;
+
+  /// 방 전체 공개 채팅 캐시 — insert 콜백마다 갱신해 필터링 오버헤드를 제거합니다.
+  List<StudyRoomMessage> _roomChatMessagesCache = [];
+  List<StudyRoomMessage> get roomChatMessages => _roomChatMessagesCache;
+
+  void _rebuildGroupChatCache() {
+    _roomChatMessagesCache =
+        _messages.where((m) => m.recipientUserId == null).toList();
+  }
 
   /// DM 스레드별 마지막 읽은 시각 (세션 내).
   final Map<String, DateTime> _dmReadAtByUser = {};
@@ -402,6 +436,7 @@ class StudyRoomController extends ChangeNotifier {
       maxPeers = (roomRow['max_peers'] as num?)?.toInt().clamp(2, 8) ?? 8;
       _selfId = userId;
       _messages = [];
+      _roomChatMessagesCache = [];
       _dmReadAtByUser.clear();
       _friendDmPreviewByUser.clear();
       _friendDmUnreadAtByUser.clear();
@@ -508,6 +543,7 @@ class StudyRoomController extends ChangeNotifier {
     _selfId = null;
     _members = const [];
     _messages = [];
+    _roomChatMessagesCache = [];
     _dmReadAtByUser.clear();
     _fixedPeerOrder.clear();
     selfSnapshotUrl = null;
@@ -599,6 +635,9 @@ class StudyRoomController extends ChangeNotifier {
       final msg = StudyRoomMessage.fromJson(row);
       if (!_messages.any((m) => m.id == msg.id)) {
         _messages.add(msg);
+        if (msg.recipientUserId == null) {
+          _roomChatMessagesCache.add(msg);
+        }
         notifyListeners();
       }
       return (ok: true, error: null);
@@ -886,6 +925,7 @@ class StudyRoomController extends ChangeNotifier {
           .order('created_at', ascending: true)
           .limit(100);
       _messages = rows.map((r) => StudyRoomMessage.fromJson(r)).toList();
+      _rebuildGroupChatCache();
       final last = _messages.isNotEmpty ? _messages.last.createdAt : null;
       if (last != null) unawaited(_touchRecentActivity(last));
       notifyListeners();
@@ -917,6 +957,9 @@ class StudyRoomController extends ChangeNotifier {
           callback: (payload) {
             final newMsg = StudyRoomMessage.fromJson(payload.newRecord);
             _messages.add(newMsg);
+            if (newMsg.recipientUserId == null) {
+              _roomChatMessagesCache.add(newMsg);
+            }
             unawaited(_touchRecentActivity(newMsg.createdAt));
             notifyListeners();
           },
@@ -1087,6 +1130,7 @@ class StudyRoomController extends ChangeNotifier {
             'recorded_at': nowUtc.toIso8601String(),
             'expires_at': nowUtc.add(const Duration(days: 1)).toIso8601String(),
             'size_bytes': bytes.length,
+            if (_selfStatusText.trim().isNotEmpty) 'status_text': _selfStatusText.trim(),
           });
         } catch (e) {
           debugPrint('[StudyRoomController] photo_snaps insert error: $e');
