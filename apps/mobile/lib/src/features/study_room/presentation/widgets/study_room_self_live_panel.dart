@@ -80,17 +80,13 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   int _engagedMinScoreForTick() => widget.engagedMinListenable.value;
 
+  /// 스트림이 살아 있으면 프리뷰 유지 (자리 이탈·신호 끊김과 무관).
   bool get _cameraActive => kIsWeb
-      ? (WebSharedCamera.instance.isStreamReady || _hasRecentSignal)
+      ? WebSharedCamera.instance.isStreamReady
       : _camera.hasActiveCamera;
 
-  bool get _sensorReadyForUi => _cameraActive;
-
-  bool get _hasRecentSignal {
-    final t = _lastSignalAt;
-    if (t == null) return false;
-    return DateTime.now().difference(t) < const Duration(seconds: 3);
-  }
+  bool get _sensorReadyForUi =>
+      kIsWeb ? WebSharedCamera.instance.isStreamReady : _camera.hasActiveCamera;
 
   void _onEngagedChanged() {
     if (mounted) setState(() {});

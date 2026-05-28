@@ -4,8 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-
+import '../../../core/platform/screen_wake_guard.dart';
 import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
 import '../../../core/study/study_activity_gate.dart';
@@ -46,8 +45,8 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
   final _controller = StudyRoomController();
   final _roomIdCtrl = TextEditingController();
   late Future<List<RecentStudyRoom>> _recentFuture;
-  bool _wakeLockOn = false;
   bool _resumePromptPending = false;
+  bool _screenWakeHeld = false;
   late final _LifecycleObserver _lifecycleObserver;
 
   late final ValueNotifier<int> _engagedMinScoreN =
@@ -68,6 +67,10 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
         final inRoom = _controller.roomId != null;
         if (!inForeground && inRoom) {
           _resumePromptPending = true;
+        }
+        if (inForeground && inRoom) {
+          unawaited(ScreenWakeGuard.refreshIfHeld());
+          unawaited(KioskLock.enableIfPossible());
         }
         if (inForeground && _resumePromptPending && inRoom) {
           _resumePromptPending = false;
@@ -106,9 +109,10 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       ..removeListener(_onChanged)
       ..dispose();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
-    if (_wakeLockOn) {
-      _wakeLockOn = false;
-      unawaited(WakelockPlus.disable());
+    if (_screenWakeHeld) {
+      _screenWakeHeld = false;
+      unawaited(ScreenWakeGuard.release());
+      unawaited(KioskLock.disableIfPossible());
     }
     _roomIdCtrl.dispose();
     _engagedMinScoreN.dispose();
@@ -117,23 +121,26 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     super.dispose();
   }
 
+  void _syncScreenWake() {
+    final inRoom = _controller.roomId != null;
+    if (inRoom == _screenWakeHeld) return;
+    _screenWakeHeld = inRoom;
+    if (inRoom) {
+      unawaited(ScreenWakeGuard.acquire());
+      unawaited(KioskLock.enableIfPossible());
+    } else {
+      unawaited(ScreenWakeGuard.release());
+      unawaited(KioskLock.disableIfPossible());
+    }
+  }
+
   void _onChanged() {
     if (mounted) {
       setState(() {});
       ref.read(studyRoomInRoomProvider.notifier).state = _controller.roomId != null;
       unawaited(StudyActivityGate.setInStudyRoom(_controller.roomId != null));
 
-      // 방에 있는 동안 화면 꺼짐 방지 (자리이탈이어도 타이머는 계속)
-      final inRoom = _controller.roomId != null;
-      if (inRoom && !_wakeLockOn) {
-        _wakeLockOn = true;
-        unawaited(WakelockPlus.enable());
-        unawaited(KioskLock.enableIfPossible());
-      } else if (!inRoom && _wakeLockOn) {
-        _wakeLockOn = false;
-        unawaited(WakelockPlus.disable());
-        unawaited(KioskLock.disableIfPossible());
-      }
+      _syncScreenWake();
 
       final selfId = _controller.selfId;
       if (selfId != null) {

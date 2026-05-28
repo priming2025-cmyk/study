@@ -1,27 +1,79 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../infra/study_room_join_link.dart';
 import '../../../../core/widgets/share_message_channels.dart';
 
-/// 셋터디 참여 초대 — 텍스트 공유 스타일.
+/// 셋터디 방 초대 — OS 공유 시트로 바로 공유.
+abstract final class StudyRoomInviteShare {
+  static Rect? _shareOrigin(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  /// 중간 시트 없이 바로 카카오/메시지 등 OS 공유.
+  static Future<void> share(
+    BuildContext context, {
+    required String joinCode,
+    String? goalText,
+  }) async {
+    final code = joinCode.trim();
+    if (code.isEmpty) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('입장코드가 없어요. 방에 입장한 뒤 다시 시도해 주세요.')),
+      );
+      return;
+    }
+
+    final message = studyRoomInviteMessage(joinCode: code, goalText: goalText);
+    if (message.trim().isEmpty) return;
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: message,
+          subject: '셋터디 초대',
+          sharePositionOrigin: _shareOrigin(context),
+        ),
+      );
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: message));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('초대 메시지가 복사됐어요')),
+      );
+    }
+  }
+}
+
+/// 셋터디 참여 초대 (상세 미리보기가 필요할 때만 시트).
 class StudyRoomInviteSheet extends StatelessWidget {
   final String joinCode;
   final String? goalText;
-  final bool shareOnly;
 
   const StudyRoomInviteSheet({
     super.key,
     required this.joinCode,
     this.goalText,
-    this.shareOnly = false,
   });
 
+  /// [shareOnly] true → OS 공유 시트를 바로 엽니다 (친구초대 1탭).
   static Future<void> show(
     BuildContext context, {
     required String joinCode,
     String? goalText,
     bool shareOnly = false,
   }) {
+    if (shareOnly) {
+      return StudyRoomInviteShare.share(
+        context,
+        joinCode: joinCode,
+        goalText: goalText,
+      );
+    }
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -29,7 +81,6 @@ class StudyRoomInviteSheet extends StatelessWidget {
       builder: (_) => StudyRoomInviteSheet(
         joinCode: joinCode,
         goalText: goalText,
-        shareOnly: shareOnly,
       ),
     );
   }

@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../infra/web_shared_camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
+import '../../../core/platform/screen_wake_guard.dart';
 
 import '../../../core/providers/core_providers.dart';
 import '../../../core/providers/shell_branch_index_provider.dart';
@@ -42,8 +42,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   bool _autoStarted = false;
   bool _autoStartOpenedAddSheet = false;
   int _subjectReloadToken = 0;
-  bool _wakeLockOn = false;
   bool _resumePromptPending = false;
+  bool _screenWakeHeld = false;
 
   @override
   void initState() {
@@ -57,6 +57,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         _c.appInForeground = inForeground;
         if (!inForeground && _c.running) {
           _resumePromptPending = true;
+        }
+        if (inForeground && _c.running) {
+          unawaited(ScreenWakeGuard.refreshIfHeld());
+          unawaited(KioskLock.enableIfPossible());
         }
         if (inForeground && _resumePromptPending && _c.running) {
           _resumePromptPending = false;
@@ -76,9 +80,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     _c.dispose();
     _ambientPlayer.dispose();
     WidgetsBinding.instance.removeObserver(_lifecycleObserver);
-    if (_wakeLockOn) {
-      _wakeLockOn = false;
-      unawaited(WakelockPlus.disable());
+    if (_screenWakeHeld) {
+      _screenWakeHeld = false;
+      unawaited(ScreenWakeGuard.release());
+      unawaited(KioskLock.disableIfPossible());
     }
     super.dispose();
   }
@@ -120,13 +125,14 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     unawaited(StudyActivityGate.setSessionRunning(_c.running));
 
     // 세션 실행 중 화면 꺼짐 방지 (자리 이탈이어도 시간은 체크)
-    if (_c.running && !_wakeLockOn) {
-      _wakeLockOn = true;
-      unawaited(WakelockPlus.enable());
+    final running = _c.running;
+    if (running == _screenWakeHeld) return;
+    _screenWakeHeld = running;
+    if (running) {
+      unawaited(ScreenWakeGuard.acquire());
       unawaited(KioskLock.enableIfPossible());
-    } else if (!_c.running && _wakeLockOn) {
-      _wakeLockOn = false;
-      unawaited(WakelockPlus.disable());
+    } else {
+      unawaited(ScreenWakeGuard.release());
       unawaited(KioskLock.disableIfPossible());
     }
   }
