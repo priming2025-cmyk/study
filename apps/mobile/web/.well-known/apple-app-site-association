@@ -3,7 +3,7 @@
     "apps": [],
     "details": [
       {
-        "appID": "PLACEHOLDER.com.studyup.student",
+        "appID": "TEAMID_REPLACE_ME.com.studyup.student",
         "paths": [
           "/room/join",
           "/room/join/*",
