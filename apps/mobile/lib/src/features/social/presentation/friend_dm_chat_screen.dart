@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../data/friend_dm_providers.dart';
 import '../domain/friend_dm_models.dart';
+import 'widgets/dm_kakao_message_row.dart';
 
 /// 인스타 DM형 친구 1:1 채팅 전용 화면.
 class FriendDmChatScreen extends ConsumerStatefulWidget {
   final String peerId;
   final String peerDisplayName;
+  final String? peerAvatarUrl;
 
   const FriendDmChatScreen({
     super.key,
     required this.peerId,
     required this.peerDisplayName,
+    this.peerAvatarUrl,
   });
 
   @override
@@ -110,16 +114,31 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
   Future<void> _send([String? preset]) async {
     final text = (preset ?? _textCtrl.text).trim();
     if (text.isEmpty || _sending) return;
+    await _sendPayload(content: text);
+    if (preset == null) _textCtrl.clear();
+  }
+
+  Future<void> _sendPayload({
+    String content = '',
+    String? attachmentUrl,
+    String? attachmentType,
+  }) async {
+    if (_sending) return;
+    if (content.trim().isEmpty &&
+        (attachmentUrl == null || attachmentUrl.isEmpty)) {
+      return;
+    }
 
     setState(() => _sending = true);
     HapticFeedback.lightImpact();
     try {
       final sent = await ref.read(friendDmRepositoryProvider).sendMessage(
             peerId: widget.peerId,
-            content: text,
+            content: content,
             replyToMessageId: _replyingTo?.id,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentType,
           );
-      if (preset == null) _textCtrl.clear();
       if (mounted) {
         setState(() {
           _replyingTo = null;
@@ -133,7 +152,39 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
       if (mounted) {
         setState(() => _sending = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('전송에 실패했어요. 친구 관계·네트워크를 확인해 주세요.\n$e')),
+          SnackBar(content: Text('전송에 실패했어요.\n$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 82,
+    );
+    if (file == null) return;
+    setState(() => _sending = true);
+    try {
+      final bytes = await file.readAsBytes();
+      final repo = ref.read(friendDmRepositoryProvider);
+      final url = await repo.uploadAttachment(
+        bytes: bytes,
+        fileName: file.name,
+        mimeType: 'image/jpeg',
+      );
+      await _sendPayload(
+        content: _textCtrl.text.trim(),
+        attachmentUrl: url,
+        attachmentType: 'image',
+      );
+      _textCtrl.clear();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('사진을 보내지 못했어요: $e')),
         );
       }
     }
@@ -168,15 +219,22 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: cs.secondaryContainer,
-              child: Text(
-                widget.peerDisplayName.isNotEmpty
-                    ? widget.peerDisplayName[0].toUpperCase()
-                    : '?',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onSecondaryContainer,
-                ),
-              ),
+              backgroundImage: (widget.peerAvatarUrl != null &&
+                      widget.peerAvatarUrl!.isNotEmpty)
+                  ? NetworkImage(widget.peerAvatarUrl!)
+                  : null,
+              child: (widget.peerAvatarUrl == null ||
+                      widget.peerAvatarUrl!.isEmpty)
+                  ? Text(
+                      widget.peerDisplayName.isNotEmpty
+                          ? widget.peerDisplayName[0].toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSecondaryContainer,
+                      ),
+                    )
+                  : null,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -255,11 +313,18 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
                                   if (!mounted) return;
                                   setState(() => _replyingTo = msg);
                                 },
-                                child: _Bubble(
-                                  text: msg.content,
-                                  time: _formatTime(msg.createdAt),
+                                child: DmKakaoMessageRow(
                                   isMine: isMine,
-                                  replyPreviewText: replyPreviewText,
+                                  peerName: widget.peerDisplayName,
+                                  peerAvatarUrl: widget.peerAvatarUrl,
+                                  text: msg.attachmentType == 'file'
+                                      ? '${msg.content}\n📎 파일'
+                                      : msg.content,
+                                  time: _formatTime(msg.createdAt),
+                                  imageUrl: msg.attachmentType == 'image'
+                                      ? msg.attachmentUrl
+                                      : null,
+                                  replyPreview: replyPreviewText,
                                 ),
                               ),
                             ],
@@ -339,6 +404,11 @@ class _FriendDmChatScreenState extends ConsumerState<FriendDmChatScreen> {
               ),
               child: Row(
                 children: [
+                  IconButton(
+                    onPressed: _sending ? null : _pickImage,
+                    icon: const Icon(Icons.image_outlined),
+                    tooltip: '사진',
+                  ),
                   Expanded(
                     child: TextField(
                       controller: _textCtrl,
@@ -433,98 +503,3 @@ class _EmptyChat extends StatelessWidget {
   }
 }
 
-class _Bubble extends StatelessWidget {
-  final String text;
-  final String time;
-  final bool isMine;
-  final String? replyPreviewText;
-
-  const _Bubble({
-    required this.text,
-    required this.time,
-    required this.isMine,
-    this.replyPreviewText,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: 8,
-        left: isMine ? 48 : 0,
-        right: isMine ? 0 : 48,
-      ),
-      child: Column(
-        crossAxisAlignment:
-            isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          if (replyPreviewText != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                constraints: const BoxConstraints(maxWidth: 240),
-                decoration: BoxDecoration(
-                  color: isMine
-                      ? cs.primary.withAlpha(60)
-                      : cs.onSurfaceVariant.withAlpha(35),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '답장: $replyPreviewText',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.labelSmall?.copyWith(
-                    color: isMine ? cs.onPrimary : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              gradient: isMine
-                  ? LinearGradient(
-                      colors: [cs.primary, cs.primary.withAlpha(220)],
-                    )
-                  : null,
-              color: isMine ? null : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: Radius.circular(isMine ? 18 : 4),
-                bottomRight: Radius.circular(isMine ? 4 : 18),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(isMine ? 18 : 8),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Text(
-              text,
-              style: tt.bodyMedium?.copyWith(
-                color: isMine ? cs.onPrimary : cs.onSurface,
-                height: 1.35,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            time,
-            style: tt.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-              fontSize: 10,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

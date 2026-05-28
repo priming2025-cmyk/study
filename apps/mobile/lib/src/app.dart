@@ -24,6 +24,8 @@ import 'features/motivation/presentation/social_hub_screen.dart';
 import 'features/plan/presentation/plan_editor_screen.dart';
 import 'features/session/presentation/session_screen.dart';
 import 'features/stats/presentation/stats_screen.dart';
+import 'features/study_room/domain/study_room_join_code.dart';
+import 'features/study_room/infra/pending_study_room_join.dart';
 import 'features/study_room/presentation/study_room_screen.dart';
 import 'shell/app_shell.dart';
 
@@ -65,6 +67,19 @@ final _routerProvider = Provider<GoRouter>((ref) {
       const skipLoginGate =
           kDebugMode && AuthFeatureFlags.devBypassAuthGate;
       if (!authed && !skipLoginGate && !onAuthScreen && !themeLab && !legal) {
+        final rawJoin = state.uri.queryParameters['join'] ??
+            state.uri.queryParameters['code'];
+        if (rawJoin != null && rawJoin.trim().isNotEmpty) {
+          final code = normalizeJoinCode(rawJoin);
+          if (code.isNotEmpty) {
+            PendingStudyRoomJoin.save(code);
+          }
+        } else if (loc == '/room/join') {
+          final code = state.uri.queryParameters['code'];
+          if (code != null && code.trim().isNotEmpty) {
+            PendingStudyRoomJoin.save(normalizeJoinCode(code));
+          }
+        }
         return '/login';
       }
       if (authed && onAuthScreen) return '/session';

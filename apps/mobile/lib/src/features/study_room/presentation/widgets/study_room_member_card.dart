@@ -31,10 +31,10 @@ class StudyRoomMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final showSnapshot = member.publicViewerMode != 'rest' &&
-        member.snapshotUrl != null &&
-        member.snapshotUrl!.isNotEmpty;
-    final snapshotUrl = showSnapshot ? member.snapshotUrl : null;
+    final snapshotUrl = (member.snapshotUrl != null &&
+            member.snapshotUrl!.isNotEmpty)
+        ? member.snapshotUrl
+        : null;
     final displayLabel = () {
       final n = member.displayName?.trim();
       if (n != null && n.isNotEmpty) return n;

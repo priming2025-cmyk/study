@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 
 import '../../features/social/infra/pending_friend_invite.dart';
+import '../../features/study_room/infra/pending_study_room_join.dart';
 import '../../features/study_room/domain/study_room_join_code.dart';
 
 bool _bound = false;
@@ -36,6 +37,7 @@ void _routeDeepLink(GoRouter router, Uri uri) {
   if (rawJoin != null && rawJoin.trim().isNotEmpty) {
     final code = normalizeJoinCode(rawJoin);
     if (code.isEmpty) return;
+    unawaited(PendingStudyRoomJoin.save(code));
     router.go('/room?join=${Uri.encodeComponent(code)}');
     return;
   }

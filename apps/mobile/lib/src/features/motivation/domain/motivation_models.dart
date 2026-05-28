@@ -84,11 +84,13 @@ class FriendRequestSendResult {
 class MyProfileSummary {
   final String? displayName;
   final String? email;
+  final String? avatarUrl;
   final ProfileRpgSummary? rpg;
 
   const MyProfileSummary({
     this.displayName,
     this.email,
+    this.avatarUrl,
     this.rpg,
   });
 }

@@ -11,6 +11,7 @@ import '../../../core/study/study_activity_gate.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
 import '../../social/infra/pending_friend_invite.dart';
+import '../infra/pending_study_room_join.dart';
 import '../../../core/widgets/sheet_header_bar.dart';
 import '../../session/data/session_repository.dart';
 import '../../session/domain/engaged_time_threshold.dart';
@@ -23,6 +24,7 @@ import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
 import '../../social/presentation/friend_dm_listener.dart';
+import 'widgets/study_room_dm_chat_screen.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
@@ -60,6 +62,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
       final params = GoRouterState.of(context).uri.queryParameters;
       final linkCode = params['join'];
       if (linkCode != null && linkCode.trim().isNotEmpty) {
+        unawaited(PendingStudyRoomJoin.save(linkCode.trim()));
         unawaited(_joinFromInviteLink(linkCode.trim()));
       } else if (widget.quickJoin) {
         unawaited(_quickJoinRecent());
@@ -113,18 +116,23 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     }
   }
 
-  void _openDmChat(String peerUserId) {
+  Future<void> _openDmChat(String peerUserId) async {
+    final rid = _controller.roomId;
+    if (rid != null) {
+      await _controller.ensureRoomMatesFriends();
+    }
     final name = _controller.displayNameFor(peerUserId)?.trim();
     final label = (name != null && name.isNotEmpty)
         ? name
         : (peerUserId.length > 8 ? peerUserId.substring(0, 8) : peerUserId);
 
-    // 친구 DM(저장·답장) 우선 — 방 메시지 RLS 이슈를 피합니다.
+    if (!mounted) return;
     openFriendDmChat(
       context,
       ref,
       peerId: peerUserId,
       peerDisplayName: label,
+      peerAvatarUrl: _controller.avatarUrlFor(peerUserId),
     );
   }
 

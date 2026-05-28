@@ -9,6 +9,7 @@ import '../../session/domain/wallet_balances.dart';
 import '../data/daily_focus_stat.dart';
 import 'dream_city_screen.dart';
 import 'widgets/city_progress_card.dart';
+import 'widgets/profile_avatar_editor.dart';
 import 'widgets/profile_name_editor.dart';
 import 'widgets/weekly_focus_chart.dart';
 
@@ -168,6 +169,13 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        ProfileAvatarEditor(
+                          initialAvatarUrl: p.profile?.avatarUrl,
+                          displayNameFallback:
+                              p.profile?.displayName?.trim() ?? '나',
+                          onSaved: _onRefresh,
+                        ),
+                        const SizedBox(height: 16),
                         Text(
                           '이름',
                           style: Theme.of(context).textTheme.labelMedium?.copyWith(

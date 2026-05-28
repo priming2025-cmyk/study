@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../core/supabase/supabase_client.dart';
 import '../domain/motivation_models.dart';
 
@@ -238,15 +242,38 @@ class MotivationRepository {
     if (uid == null) return null;
     final row = await supabase
         .from('profiles')
-        .select('display_name')
+        .select('display_name, avatar_url')
         .eq('id', uid)
         .maybeSingle();
     final rpg = await fetchMyProfileRpg();
     return MyProfileSummary(
       displayName: row?['display_name'] as String?,
       email: supabase.auth.currentUser?.email,
+      avatarUrl: (row?['avatar_url'] as String?)?.trim(),
       rpg: rpg,
     );
+  }
+
+  Future<String?> uploadAvatarBytes(List<int> bytes, {String mime = 'image/jpeg'}) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) return '로그인이 필요해요';
+    try {
+      final path = '$uid/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final data = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+      await supabase.storage.from('study-snapshots').uploadBinary(
+            'avatars/$path',
+            data,
+            fileOptions: FileOptions(contentType: mime, upsert: true),
+          );
+      final url = supabase.storage.from('study-snapshots').getPublicUrl('avatars/$path');
+      await supabase.from('profiles').update({
+        'avatar_url': url,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', uid);
+      return null;
+    } catch (e) {
+      return '프로필 사진 저장 실패: $e';
+    }
   }
 
   Future<String?> updateDisplayName(String name) async {

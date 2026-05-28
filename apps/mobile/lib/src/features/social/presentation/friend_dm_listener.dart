@@ -95,6 +95,7 @@ void openFriendDmChat(
   WidgetRef ref, {
   required String peerId,
   required String peerDisplayName,
+  String? peerAvatarUrl,
 }) {
   ref.read(friendDmActivePeerProvider.notifier).state = peerId;
   Navigator.of(context)
@@ -103,6 +104,7 @@ void openFriendDmChat(
           builder: (_) => FriendDmChatScreen(
             peerId: peerId,
             peerDisplayName: peerDisplayName,
+            peerAvatarUrl: peerAvatarUrl,
           ),
         ),
       )

@@ -238,6 +238,46 @@ class FaceAttentionSensor {
     }
   }
 
+  /// 2.5초 MP4 원본 녹화 (이미지 스트림 일시 중지).
+  Future<String?> captureStudyClipPath() async {
+    if (!_running) return null;
+    final c = _controller;
+    final cam = _activeCam;
+    final appFg = _activeAppInForeground;
+    final gen = _activeStreamGeneration;
+    if (c == null || cam == null || appFg == null || !c.value.isInitialized) {
+      return null;
+    }
+    if (c.value.isRecordingVideo) return null;
+
+    final wasStreaming = c.value.isStreamingImages;
+    try {
+      if (wasStreaming) {
+        await c.stopImageStream();
+        if (Platform.isIOS) {
+          await Future<void>.delayed(const Duration(milliseconds: 280));
+        }
+      }
+      await c.startVideoRecording();
+      await Future<void>.delayed(
+        const Duration(milliseconds: 2600),
+      );
+      final xfile = await c.stopVideoRecording();
+      return xfile.path;
+    } catch (e) {
+      debugPrint('FaceAttentionSensor: captureStudyClipPath → $e');
+      return null;
+    } finally {
+      if (wasStreaming && _running && gen == _streamGeneration && c == _controller) {
+        try {
+          await _bindImageStream(cam: cam, appInForeground: appFg, gen: gen);
+        } catch (e) {
+          debugPrint('FaceAttentionSensor: resume stream after clip → $e');
+        }
+      }
+    }
+  }
+
   Future<List<Face>> _detectAndroid({
     required CameraImage image,
     required CameraDescription cam,

@@ -15,6 +15,8 @@ import '../domain/study_room_default_name.dart';
 import '../domain/study_room_join_code.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
+import 'room_video_recorder.dart';
+import 'study_video_clip_uploader.dart';
 import 'study_room_ambient_player.dart';
 import 'study_room_recent_room.dart';
 
@@ -27,9 +29,7 @@ class StudyRoomCreated {
 
 const _snapshotBucket = 'study-snapshots';
 const _captureInterval = Duration(minutes: 1);
-const _videoInterval = Duration(minutes: 10);
-const _videoBurstFrames = 4;
-const _videoBurstStep = Duration(milliseconds: 500);
+const _videoHourSlots = [0, 10, 20, 30, 40, 50];
 
 class _ReactionEntry {
   final StudyRoomReactionOverlay overlay;
@@ -42,6 +42,7 @@ class StudyRoomController extends ChangeNotifier {
   StudyRoomController() : _ambient = StudyRoomAmbientPlayer();
 
   final RoomSnapshot _snapshot = RoomSnapshot();
+  final RoomVideoRecorder _videoRecorder = RoomVideoRecorder();
   final StudyRoomAmbientPlayer _ambient;
 
   String? roomId;
@@ -113,6 +114,7 @@ class StudyRoomController extends ChangeNotifier {
   RealtimeChannel? _presenceChannel;
   RealtimeChannel? _messageChannel;
   Timer? _snapshotTimer;
+  Timer? _videoSlotTimer;
   bool _snapshotInitialized = false;
 
   String _selfGoalText = '';
@@ -120,7 +122,9 @@ class StudyRoomController extends ChangeNotifier {
   String _selfStatus = 'focus';
   String? _selfSubjectName;
   String? _selfDisplayName;
+  String? _selfAvatarUrl;
   final Map<String, String> _displayNameByUserId = {};
+  final Map<String, String> _avatarUrlByUserId = {};
 
   int _selfPublicLevel = 1;
   String? _selfPublicTitleKo;
@@ -409,6 +413,7 @@ class StudyRoomController extends ChangeNotifier {
         snapshotUrl: '',
       );
       unawaited(_finishJoinSnapshot(roomId: resolvedId, userId: userId));
+      unawaited(ensureRoomMatesFriends());
       webSelfCamEpoch++;
       return true;
     } catch (e) {
@@ -463,6 +468,8 @@ class StudyRoomController extends ChangeNotifier {
     cancelFocusTracking();
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
+    _videoSlotTimer?.cancel();
+    _videoSlotTimer = null;
 
     for (final e in _reactions.values) {
       e.timer.cancel();
@@ -497,6 +504,7 @@ class StudyRoomController extends ChangeNotifier {
     await _leavePresence();
     try {
       await _snapshot.dispose();
+      await _videoRecorder.dispose();
     } catch (_) {}
     _snapshotInitialized = false;
     await releaseSharedCameraMedia();
@@ -514,6 +522,7 @@ class StudyRoomController extends ChangeNotifier {
     await leave();
     await _ambient.dispose();
     await _snapshot.dispose();
+    await _videoRecorder.dispose();
   }
 
   // ── 메시지 ─────────────────────────────────────────────────────────────────
@@ -638,13 +647,41 @@ class StudyRoomController extends ChangeNotifier {
     _selfPublicViewerMode = m;
     if (m == 'rest') {
       _selfStatus = 'rest';
-      selfSnapshotUrl = null;
+      await _applyRestProfilePresence();
     } else {
       _selfStatus = 'focus';
+      _restartSnapshotTimer();
     }
     notifyListeners();
-    await _trackSelfFull(snapshotUrl: m == 'rest' ? '' : null);
-    _restartSnapshotTimer();
+  }
+
+  Future<void> _applyRestProfilePresence() async {
+    _snapshotTimer?.cancel();
+    _snapshotTimer = null;
+    _videoSlotTimer?.cancel();
+    _videoSlotTimer = null;
+    final avatar = _selfAvatarUrl ?? '';
+    selfSnapshotUrl = avatar.isNotEmpty ? avatar : null;
+    await _trackSelfFull(snapshotUrl: avatar);
+    notifyListeners();
+  }
+
+  String? avatarUrlFor(String userId) {
+    if (userId == _selfId) return _selfAvatarUrl;
+    return _avatarUrlByUserId[userId];
+  }
+
+  Future<void> ensureRoomMatesFriends() async {
+    final rid = roomId;
+    if (rid == null) return;
+    try {
+      await supabase.rpc(
+        'ensure_study_room_mates_friends',
+        params: {'p_room_id': rid},
+      );
+    } catch (e) {
+      debugPrint('[StudyRoomController] ensureRoomMatesFriends: $e');
+    }
   }
 
   String? displayNameFor(String userId) {
@@ -713,6 +750,7 @@ class StudyRoomController extends ChangeNotifier {
     final payload = <String, dynamic>{
       'user_id': uid,
       'display_name': _selfDisplayName ?? '',
+      'avatar_url': _selfAvatarUrl ?? '',
       'snapshot_url': snap,
       'snapshot_at': DateTime.now().toUtc().toIso8601String(),
       'status': _selfPublicViewerMode == 'rest' ? 'rest' : _selfStatus,
@@ -820,56 +858,121 @@ class StudyRoomController extends ChangeNotifier {
     if (rid == null || uid == null) return;
 
     if (_selfPublicViewerMode == 'rest') {
-      selfSnapshotUrl = null;
-      unawaited(_trackSelfFull(snapshotUrl: ''));
+      unawaited(_applyRestProfilePresence());
       return;
     }
 
-    final interval =
-        _selfPublicViewerMode == 'video' ? _videoInterval : _captureInterval;
+    if (_selfPublicViewerMode == 'video') {
+      _videoSlotTimer?.cancel();
+      unawaited(_captureVideoSlot(roomId: rid, userId: uid));
+      _scheduleNextVideoSlot(roomId: rid, userId: uid);
+      return;
+    }
+
+    _videoSlotTimer?.cancel();
 
     Future<void> tick() async {
-      if (this.roomId != rid || _selfId != uid) return;
-      if (_selfPublicViewerMode == 'rest') return;
-      if (_selfPublicViewerMode == 'video') {
-        final url = await _uploadVideoBurst(roomId: rid, userId: uid);
-        if (url != null) {
-          selfSnapshotUrl = url;
-          await _trackSelfFull(snapshotUrl: url);
-          notifyListeners();
-        }
-      } else {
-        final url = await _uploadSnapshot(roomId: rid, userId: uid);
-        if (url != null) {
-          selfSnapshotUrl = url;
-          await _trackSelfFull(snapshotUrl: url);
-          notifyListeners();
-        }
+      if (roomId != rid || _selfId != uid) return;
+      if (_selfPublicViewerMode != 'capture') return;
+      final url = await _uploadSnapshot(roomId: rid, userId: uid);
+      if (url != null) {
+        selfSnapshotUrl = url;
+        await _trackSelfFull(snapshotUrl: url);
+        notifyListeners();
       }
     }
 
     unawaited(tick());
-    _snapshotTimer = Timer.periodic(interval, (_) => unawaited(tick()));
+    _snapshotTimer = Timer.periodic(_captureInterval, (_) => unawaited(tick()));
   }
 
-  /// 10분마다: 약 2초간 연속 캡처 후 마지막 프레임을 스냅샷으로 업로드.
-  Future<String?> _uploadVideoBurst({
+  Duration _delayUntilNextVideoSlot() {
+    final now = DateTime.now();
+    for (final slot in _videoHourSlots) {
+      if (now.minute < slot || (now.minute == slot && now.second < 5)) {
+        final next = DateTime(now.year, now.month, now.day, now.hour, slot);
+        final d = next.difference(now);
+        if (d.inSeconds > 0) return d;
+      }
+    }
+    final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1, 0);
+    return nextHour.difference(now);
+  }
+
+  void _scheduleNextVideoSlot({required String roomId, required String userId}) {
+    _videoSlotTimer?.cancel();
+    if (_selfPublicViewerMode != 'video') return;
+    final delay = _delayUntilNextVideoSlot();
+    _videoSlotTimer = Timer(delay, () {
+      if (this.roomId != roomId || _selfId != userId) return;
+      if (_selfPublicViewerMode != 'video') return;
+      unawaited(_captureVideoSlot(roomId: roomId, userId: userId));
+      _scheduleNextVideoSlot(roomId: roomId, userId: userId);
+    });
+  }
+
+  Future<void> _captureVideoSlot({
     required String roomId,
     required String userId,
   }) async {
-    String? lastUrl;
-    for (var i = 0; i < _videoBurstFrames; i++) {
-      if (this.roomId != roomId) break;
-      lastUrl = await _uploadSnapshot(
+    if (this.roomId != roomId || _selfId != userId) return;
+    try {
+      final clip = await _videoRecorder.captureCompressedClip();
+      if (clip == null) return;
+
+      final uploaded = await StudyVideoClipUploader.upload(
         roomId: roomId,
         userId: userId,
-        suffix: 'v${DateTime.now().millisecondsSinceEpoch}_$i',
+        clip: clip,
       );
-      if (i < _videoBurstFrames - 1) {
-        await Future<void>.delayed(_videoBurstStep);
-      }
+      if (uploaded == null) return;
+
+      final presenceUrl = uploaded.posterUrl ?? uploaded.publicUrl;
+      selfSnapshotUrl = presenceUrl;
+      await _trackSelfFull(snapshotUrl: presenceUrl);
+
+      await _recordVideoClip(
+        roomId: roomId,
+        userId: userId,
+        storagePath: uploaded.storagePath,
+        publicUrl: uploaded.publicUrl,
+        posterUrl: uploaded.posterUrl,
+        mimeType: uploaded.mimeType,
+        sizeBytes: uploaded.sizeBytes,
+        durationMs: clip.durationMs,
+      );
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('[StudyRoomController] captureVideoSlot: $e\n$st');
     }
-    return lastUrl;
+  }
+
+  Future<void> _recordVideoClip({
+    required String roomId,
+    required String userId,
+    required String storagePath,
+    required String publicUrl,
+    String? posterUrl,
+    required String mimeType,
+    required int sizeBytes,
+    required int durationMs,
+  }) async {
+    try {
+      await supabase.from('study_room_video_clips').insert({
+        'room_id': roomId,
+        'user_id': userId,
+        'storage_path': storagePath,
+        'public_url': publicUrl,
+        'poster_url': posterUrl,
+        'mime_type': mimeType,
+        'size_bytes': sizeBytes,
+        'duration_ms': durationMs,
+        'expires_at':
+            DateTime.now().toUtc().add(const Duration(days: 1)).toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[StudyRoomController] recordVideoClip: $e');
+    }
   }
 
   Future<String?> _uploadSnapshot({
@@ -1030,20 +1133,28 @@ class StudyRoomController extends ChangeNotifier {
 
   Future<void> _hydrateMemberDisplayNames(Iterable<String> userIds) async {
     final missing = userIds
-        .where((id) => !_displayNameByUserId.containsKey(id))
+        .where(
+          (id) =>
+              !_displayNameByUserId.containsKey(id) ||
+              !_avatarUrlByUserId.containsKey(id),
+        )
         .toSet()
         .toList();
     if (missing.isEmpty) return;
     try {
       final rows = await supabase
           .from('profiles')
-          .select('id, display_name')
+          .select('id, display_name, avatar_url')
           .inFilter('id', missing);
       for (final row in rows) {
         final id = row['id'] as String?;
         final name = (row['display_name'] as String?)?.trim();
         if (id != null && name != null && name.isNotEmpty) {
           _displayNameByUserId[id] = name;
+        }
+        final av = (row['avatar_url'] as String?)?.trim();
+        if (id != null && av != null && av.isNotEmpty) {
+          _avatarUrlByUserId[id] = av;
         }
       }
       if (_members.isEmpty) return;
@@ -1052,7 +1163,9 @@ class StudyRoomController extends ChangeNotifier {
             (m) => StudyRoomMember(
               userId: m.userId,
               displayName: m.displayName ?? _displayNameByUserId[m.userId],
-              snapshotUrl: m.snapshotUrl,
+              snapshotUrl: m.publicViewerMode == 'rest'
+                  ? (_avatarUrlByUserId[m.userId] ?? m.snapshotUrl)
+                  : m.snapshotUrl,
               snapshotAt: m.snapshotAt,
               status: m.status,
               focusScore: m.focusScore,
@@ -1100,7 +1213,7 @@ class StudyRoomController extends ChangeNotifier {
     try {
       final row = await supabase
           .from('profiles')
-          .select('level, equipped_title_id, display_name')
+          .select('level, equipped_title_id, display_name, avatar_url')
           .eq('id', uid)
           .maybeSingle();
       if (row == null) return;
@@ -1108,6 +1221,11 @@ class StudyRoomController extends ChangeNotifier {
       if (dn != null && dn.isNotEmpty) {
         _selfDisplayName = dn;
         _displayNameByUserId[uid] = dn;
+      }
+      final av = (row['avatar_url'] as String?)?.trim();
+      if (av != null && av.isNotEmpty) {
+        _selfAvatarUrl = av;
+        _avatarUrlByUserId[uid] = av;
       }
       _selfPublicLevel = ((row['level'] ?? 1) as num).toInt();
       final tid = row['equipped_title_id'] as String?;

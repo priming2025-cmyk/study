@@ -3,9 +3,11 @@
 import 'dart:async';
 import 'dart:convert' show base64Decode;
 import 'dart:html' as html;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
+import '../../study_room/domain/study_video_clip_config.dart';
 import 'web_face_detector_holder.dart';
 
 /// 웹 전체에서 **카메라 스트림 1개**만 사용 (공부탭·셋터디·스냅샷 공유).
@@ -222,5 +224,67 @@ final class WebSharedCamera {
     final comma = dataUrl.indexOf(',');
     if (comma < 0 || comma >= dataUrl.length - 1) return null;
     return Uint8List.fromList(base64Decode(dataUrl.substring(comma + 1)));
+  }
+
+  /// 2.5초 WebM (VP8·무음·저비트레이트) — 업로드 후 서버 24h 보관.
+  Future<Uint8List?> recordWebmClip({
+    Duration duration = StudyVideoClipConfig.recordDuration,
+  }) async {
+    final stream = _stream;
+    if (stream == null || !isStreamReady) return null;
+
+    final candidates = <String>[
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+    String? mime;
+    for (final c in candidates) {
+      if (html.MediaRecorder.isTypeSupported(c)) {
+        mime = c;
+        break;
+      }
+    }
+    mime ??= 'video/webm';
+
+    final recorder = html.MediaRecorder(
+      stream,
+      {
+        'mimeType': mime,
+        'videoBitsPerSecond': StudyVideoClipConfig.webVideoBitsPerSecond,
+      },
+    );
+
+    final chunks = <html.Blob>[];
+    final done = Completer<void>();
+    recorder.addEventListener('dataavailable', (event) {
+      final blob = (event as html.BlobEvent).data;
+      if (blob != null && blob.size > 0) chunks.add(blob);
+    });
+    recorder.addEventListener('stop', (_) {
+      if (!done.isCompleted) done.complete();
+    });
+
+    recorder.start(200);
+    await Future<void>.delayed(duration);
+    recorder.stop();
+    await done.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () {},
+    );
+
+    if (chunks.isEmpty) return null;
+    final blob = html.Blob(chunks, mime);
+    final reader = html.FileReader();
+    final bytesDone = Completer<Uint8List?>();
+    reader.onLoadEnd.listen((_) {
+      final result = reader.result;
+      if (result is ByteBuffer) {
+        bytesDone.complete(Uint8List.view(result));
+      } else {
+        bytesDone.complete(null);
+      }
+    });
+    reader.readAsArrayBuffer(blob);
+    return bytesDone.future.timeout(const Duration(seconds: 12));
   }
 }

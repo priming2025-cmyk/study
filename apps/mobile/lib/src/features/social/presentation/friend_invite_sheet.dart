@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/supabase/supabase_client.dart';
-import '../../../core/widgets/sheet_header_bar.dart';
-import '../../../core/widgets/share_message_channels.dart';
 import '../infra/friend_invite_link.dart';
+import '../../../core/widgets/share_message_channels.dart';
 
-/// 카카오톡·인스타 등으로 친구 초대 링크 보내기.
+/// 친구 초대 — 텍스트 공유 스타일.
 class FriendInviteSheet extends StatelessWidget {
   const FriendInviteSheet({super.key});
 
@@ -13,29 +12,44 @@ class FriendInviteSheet extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (_) => const FriendInviteSheet(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final uid = supabase.auth.currentUser?.id;
+    final link = uid == null ? '' : friendInviteLink();
+    final message = uid == null ? '' : friendInviteMessage();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.paddingOf(context).bottom + 24,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SheetHeaderBar(
-            title: '친구 초대',
-            subtitle: '아래 내용을 복사하거나 앱으로 보내세요',
-            padding: EdgeInsets.fromLTRB(0, 0, 0, 8),
+          Text(
+            '텍스트 공유',
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: 16),
           if (uid == null)
             const Text('로그인 후 초대 링크를 만들 수 있어요')
           else
-            ShareMessageChannels(message: friendInviteMessage()),
+            ShareMessageChannels(
+              message: message,
+              previewLine1: '셋터디에서 같이 공부해요!',
+              previewLine2: '친구 추가 링크',
+              shareLink: link,
+              copyMessageSuccessText: '초대 메시지가 복사됐어요',
+              copyLinkSuccessText: '초대 링크가 복사됐어요',
+            ),
         ],
       ),
     );

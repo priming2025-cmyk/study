@@ -246,7 +246,7 @@ class _VideoView extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '10분마다 약 2초 구간을 촬영해 올려요',
+          '매시 0·10·20·30·40·50분에 약 2초 MP4/WebM을 올려요 (24시간 보관)',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),

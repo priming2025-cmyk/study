@@ -1,5 +1,6 @@
 import 'dart:async' show unawaited;
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show ChangeNotifier, debugPrint;
 import 'package:http/http.dart' as http;
@@ -113,24 +114,52 @@ class FriendDmRepository extends ChangeNotifier {
   }
 
   /// 전송 성공 시 삽입된 메시지를 반환. 실패 시 예외.
+  Future<String> uploadAttachment({
+    required List<int> bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final uid = supabase.auth.currentUser?.id;
+    if (uid == null) throw StateError('로그인이 필요해요');
+    final safeName = fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
+    final path = '$uid/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+    await supabase.storage.from('study-snapshots').uploadBinary(
+          'dm/$path',
+          bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
+          fileOptions: FileOptions(contentType: mimeType, upsert: false),
+        );
+    final base =
+        supabase.storage.from('study-snapshots').getPublicUrl('dm/$path');
+    return '$base?t=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   Future<FriendMessage> sendMessage({
     required String peerId,
-    required String content,
+    String content = '',
     String? replyToMessageId,
+    String? attachmentUrl,
+    String? attachmentType,
   }) async {
     final uid = supabase.auth.currentUser?.id;
     final text = content.trim();
-    if (uid == null || text.isEmpty) {
-      throw StateError('로그인이 필요하거나 메시지가 비어 있어요');
+    if (uid == null) {
+      throw StateError('로그인이 필요해요');
+    }
+    if (text.isEmpty && (attachmentUrl == null || attachmentUrl.isEmpty)) {
+      throw StateError('메시지 또는 사진을 추가해 주세요');
     }
 
     final payload = <String, dynamic>{
       'sender_id': uid,
       'recipient_id': peerId,
-      'content': text,
+      'content': text.isEmpty ? (attachmentType == 'image' ? '사진' : '파일') : text,
     };
     if (replyToMessageId != null) {
       payload['reply_to_message_id'] = replyToMessageId;
+    }
+    if (attachmentUrl != null && attachmentUrl.isNotEmpty) {
+      payload['attachment_url'] = attachmentUrl;
+      payload['attachment_type'] = attachmentType ?? 'image';
     }
 
     final row = await supabase

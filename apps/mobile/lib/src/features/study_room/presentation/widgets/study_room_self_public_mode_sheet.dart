@@ -46,7 +46,7 @@ class _Body extends StatelessWidget {
             _ModeTile(
               selected: current == 'video',
               title: '2초 영상',
-              subtitle: '10분마다 2초영상',
+              subtitle: '매시 0·10·20·30·40·50분 촬영 (24시간 보관)',
               icon: Icons.videocam_outlined,
               onTap: () => onSelect('video'),
             ),

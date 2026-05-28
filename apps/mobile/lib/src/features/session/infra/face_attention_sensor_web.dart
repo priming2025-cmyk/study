@@ -171,6 +171,8 @@ class FaceAttentionSensor {
   /// 웹 스터디방 스냅샷은 [WebSharedCamera] 경로를 씁니다.
   Future<Uint8List?> captureSnapshotJpeg() async => null;
 
+  Future<String?> captureStudyClipPath() async => null;
+
   Future<void> stop() async {
     _running = false;
     _streamGeneration++;

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/widgets/sheet_header_bar.dart';
-import '../../../../core/widgets/share_message_channels.dart';
 import '../../infra/study_room_join_link.dart';
+import '../../../../core/widgets/share_message_channels.dart';
 
-/// 셋터디 참여 초대 시트 (메시지 + 복사 + 채널별 공유).
+/// 셋터디 참여 초대 — 텍스트 공유 스타일.
 class StudyRoomInviteSheet extends StatelessWidget {
   final String joinCode;
   final String? goalText;
@@ -26,6 +25,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (_) => StudyRoomInviteSheet(
         joinCode: joinCode,
         goalText: goalText,
@@ -41,25 +41,39 @@ class StudyRoomInviteSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tt = Theme.of(context).textTheme;
     final code = joinCode.trim().toUpperCase();
+    final link = code.isEmpty ? '' : studyRoomJoinLink(code);
+    final goal = goalText?.trim();
+    final line1 = goal != null && goal.isNotEmpty
+        ? '우리 같이 공부하자! (목표: $goal)'
+        : '우리 같이 공부하자!';
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 36),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.paddingOf(context).bottom + 24,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SheetHeaderBar(
-            title: '친구 초대',
-            subtitle: '아래 내용을 복사하거나 앱으로 보내세요',
-            padding: EdgeInsets.fromLTRB(0, 0, 0, 8),
+          Text(
+            '텍스트 공유',
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
+          const SizedBox(height: 16),
           if (code.isEmpty)
             const Text('입장코드가 없어요. 방에 입장한 뒤 다시 시도해 주세요.')
           else
             ShareMessageChannels(
               message: _inviteText,
-              copySuccessText: '초대 메시지가 복사됐어요',
+              previewLine1: line1,
+              previewLine2: '입장코드: $code',
+              shareLink: link,
+              copyMessageSuccessText: '초대 메시지가 복사됐어요',
+              copyLinkSuccessText: '입장 링크가 복사됐어요',
             ),
         ],
       ),

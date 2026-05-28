@@ -8,6 +8,7 @@ import '../../../core/branding/setudy_logo.dart';
 import '../../../core/supabase/auth_redirect_config.dart';
 import '../../../core/supabase/supabase_client.dart';
 import '../../../core/ui/app_snacks.dart';
+import '../../study_room/infra/pending_study_room_join.dart';
 import '../infra/auth_login_error_message.dart';
 import '../infra/auth_sign_up_error_message.dart';
 import 'auth_field_utils.dart';
@@ -79,8 +80,14 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  void _goHomeAfterAuth() {
+  Future<void> _goHomeAfterAuth() async {
     if (!mounted) return;
+    final joinCode = await PendingStudyRoomJoin.consume();
+    if (!mounted) return;
+    if (joinCode != null && joinCode.isNotEmpty) {
+      GoRouter.of(context).go('/room?join=${Uri.encodeComponent(joinCode)}');
+      return;
+    }
     GoRouter.of(context).go('/session');
   }
 

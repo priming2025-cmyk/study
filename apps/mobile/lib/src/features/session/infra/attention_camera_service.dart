@@ -77,6 +77,16 @@ final class AttentionCameraService {
     return fut;
   }
 
+  /// 2초 영상용 원본 녹화 파일 경로 (압축은 [RoomVideoRecorder]).
+  Future<String?> captureStudyClipPath() {
+    final fut = _op.then((_) async {
+      if (!hasActiveCamera) return null;
+      return _sensor.captureStudyClipPath();
+    });
+    _op = fut.then((_) {});
+    return fut;
+  }
+
   Future<void> _enqueue(Future<void> Function() action) {
     _op = _op.then((_) => action());
     return _op;

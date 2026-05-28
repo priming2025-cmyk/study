@@ -4,6 +4,8 @@ class FriendMessage {
   final String recipientId;
   final String content;
   final String? replyToMessageId;
+  final String? attachmentUrl;
+  final String? attachmentType;
   final DateTime createdAt;
 
   const FriendMessage({
@@ -12,6 +14,8 @@ class FriendMessage {
     required this.recipientId,
     required this.content,
     this.replyToMessageId,
+    this.attachmentUrl,
+    this.attachmentType,
     required this.createdAt,
   });
 
@@ -19,8 +23,10 @@ class FriendMessage {
         id: j['id'] as String,
         senderId: j['sender_id'] as String,
         recipientId: j['recipient_id'] as String,
-        content: j['content'] as String,
+        content: j['content'] as String? ?? '',
         replyToMessageId: j['reply_to_message_id'] as String?,
+        attachmentUrl: j['attachment_url'] as String?,
+        attachmentType: j['attachment_type'] as String?,
         createdAt: DateTime.parse(j['created_at'] as String),
       );
 }
