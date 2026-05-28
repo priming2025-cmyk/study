@@ -105,6 +105,16 @@ class StudyRoomController extends ChangeNotifier {
         _messages.where((m) => m.recipientUserId == null).toList();
   }
 
+  /// insert 응답 + Realtime insert가 겹칠 때 중복 추가 방지.
+  bool _appendMessageIfNew(StudyRoomMessage msg) {
+    if (_messages.any((m) => m.id == msg.id)) return false;
+    _messages.add(msg);
+    if (msg.recipientUserId == null) {
+      _roomChatMessagesCache.add(msg);
+    }
+    return true;
+  }
+
   /// DM 스레드별 마지막 읽은 시각 (세션 내).
   final Map<String, DateTime> _dmReadAtByUser = {};
   // 친구 DM(=friend_messages) 미리보기/읽음 (셋터디 화면 표시용)
@@ -605,9 +615,7 @@ class StudyRoomController extends ChangeNotifier {
           .select()
           .single();
       final msg = StudyRoomMessage.fromJson(row);
-      if (!_messages.any((m) => m.id == msg.id)) {
-        _messages.add(msg);
-        _roomChatMessagesCache.add(msg);
+      if (_appendMessageIfNew(msg)) {
         notifyListeners();
       }
     } catch (e) {
@@ -646,11 +654,7 @@ class StudyRoomController extends ChangeNotifier {
           .select()
           .single();
       final msg = StudyRoomMessage.fromJson(row);
-      if (!_messages.any((m) => m.id == msg.id)) {
-        _messages.add(msg);
-        if (msg.recipientUserId == null) {
-          _roomChatMessagesCache.add(msg);
-        }
+      if (_appendMessageIfNew(msg)) {
         notifyListeners();
       }
       return (ok: true, error: null);
@@ -1024,10 +1028,7 @@ class StudyRoomController extends ChangeNotifier {
           ),
           callback: (payload) {
             final newMsg = StudyRoomMessage.fromJson(payload.newRecord);
-            _messages.add(newMsg);
-            if (newMsg.recipientUserId == null) {
-              _roomChatMessagesCache.add(newMsg);
-            }
+            if (!_appendMessageIfNew(newMsg)) return;
             unawaited(_touchRecentActivity(newMsg.createdAt));
             notifyListeners();
           },
