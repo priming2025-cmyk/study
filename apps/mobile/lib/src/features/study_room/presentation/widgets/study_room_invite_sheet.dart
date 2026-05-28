@@ -43,8 +43,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final code = joinCode.trim().toUpperCase();
-    final link = code.isEmpty ? '' : studyRoomJoinLink(code);
-    final goal = goalText?.trim();
+        final goal = goalText?.trim();
     final line1 = goal != null && goal.isNotEmpty
         ? '우리 같이 공부하자! (목표: $goal)'
         : '우리 같이 공부하자!';
@@ -71,9 +70,7 @@ class StudyRoomInviteSheet extends StatelessWidget {
               message: _inviteText,
               previewLine1: line1,
               previewLine2: '입장코드: $code',
-              shareLink: link,
               copyMessageSuccessText: '초대 메시지가 복사됐어요',
-              copyLinkSuccessText: '입장 링크가 복사됐어요',
             ),
         ],
       ),

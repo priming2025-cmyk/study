@@ -21,8 +21,7 @@ class FriendInviteSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
     final uid = supabase.auth.currentUser?.id;
-    final link = uid == null ? '' : friendInviteLink();
-    final message = uid == null ? '' : friendInviteMessage();
+        final message = uid == null ? '' : friendInviteMessage();
 
     return Padding(
       padding: EdgeInsets.only(
@@ -46,9 +45,7 @@ class FriendInviteSheet extends StatelessWidget {
               message: message,
               previewLine1: '셋터디에서 같이 공부해요!',
               previewLine2: '친구 추가 링크',
-              shareLink: link,
               copyMessageSuccessText: '초대 메시지가 복사됐어요',
-              copyLinkSuccessText: '초대 링크가 복사됐어요',
             ),
         ],
       ),
