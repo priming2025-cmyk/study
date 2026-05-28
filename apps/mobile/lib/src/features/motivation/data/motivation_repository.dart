@@ -7,6 +7,7 @@ import '../domain/motivation_models.dart';
 
 class MotivationRepository {
   const MotivationRepository();
+  static const _mediaBucket = 'user-media';
 
   static int _xpRequiredForLevel(int level) {
     if (level <= 1) return 0;
@@ -260,12 +261,12 @@ class MotivationRepository {
     try {
       final path = '$uid/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final data = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
-      await supabase.storage.from('study-snapshots').uploadBinary(
+      await supabase.storage.from(_mediaBucket).uploadBinary(
             'avatars/$path',
             data,
             fileOptions: FileOptions(contentType: mime, upsert: true),
           );
-      final url = supabase.storage.from('study-snapshots').getPublicUrl('avatars/$path');
+      final url = supabase.storage.from(_mediaBucket).getPublicUrl('avatars/$path');
       await supabase.from('profiles').update({
         'avatar_url': url,
         'updated_at': DateTime.now().toUtc().toIso8601String(),

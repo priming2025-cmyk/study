@@ -127,10 +127,10 @@ class _ProfileNameEditorState extends ConsumerState<ProfileNameEditor> {
             style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
-        TextButton.icon(
+        IconButton(
+          tooltip: '수정',
           onPressed: () => setState(() => _editing = true),
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: const Text('수정'),
+          icon: Icon(Icons.edit_outlined, color: cs.onSurfaceVariant),
         ),
       ],
     );

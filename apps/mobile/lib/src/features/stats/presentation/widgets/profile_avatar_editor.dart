@@ -9,12 +9,14 @@ class ProfileAvatarEditor extends ConsumerStatefulWidget {
   final String? initialAvatarUrl;
   final String displayNameFallback;
   final VoidCallback? onSaved;
+  final bool showHint;
 
   const ProfileAvatarEditor({
     super.key,
     this.initialAvatarUrl,
     required this.displayNameFallback,
     this.onSaved,
+    this.showHint = true,
   });
 
   @override
@@ -124,12 +126,13 @@ class _ProfileAvatarEditorState extends ConsumerState<ProfileAvatarEditor> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            '사진을 눌러 프로필을 바꿀 수 있어요',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-          ),
+          if (widget.showHint)
+            Text(
+              '사진을 눌러 프로필을 바꿀 수 있어요',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
         ],
       ),
     );

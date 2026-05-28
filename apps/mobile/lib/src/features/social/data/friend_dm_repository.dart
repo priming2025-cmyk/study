@@ -13,6 +13,7 @@ import '../domain/friend_dm_models.dart';
 
 /// 친구 DM 저장·조회·읽음 처리.
 class FriendDmRepository extends ChangeNotifier {
+  static const _mediaBucket = 'user-media';
   RealtimeChannel? _channel;
   String? _subscribedUid;
 
@@ -123,13 +124,13 @@ class FriendDmRepository extends ChangeNotifier {
     if (uid == null) throw StateError('로그인이 필요해요');
     final safeName = fileName.replaceAll(RegExp(r'[^\w.\-]'), '_');
     final path = '$uid/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-    await supabase.storage.from('study-snapshots').uploadBinary(
+    await supabase.storage.from(_mediaBucket).uploadBinary(
           'dm/$path',
           bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
           fileOptions: FileOptions(contentType: mimeType, upsert: false),
         );
     final base =
-        supabase.storage.from('study-snapshots').getPublicUrl('dm/$path');
+        supabase.storage.from(_mediaBucket).getPublicUrl('dm/$path');
     return '$base?t=${DateTime.now().millisecondsSinceEpoch}';
   }
 
