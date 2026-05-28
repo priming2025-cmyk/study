@@ -29,7 +29,8 @@ class StudyRoomCreated {
 
 const _snapshotBucket = 'study-snapshots';
 const _captureInterval = Duration(minutes: 1);
-const _videoHourSlots = [0, 10, 20, 30, 40, 50];
+const _videoInitialDelay = Duration(seconds: 2);
+const _videoInterval = Duration(minutes: 10);
 
 class _ReactionEntry {
   final StudyRoomReactionOverlay overlay;
@@ -437,6 +438,7 @@ class StudyRoomController extends ChangeNotifier {
     try {
       if (!_snapshotInitialized) {
         await _snapshot.initialize();
+        await _videoRecorder.initialize();
         _snapshotInitialized = true;
       }
       await _uploadSnapshotWhenCameraReady(roomId: roomId, userId: userId);
@@ -864,8 +866,15 @@ class StudyRoomController extends ChangeNotifier {
 
     if (_selfPublicViewerMode == 'video') {
       _videoSlotTimer?.cancel();
-      unawaited(_captureVideoSlot(roomId: rid, userId: uid));
-      _scheduleNextVideoSlot(roomId: rid, userId: uid);
+      // 더 단순한 규칙: 방 접속/모드 변경 후 2초 뒤 1회 촬영 → 이후 10분마다 촬영
+      _videoSlotTimer = Timer(_videoInitialDelay, () {
+        if (roomId != rid || _selfId != uid) return;
+        if (_selfPublicViewerMode != 'video') return;
+        unawaited(_captureVideoSlot(roomId: rid, userId: uid));
+        _videoSlotTimer?.cancel();
+        _videoSlotTimer =
+            Timer.periodic(_videoInterval, (_) => unawaited(_captureVideoSlot(roomId: rid, userId: uid)));
+      });
       return;
     }
 
@@ -886,29 +895,11 @@ class StudyRoomController extends ChangeNotifier {
     _snapshotTimer = Timer.periodic(_captureInterval, (_) => unawaited(tick()));
   }
 
-  Duration _delayUntilNextVideoSlot() {
-    final now = DateTime.now();
-    for (final slot in _videoHourSlots) {
-      if (now.minute < slot || (now.minute == slot && now.second < 5)) {
-        final next = DateTime(now.year, now.month, now.day, now.hour, slot);
-        final d = next.difference(now);
-        if (d.inSeconds > 0) return d;
-      }
-    }
-    final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1, 0);
-    return nextHour.difference(now);
-  }
-
-  void _scheduleNextVideoSlot({required String roomId, required String userId}) {
-    _videoSlotTimer?.cancel();
-    if (_selfPublicViewerMode != 'video') return;
-    final delay = _delayUntilNextVideoSlot();
-    _videoSlotTimer = Timer(delay, () {
-      if (this.roomId != roomId || _selfId != userId) return;
-      if (_selfPublicViewerMode != 'video') return;
-      unawaited(_captureVideoSlot(roomId: roomId, userId: userId));
-      _scheduleNextVideoSlot(roomId: roomId, userId: userId);
-    });
+  Future<void> setMyStatusText(String text) async {
+    final t = text.trim();
+    _selfGoalText = t;
+    await _trackSelfFull();
+    notifyListeners();
   }
 
   Future<void> _captureVideoSlot({

@@ -24,12 +24,12 @@ import '../infra/study_room_recent_room.dart';
 import 'widgets/settudy_social_view.dart';
 import 'widgets/study_room_active_view.dart';
 import '../../social/presentation/friend_dm_listener.dart';
-import 'widgets/study_room_dm_chat_screen.dart';
 import 'widgets/study_room_ambient_sheet.dart';
 import 'widgets/study_room_create_sheet.dart';
 import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
 import 'widgets/study_room_invite_sheet.dart';
+import 'widgets/study_room_celolog_sheet.dart';
 import 'widgets/study_room_settings_sheet.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
@@ -463,6 +463,14 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
           ? AppBar(
               title: const Text('셋터디'),
               actions: [
+                IconButton(
+                  tooltip: '다운로드',
+                  icon: const Icon(Icons.download_rounded),
+                  onPressed: () => showStudyRoomCelologSheet(
+                    context,
+                    roomId: _controller.roomId,
+                  ),
+                ),
                 if (kIsWeb)
                   IconButton(
                     tooltip: '카메라 새로고침',

@@ -294,6 +294,31 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     width: widget.width,
                     height: widget.height,
                   ),
+                if (widget.controller.goalText.trim().isNotEmpty)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      child: Text(
+                        widget.controller.goalText.trim(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                          height: 1.15,
+                          shadows: [
+                            Shadow(
+                              blurRadius: 18,
+                              color: Colors.black54,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
                 StudyRoomSelfFocusBadge(score: score, status: status),
                 _SelfPanelBottomOverlays(
                   controller: widget.controller,
@@ -328,6 +353,65 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
         'rest' => '휴식',
         _ => '캡쳐',
       };
+
+  Future<void> _editStatus(BuildContext context) async {
+    final ctrl = TextEditingController(text: controller.goalText);
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 8,
+            bottom: 16 + bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '내 상태',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  hintText: '예: 수학 공부 중',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text.trim()),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(null),
+                    child: const Text('취소'),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
+                    child: const Text('저장'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    ctrl.dispose();
+    if (result != null) {
+      await controller.setMyStatusText(result);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +521,36 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
               ),
             ),
           ),
+        Positioned(
+          right: 8,
+          bottom: 54,
+          child: Material(
+            color: Colors.black.withAlpha(140),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              onTap: () => _editStatus(context),
+              borderRadius: BorderRadius.circular(999),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+                    SizedBox(width: 6),
+                    Text(
+                      '상태',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         Positioned(
           right: 8,
           bottom: 8,
