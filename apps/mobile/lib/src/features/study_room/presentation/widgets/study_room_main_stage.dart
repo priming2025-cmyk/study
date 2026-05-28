@@ -20,11 +20,14 @@ class StudyRoomMainStage extends StatelessWidget {
   final StudyRoomController controller;
   final ValueListenable<int> engagedMinListenable;
   final bool studyCameraSlotActive;
+  final void Function(String peerUserId)? onOpenDmChat;
+
   const StudyRoomMainStage({
     super.key,
     required this.controller,
     required this.engagedMinListenable,
     required this.studyCameraSlotActive,
+    this.onOpenDmChat,
   });
 
   static const double _gap = 6.0;
@@ -218,6 +221,7 @@ class StudyRoomMainStage extends StatelessWidget {
       floatingReaction: controller.reactionEmojiFor(m.userId),
       onQuickReact: (emoji) =>
           controller.sendQuickReaction(targetUserId: m.userId, emoji: emoji),
+      onChat: onOpenDmChat == null ? null : () => onOpenDmChat!(m.userId),
     );
   }
 }

@@ -11,6 +11,8 @@ class StudyRoomMemberCard extends StatelessWidget {
   final bool compact;
   final String? floatingReaction;
   final void Function(String emoji)? onQuickReact;
+  final VoidCallback? onChat;
+
   const StudyRoomMemberCard({
     super.key,
     required this.member,
@@ -18,6 +20,7 @@ class StudyRoomMemberCard extends StatelessWidget {
     this.compact = false,
     this.floatingReaction,
     this.onQuickReact,
+    this.onChat,
   });
 
   @override
@@ -223,24 +226,28 @@ class StudyRoomMemberCard extends StatelessWidget {
               child: _SnapshotAge(at: member.snapshotAt!),
             ),
 
+          if (!isSelf && onChat != null)
+            Positioned(
+              top: 8,
+              right: 4,
+              child: _IconBtn(
+                icon: Icons.chat_bubble_outline_rounded,
+                tooltip: '메시지',
+                onTap: onChat!,
+              ),
+            ),
           if (!isSelf)
             Positioned(
               right: 4,
-              top: 0,
-              bottom: 0,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _IconBtn(
-                    icon: Icons.favorite_outline_rounded,
-                    tooltip: '응원',
-                    onTap: () {
-                      if (onQuickReact != null) {
-                        onQuickReact!('❤️');
-                      }
-                    },
-                  ),
-                ],
+              bottom: 8,
+              child: _IconBtn(
+                icon: Icons.favorite_outline_rounded,
+                tooltip: '응원',
+                onTap: () {
+                  if (onQuickReact != null) {
+                    onQuickReact!('❤️');
+                  }
+                },
               ),
             ),
         ],

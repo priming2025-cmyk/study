@@ -12,6 +12,7 @@ import '../../../session/infra/session_self_camera.dart';
 import '../../../session/infra/web_camera.dart';
 import '../../infra/study_room_controller.dart';
 import 'study_room_self_camera_preview_box.dart';
+import 'study_room_group_chat_chip.dart';
 import 'study_room_self_focus_badge.dart';
 /// 스터디방 본인 실시간 프리뷰 — [AttentionCameraService] 단일 인스턴스 공유.
 /// 다른 탭으로 나갈 때는 카메라를 **끄지 않고** 구독만 끊습니다(공부 탭과 동일).
@@ -400,6 +401,15 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        Positioned(
+          top: 8,
+          right: 8,
+          left: 48,
+          child: Align(
+            alignment: Alignment.topRight,
+            child: StudyRoomGroupChatChip(controller: controller),
+          ),
+        ),
         Positioned(
           right: 8,
           bottom: 54,
