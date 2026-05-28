@@ -8,7 +8,9 @@
           "/room/join",
           "/room/join/*",
           "/room",
-          "/room/*"
+          "/room/*",
+          "/friend",
+          "/friend/*"
         ]
       }
     ]

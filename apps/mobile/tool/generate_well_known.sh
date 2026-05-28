@@ -41,7 +41,9 @@ cat >"$OUT/apple-app-site-association" <<EOF
           "/room/join",
           "/room/join/*",
           "/room",
-          "/room/*"
+          "/room/*",
+          "/friend",
+          "/friend/*"
         ]
       }
     ]

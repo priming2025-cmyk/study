@@ -5,7 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-FLUTTER_DIR="${FLUTTER_DIR:-${ROOT}/.flutter_sdk}"
+# Vercel 루트에 .flutter_sdk 가 올라가면 git clone 검증에 실패합니다 → /tmp 사용
+FLUTTER_DIR="${FLUTTER_DIR:-/tmp/setudy_flutter_sdk}"
 if [[ ! -x "${FLUTTER_DIR}/bin/flutter" ]]; then
   rm -rf "$FLUTTER_DIR"
   git clone https://github.com/flutter/flutter.git -b stable --depth 1 "$FLUTTER_DIR"
@@ -29,6 +30,7 @@ SUPABASE_URL=${SUPABASE_URL}
 SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 SETUDY_WEB_URL=${SETUDY_WEB_URL:-https://setudy.vercel.app}
 PREMIUM_VIDEO_ENABLED=${PREMIUM}
+SETUDY_FCM_ENABLED=${SETUDY_FCM_ENABLED:-false}
 SETUDY_APP_STORE_URL=${SETUDY_APP_STORE_URL:-}
 SETUDY_PLAY_STORE_URL=${SETUDY_PLAY_STORE_URL:-}
 TURN_URL=${TURN_URL:-}

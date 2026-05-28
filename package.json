@@ -6,6 +6,7 @@
     "web:clean": "npm run web:clean --prefix apps/mobile",
     "db:supabase-login": "npx --yes supabase@latest login",
     "db:push": "bash tool/supabase-db-push.sh",
+    "web:deploy": "npm run deploy --prefix apps/mobile",
     "db:apply-profiles-rls": "npm run db:push"
   }
 }

@@ -2,6 +2,7 @@
   "private": true,
   "scripts": {
     "build": "bash tool/vercel_build.sh",
+    "deploy": "bash tool/vercel_deploy_local.sh",
     "web": "flutter run -d chrome --no-web-resources-cdn",
     "web:clean": "flutter clean && flutter pub get && flutter run -d chrome --no-web-resources-cdn"
   }

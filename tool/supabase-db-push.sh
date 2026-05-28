@@ -38,7 +38,7 @@ _ref_from_env_file() {
 REF="${SUPABASE_PROJECT_REF:-}"
 if [[ -z "$REF" ]]; then
   MOBILE_ENV="$ROOT/apps/mobile"
-  for candidate in "$MOBILE_ENV/.env" "$MOBILE_ENV/..env"; do
+  for candidate in "$MOBILE_ENV/.env" "$MOBILE_ENV/..env" "$ROOT/.env"; do
     REF="$(_ref_from_env_file "$candidate" || true)"
     if [[ -n "$REF" && "$REF" != YOUR_* ]]; then
       break
