@@ -16,6 +16,13 @@ CLI `npm run db:push`가 **프로젝트 권한** 오류로 실패할 때, Dashbo
 | 친구 아님 + 같은 셋터디 DM | 0034 |
 | 프로필 사진 `avatar_url` | 0034 |
 | 2초 영상 클립 테이블·셀로그 RPC | 0034 + 0035 |
+| **2초 영상 Storage 업로드** (MP4/WebM·2MB) | **0040** |
+
+## 0040 — 2초 영상이 안 올라갈 때 (캠코더만 보임)
+
+`study-snapshots` 버킷이 예전 설정(100KB·JPEG만)이면 **영상 업로드가 Storage에서 거절**됩니다.
+
+SQL Editor에서 `supabase/migrations/0040_study_snapshots_allow_video_clips.sql` 실행 후 앱을 다시 빌드하세요.
 
 ## 만료 클립 자동 삭제 (Edge Function)
 

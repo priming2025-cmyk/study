@@ -272,7 +272,9 @@ final class WebSharedCamera {
       onTimeout: () {},
     );
 
-    if (chunks.isEmpty) return null;
+    if (chunks.isEmpty) {
+      return _recordWebmClipFromCanvas(duration: duration, mime: mime);
+    }
     final blob = html.Blob(chunks, mime);
     final reader = html.FileReader();
     final bytesDone = Completer<Uint8List?>();
@@ -286,5 +288,67 @@ final class WebSharedCamera {
     });
     reader.readAsArrayBuffer(blob);
     return bytesDone.future.timeout(const Duration(seconds: 12));
+  }
+
+  /// MediaRecorder(stream) 실패 시 video 캔버스 캡처 스트림으로 녹화.
+  Future<Uint8List?> _recordWebmClipFromCanvas({
+    required Duration duration,
+    required String mime,
+  }) async {
+    final v = _video;
+    if (v == null || v.videoWidth < 8) return null;
+
+    try {
+      final canvas = html.CanvasElement(
+        width: v.videoWidth,
+        height: v.videoHeight,
+      );
+      final ctx = canvas.context2D;
+      final stream = canvas.captureStream(12);
+      final recorder = html.MediaRecorder(
+        stream,
+        {
+          'mimeType': mime,
+          'videoBitsPerSecond': StudyVideoClipConfig.webVideoBitsPerSecond,
+        },
+      );
+
+      final chunks = <html.Blob>[];
+      final done = Completer<void>();
+      recorder.addEventListener('dataavailable', (event) {
+        final blob = (event as html.BlobEvent).data;
+        if (blob != null && blob.size > 0) chunks.add(blob);
+      });
+      recorder.addEventListener('stop', (_) {
+        if (!done.isCompleted) done.complete();
+      });
+
+      recorder.start(200);
+      final endAt = DateTime.now().add(duration);
+      while (DateTime.now().isBefore(endAt)) {
+        ctx.drawImage(v, 0, 0);
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+      }
+      recorder.stop();
+      await done.future.timeout(const Duration(seconds: 8), onTimeout: () {});
+
+      if (chunks.isEmpty) return null;
+      final blob = html.Blob(chunks, mime);
+      final reader = html.FileReader();
+      final bytesDone = Completer<Uint8List?>();
+      reader.onLoadEnd.listen((_) {
+        final result = reader.result;
+        if (result is ByteBuffer) {
+          bytesDone.complete(Uint8List.view(result));
+        } else {
+          bytesDone.complete(null);
+        }
+      });
+      reader.readAsArrayBuffer(blob);
+      return bytesDone.future.timeout(const Duration(seconds: 12));
+    } catch (e) {
+      debugPrint('[WebSharedCamera] canvas record: $e');
+      return null;
+    }
   }
 }

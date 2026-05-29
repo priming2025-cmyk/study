@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -25,6 +26,7 @@ class StudyRoomMemberMedia extends StatefulWidget {
 class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
   VideoPlayerController? _video;
   String? _loadedUrl;
+  bool _videoFailed = false;
 
   StudyRoomMember get member => widget.member;
 
@@ -33,6 +35,12 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
   String? get _videoUrl {
     final clip = member.latestClipUrl?.trim();
     if (clip != null && clip.isNotEmpty) return clip;
+    return null;
+  }
+
+  String? get _posterUrl {
+    final snap = member.snapshotUrl?.trim();
+    if (snap != null && snap.isNotEmpty) return snap;
     return null;
   }
 
@@ -46,22 +54,37 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
   void didUpdateWidget(covariant StudyRoomMemberMedia oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.member.latestClipUrl != member.latestClipUrl ||
-        oldWidget.member.publicViewerMode != member.publicViewerMode) {
+        oldWidget.member.publicViewerMode != member.publicViewerMode ||
+        oldWidget.member.snapshotUrl != member.snapshotUrl) {
+      _videoFailed = false;
       _syncVideo();
     }
   }
 
   Future<void> _syncVideo() async {
-    final url = _isVideoMode ? _videoUrl : null;
+    if (!_isVideoMode) {
+      await _disposeVideo();
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final url = _videoUrl;
     if (url == null) {
       await _disposeVideo();
       if (mounted) setState(() {});
       return;
     }
-    if (_loadedUrl == url && _video != null) return;
+
+    if (_videoFailed) return;
+    if (_loadedUrl == url && _video != null && _video!.value.isInitialized) {
+      return;
+    }
 
     await _disposeVideo();
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(url),
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     _video = controller;
     _loadedUrl = url;
     try {
@@ -69,7 +92,10 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
       await controller.setLooping(true);
       await controller.setVolume(0);
       await controller.play();
-    } catch (_) {
+      _videoFailed = false;
+    } catch (e) {
+      debugPrint('[StudyRoomMemberMedia] video init failed: $e url=$url');
+      _videoFailed = true;
       await _disposeVideo();
     }
     if (mounted) setState(() {});
@@ -90,6 +116,16 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
     super.dispose();
   }
 
+  Widget _networkImage(String url, ColorScheme cs) {
+    return Image.network(
+      url,
+      fit: widget.fit,
+      errorBuilder: (_, __, ___) => StudyRoomMemberMediaPlaceholder(cs: cs),
+      loadingBuilder: (_, child, progress) =>
+          progress == null ? child : StudyRoomMemberMediaPlaceholder(cs: cs),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -102,59 +138,42 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
     }
 
     if (_isVideoMode) {
+      final poster = _posterUrl;
       final controller = _video;
-      if (_videoUrl != null &&
+      final showVideo = !_videoFailed &&
+          _videoUrl != null &&
           controller != null &&
-          controller.value.isInitialized) {
-        return FittedBox(
-          fit: widget.fit,
-          clipBehavior: Clip.hardEdge,
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: controller.value.size.width,
-            height: controller.value.size.height,
-            child: VideoPlayer(controller),
-          ),
+          controller.value.isInitialized;
+
+      if (showVideo) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (poster != null) _networkImage(poster, cs),
+            FittedBox(
+              fit: widget.fit,
+              clipBehavior: Clip.hardEdge,
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: controller.value.size.width,
+                height: controller.value.size.height,
+                child: VideoPlayer(controller),
+              ),
+            ),
+          ],
         );
       }
-      if (_videoUrl != null) {
-        final poster = member.snapshotUrl;
-        if (poster != null && poster.isNotEmpty) {
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.network(
-                poster,
-                fit: widget.fit,
-                errorBuilder: (_, __, ___) =>
-                    StudyRoomMemberVideoPlaceholder(cs: cs),
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const StudyRoomMemberVideoPlaceholder(),
-              ),
-              const Center(
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            ],
-          );
-        }
+
+      if (poster != null) {
+        return _networkImage(poster, cs);
       }
+
       return StudyRoomMemberVideoPlaceholder(cs: cs);
     }
 
     final snapshotUrl = member.snapshotUrl;
     if (snapshotUrl != null && snapshotUrl.isNotEmpty) {
-      return Image.network(
-        snapshotUrl,
-        fit: widget.fit,
-        errorBuilder: (_, __, ___) => StudyRoomMemberMediaPlaceholder(cs: cs),
-        loadingBuilder: (_, child, progress) =>
-            progress == null ? child : StudyRoomMemberMediaPlaceholder(cs: cs),
-      );
+      return _networkImage(snapshotUrl, cs);
     }
 
     return StudyRoomMemberMediaPlaceholder(cs: cs);

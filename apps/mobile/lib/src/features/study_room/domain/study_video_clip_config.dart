@@ -4,7 +4,8 @@
 abstract final class StudyVideoClipConfig {
   static const recordDuration = Duration(milliseconds: 2500);
   static const slotDurationMs = 2500;
-  static const maxUploadBytes = 512 * 1024;
+  /// study-snapshots 버킷 한도(2MB)와 맞춤 — Supabase migration 0040
+  static const maxUploadBytes = 2 * 1024 * 1024;
   static const posterMaxDim = 360;
   static const posterJpegQuality = 72;
 

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import '../domain/study_video_clip_config.dart';
 import '../domain/study_video_clip_result.dart';
 
 const _bucket = 'study-snapshots';
@@ -27,8 +29,16 @@ abstract final class StudyVideoClipUploader {
     required String userId,
     required StudyVideoClipResult clip,
   }) async {
-    if (clip.videoBytes.isEmpty) return null;
-    if (clip.videoBytes.length > 512 * 1024) return null;
+    if (clip.videoBytes.isEmpty) {
+      debugPrint('[StudyVideoClipUploader] empty video bytes');
+      return null;
+    }
+    if (clip.videoBytes.length > StudyVideoClipConfig.maxUploadBytes) {
+      debugPrint(
+        '[StudyVideoClipUploader] too large: ${clip.videoBytes.length} bytes',
+      );
+      return null;
+    }
 
     final ts = DateTime.now().toUtc().millisecondsSinceEpoch;
     final ext = clip.fileExtension;
@@ -48,19 +58,28 @@ abstract final class StudyVideoClipUploader {
       final poster = clip.posterJpeg;
       if (poster != null && poster.isNotEmpty) {
         final posterPath = 'clips/$roomId/$userId/${ts}_poster.jpg';
-        await supabase.storage.from(_bucket).uploadBinary(
-              posterPath,
-              poster,
-              fileOptions: const FileOptions(
-                contentType: 'image/jpeg',
-                upsert: true,
-              ),
-            );
-        posterUrl = supabase.storage.from(_bucket).getPublicUrl(posterPath);
+        try {
+          await supabase.storage.from(_bucket).uploadBinary(
+                posterPath,
+                poster,
+                fileOptions: const FileOptions(
+                  contentType: 'image/jpeg',
+                  upsert: true,
+                ),
+              );
+          posterUrl = supabase.storage.from(_bucket).getPublicUrl(posterPath);
+        } catch (e) {
+          debugPrint('[StudyVideoClipUploader] poster upload: $e');
+        }
       }
 
       final base = supabase.storage.from(_bucket).getPublicUrl(storagePath);
       final publicUrl = '$base?t=$ts';
+
+      debugPrint(
+        '[StudyVideoClipUploader] ok ${clip.mimeType} '
+        '${clip.videoBytes.length}B → $publicUrl',
+      );
 
       return StudyVideoClipUploadResult(
         storagePath: storagePath,
@@ -69,7 +88,10 @@ abstract final class StudyVideoClipUploader {
         sizeBytes: clip.videoBytes.length,
         mimeType: clip.mimeType,
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint(
+        '[StudyVideoClipUploader] storage failed ($storagePath): $e\n$st',
+      );
       return null;
     }
   }

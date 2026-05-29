@@ -21,6 +21,7 @@ import 'room_snapshot.dart';
 import 'room_video_recorder.dart';
 import 'study_video_clip_uploader.dart';
 import 'study_room_ambient_player.dart';
+import 'study_room_public_video_capture.dart';
 import 'study_room_recent_room.dart';
 
 class StudyRoomCreated {
@@ -914,10 +915,10 @@ class StudyRoomController extends ChangeNotifier {
     _videoSlotTimer = null;
   }
 
-  bool _isCameraReadyForVideoClip() {
-    if (kIsWeb) return WebSharedCamera.instance.isStreamReady;
-    return AttentionCameraService.instance.hasActiveCamera;
-  }
+  bool _isCameraReadyForVideoClip() => StudyRoomPublicVideoCapture.isReady;
+
+  Future<bool> _ensureCameraForVideoClip() =>
+      StudyRoomPublicVideoCapture.ensureCameraReady();
 
   Future<void> _applyRestProfilePresence() async {
     _snapshotTimer?.cancel();
@@ -1181,6 +1182,8 @@ class StudyRoomController extends ChangeNotifier {
     final gen = _videoScheduleGen;
     _lastVideoClockSlotKey = null;
 
+    unawaited(_ensureCameraForVideoClip());
+
     unawaited(_captureFirstVideoWhenCameraReady(
       roomId: roomId,
       userId: userId,
@@ -1251,8 +1254,11 @@ class StudyRoomController extends ChangeNotifier {
       if (this.roomId != roomId || _selfId != userId) return;
       if (_selfPublicViewerMode != 'video') return;
       if (!_isCameraReadyForVideoClip()) {
-        await Future<void>.delayed(const Duration(seconds: 2));
-        continue;
+        await _ensureCameraForVideoClip();
+        if (!_isCameraReadyForVideoClip()) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          continue;
+        }
       }
       final ok = await _captureVideoSlot(roomId: roomId, userId: userId);
       if (ok) {
@@ -1269,17 +1275,29 @@ class StudyRoomController extends ChangeNotifier {
   }) async {
     if (this.roomId != roomId || _selfId != userId) return false;
     if (_selfPublicViewerMode != 'video') return false;
-    if (!_isCameraReadyForVideoClip()) return false;
+    if (!_isCameraReadyForVideoClip()) {
+      final ready = await _ensureCameraForVideoClip();
+      if (!ready) {
+        debugPrint('[StudyRoomController] captureVideoSlot: camera not ready');
+        return false;
+      }
+    }
     try {
       final clip = await _videoRecorder.captureCompressedClip();
-      if (clip == null) return false;
+      if (clip == null) {
+        debugPrint('[StudyRoomController] captureVideoSlot: record failed');
+        return false;
+      }
 
       final uploaded = await StudyVideoClipUploader.upload(
         roomId: roomId,
         userId: userId,
         clip: clip,
       );
-      if (uploaded == null) return false;
+      if (uploaded == null) {
+        debugPrint('[StudyRoomController] captureVideoSlot: upload failed');
+        return false;
+      }
 
       final presenceUrl = uploaded.posterUrl ?? uploaded.publicUrl;
       selfSnapshotUrl = presenceUrl;

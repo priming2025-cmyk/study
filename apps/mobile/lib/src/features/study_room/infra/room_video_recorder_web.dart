@@ -10,9 +10,23 @@ class RoomVideoRecorder {
 
   Future<StudyVideoClipResult?> captureCompressedClip() async {
     try {
+      await WebSharedCamera.instance.acquire();
+      for (var i = 0; i < 60; i++) {
+        if (WebSharedCamera.instance.isStreamReady) break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      if (!WebSharedCamera.instance.isStreamReady) {
+        debugPrint(
+          '[RoomVideoRecorder/web] camera not ready: '
+          '${WebSharedCamera.instance.lastOpenError}',
+        );
+        return null;
+      }
+
       final bytes = await WebSharedCamera.instance.recordWebmClip();
       if (bytes == null || bytes.isEmpty) return null;
       if (bytes.length > StudyVideoClipConfig.maxUploadBytes) {
+        // config와 Supabase bucket(0040) 한도 일치
         debugPrint(
           '[RoomVideoRecorder/web] clip too large (${bytes.length} bytes), skip',
         );
