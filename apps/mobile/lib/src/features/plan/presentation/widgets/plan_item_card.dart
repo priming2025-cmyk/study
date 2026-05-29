@@ -9,6 +9,7 @@ class PlanItemCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSchedule;
   final VoidCallback onDelete;
+  final VoidCallback? onStartStudy;
   final bool showDragHandle;
 
   const PlanItemCard({
@@ -17,6 +18,7 @@ class PlanItemCard extends StatelessWidget {
     required this.onEdit,
     required this.onSchedule,
     required this.onDelete,
+    this.onStartStudy,
     this.showDragHandle = false,
   });
 
@@ -154,6 +156,18 @@ class PlanItemCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onStartStudy != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: FilledButton.tonalIcon(
+                    onPressed: onStartStudy,
+                    icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                    label: const Text('집중공부 시작'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 40),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

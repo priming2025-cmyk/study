@@ -20,3 +20,9 @@ final studyRoomInRoomProvider = StateProvider<bool>((ref) => false);
 
 /// 스터디 탭에서 나갈 때 방만 나가야 하면 증가시키고 StudyRoomScreen이 [leave] 처리.
 final studyRoomLeaveForTabSwitchProvider = StateProvider<int>((ref) => 0);
+
+/// 오늘 계획이 바뀌면 증가 — 집중공부 탭이 목록을 다시 불러옵니다.
+final todayPlanRevisionProvider = StateProvider<int>((ref) => 0);
+
+/// 계획 탭 → 집중공부: 이 id 항목을 선택한 뒤 공부 시작하도록 유도.
+final sessionPendingPlanItemIdProvider = StateProvider<String?>((ref) => null);

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 
 import '../../../core/providers/core_providers.dart';
+import '../../../core/providers/shell_branch_index_provider.dart';
 import '../data/plan_models.dart';
 import '../data/plan_repeat_config.dart';
 import 'monthly_plan_overview_sheet.dart';
@@ -11,7 +13,7 @@ import 'widgets/plan_add_item_sheet.dart';
 import 'widgets/plan_item_card.dart';
 import 'widgets/plan_item_time_sheet.dart';
 import 'widgets/plan_time_utils.dart';
-import 'widgets/plan_week_bar.dart';
+import 'widgets/plan_week_bar.dart' hide sameCalendarDay;
 
 class PlanEditorScreen extends ConsumerStatefulWidget {
   const PlanEditorScreen({super.key});
@@ -125,6 +127,25 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
     );
   }
 
+  void _bumpTodayPlanForSession() {
+    if (!sameCalendarDay(_c.planDay, DateTime.now())) return;
+    ref.read(todayPlanRevisionProvider.notifier).state++;
+  }
+
+  void _startStudyFromPlan(PlanItem item) {
+    if (!sameCalendarDay(_c.planDay, DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('오늘 날짜 계획만 집중공부에서 바로 시작할 수 있어요'),
+        ),
+      );
+      return;
+    }
+    ref.read(sessionPendingPlanItemIdProvider.notifier).state = item.id;
+    _bumpTodayPlanForSession();
+    context.go('/session');
+  }
+
   void _openAddSheet() {
     showModalBottomSheet(
       context: context,
@@ -145,14 +166,16 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           TimeOfDay? startTime,
           required bool reminderEnabled,
           PlanRepeatConfig? repeat,
-        }) =>
-            _c.addPlanEntry(
-              subject: subject,
-              targetMinutes: targetMinutes,
-              startTime: startTime,
-              reminderEnabled: reminderEnabled,
-              repeat: repeat,
-            ),
+        }) async {
+          await _c.addPlanEntry(
+            subject: subject,
+            targetMinutes: targetMinutes,
+            startTime: startTime,
+            reminderEnabled: reminderEnabled,
+            repeat: repeat,
+          );
+          _bumpTodayPlanForSession();
+        },
       ),
     );
   }
@@ -178,14 +201,16 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
           TimeOfDay? startTime,
           required bool reminderEnabled,
           PlanRepeatConfig? repeat,
-        }) =>
-            _c.updatePlanEntry(
-              item: item,
-              subject: subject,
-              targetMinutes: targetMinutes,
-              startTime: startTime,
-              reminderEnabled: reminderEnabled,
-            ),
+        }) async {
+          await _c.updatePlanEntry(
+            item: item,
+            subject: subject,
+            targetMinutes: targetMinutes,
+            startTime: startTime,
+            reminderEnabled: reminderEnabled,
+          );
+          _bumpTodayPlanForSession();
+        },
       ),
     );
   }
@@ -326,6 +351,9 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                               onEdit: () => _openEditSheet(item),
                               onSchedule: () => _openTimeSheet(item),
                               onDelete: () => _deleteItem(item),
+                              onStartStudy: viewingToday
+                                  ? () => _startStudyFromPlan(item)
+                                  : null,
                               showDragHandle: items.length > 1,
                             ),
                           ),

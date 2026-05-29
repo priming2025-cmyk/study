@@ -11,6 +11,8 @@ import '../../session/domain/session_summary.dart';
 import '../../session/infra/attention_camera_service.dart';
 import '../../session/infra/session_media_lifecycle.dart';
 import '../../session/infra/web_camera.dart';
+import '../../plan/data/plan_repository.dart';
+import '../../plan/presentation/widgets/plan_time_utils.dart';
 import '../domain/study_room_default_name.dart';
 import '../domain/study_room_join_code.dart';
 import '../../social/domain/friend_dm_models.dart';
@@ -247,7 +249,7 @@ class StudyRoomController extends ChangeNotifier {
     _lastFocusSignalAt = null;
   }
 
-  SessionSummary? endFocusTracking() {
+  Future<SessionSummary?> endFocusTracking() async {
     _focusTimer?.cancel();
     _focusTimer = null;
     final st = _focusState;
@@ -255,11 +257,17 @@ class StudyRoomController extends ChangeNotifier {
     _lastFocusSignalAt = null;
     if (st == null) return null;
     final subject = _selfGoalText.trim().isEmpty ? '셋터디' : _selfGoalText.trim();
+    String? planItemId;
+    try {
+      final plan = await PlanRepository().fetchTodayPlan();
+      planItemId = activePlanItemForNow(plan, DateTime.now())?.id ??
+          planItemMatchingSubject(plan, subject)?.id;
+    } catch (_) {}
     return AttentionScoring.finalize(
       st,
       DateTime.now(),
       subject: subject,
-      planItemId: null,
+      planItemId: planItemId,
     );
   }
 

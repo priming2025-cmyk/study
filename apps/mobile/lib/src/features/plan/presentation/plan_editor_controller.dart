@@ -197,10 +197,11 @@ class PlanEditorController extends ChangeNotifier {
     }
     final planId = plan.id;
 
+    final mins = targetMinutes <= 0 ? 0 : targetMinutes.clamp(5, 240);
     await _repo.addItem(
       planId: planId,
       subject: subject,
-      targetSeconds: targetMinutes * 60,
+      targetSeconds: mins * 60,
       scheduledStartAtUtc: scheduledUtc,
       reminderEnabled: reminderEnabled && scheduledUtc != null,
       repeatSeriesId: repeatSeriesId,
@@ -228,7 +229,7 @@ class PlanEditorController extends ChangeNotifier {
   }) async {
     final trimmed = subject.trim();
     if (trimmed.isEmpty) return;
-    final clampedMin = targetMinutes.clamp(1, 960);
+    final clampedMin = targetMinutes <= 0 ? 0 : targetMinutes.clamp(5, 240);
 
     DateTime? scheduledUtc;
     if (startTime != null) {

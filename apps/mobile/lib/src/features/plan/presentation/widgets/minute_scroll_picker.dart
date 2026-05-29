@@ -20,6 +20,11 @@ class MinuteScrollPicker extends StatefulWidget {
   /// [compact]일 때 왼쪽 분 칩 열 위에 표시 (예: 시작 시간, 계획 시간).
   final String? sectionLabel;
 
+  /// 휠 위 중앙 「미정」 칩 (시작·계획 시간 미설정).
+  final bool showUnsetOption;
+  final bool isUnset;
+  final VoidCallback? onUnsetTap;
+
   const MinuteScrollPicker({
     super.key,
     required this.valueMinutes,
@@ -32,6 +37,9 @@ class MinuteScrollPicker extends StatefulWidget {
     this.isDuration = false,
     this.compact = false,
     this.sectionLabel,
+    this.showUnsetOption = false,
+    this.isUnset = false,
+    this.onUnsetTap,
   });
 
   @override
@@ -311,6 +319,30 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
     );
   }
 
+  Widget _unsetChip(ColorScheme cs, TextTheme tt) {
+    final sel = widget.isUnset;
+    return Center(
+      child: Material(
+        color: sel ? cs.primaryContainer : cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: widget.onUnsetTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            child: Text(
+              '미정',
+              style: tt.labelMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: sel ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompact(ColorScheme cs, TextTheme tt) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -323,7 +355,13 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
           ),
           const SizedBox(height: 2),
         ],
-        SizedBox(
+        if (widget.showUnsetOption) ...[
+          _unsetChip(cs, tt),
+          const SizedBox(height: 6),
+        ],
+        Opacity(
+          opacity: widget.isUnset ? 0.35 : 1,
+          child: SizedBox(
           height: _compactWheelH,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -343,6 +381,7 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
               ),
             ],
           ),
+        ),
         ),
       ],
     );

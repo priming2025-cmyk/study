@@ -47,6 +47,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
 
   late int _startMin;
   late int _durationMin;
+  bool _startUnset = false;
+  bool _durationUnset = false;
   PlanRepeatUnit _repeatUnit = PlanRepeatUnit.week;
   int _repeatInterval = 1;
   late Set<int> _weekdays;
@@ -82,8 +84,12 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     if (e != null) {
       _selectedName = e.subject;
       _nameCtrl.text = e.subject;
-      _durationMin = (e.targetSeconds / 60).round().clamp(5, 240);
+      _durationUnset = e.targetSeconds <= 0;
+      _durationMin = _durationUnset
+          ? 50
+          : (e.targetSeconds / 60).round().clamp(5, 240);
       final sched = e.scheduledStartAt?.toLocal();
+      _startUnset = sched == null;
       if (sched != null) {
         _startMin = sched.hour * 60 + sched.minute;
       } else {
@@ -93,6 +99,8 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     } else {
       _startMin = suggestPlanStartMinutes(widget.existingItems, DateTime.now());
       _durationMin = suggestPlanDurationMinutes(widget.existingItems) ?? 50;
+      _startUnset = false;
+      _durationUnset = false;
       _repeatNone = true;
       _repeatUnit = PlanRepeatUnit.week;
       _repeatInterval = 1;
@@ -207,12 +215,13 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
     await CustomSubjectStore.upsert(name, _selectedColor);
     setState(() => _saving = true);
     try {
-      final start = TimeOfDay(hour: _startMin ~/ 60, minute: _startMin % 60);
       await widget.onAdd(
         subject: name,
-        targetMinutes: _durationMin,
-        startTime: start,
-        reminderEnabled: true,
+        targetMinutes: _durationUnset ? 0 : _durationMin,
+        startTime: _startUnset
+            ? null
+            : TimeOfDay(hour: _startMin ~/ 60, minute: _startMin % 60),
+        reminderEnabled: !_startUnset,
         repeat: _repeatConfig,
       );
       if (mounted) Navigator.pop(context);
@@ -301,8 +310,18 @@ class _PlanAddItemSheetState extends State<PlanAddItemSheet>
                   _TimePlanTab(
                     startMin: _startMin,
                     durationMin: _durationMin,
-                    onStartChanged: (m) => setState(() => _startMin = m),
-                    onDurationChanged: (m) => setState(() => _durationMin = m),
+                    startUnset: _startUnset,
+                    durationUnset: _durationUnset,
+                    onStartChanged: (m) => setState(() {
+                      _startMin = m;
+                      _startUnset = false;
+                    }),
+                    onDurationChanged: (m) => setState(() {
+                      _durationMin = m;
+                      _durationUnset = false;
+                    }),
+                    onStartUnset: () => setState(() => _startUnset = true),
+                    onDurationUnset: () => setState(() => _durationUnset = true),
                   ),
                   _RepeatTab(
                     repeatNone: _repeatNone,
@@ -585,14 +604,22 @@ class _SubjectTabState extends State<_SubjectTab> {
 class _TimePlanTab extends StatelessWidget {
   final int startMin;
   final int durationMin;
+  final bool startUnset;
+  final bool durationUnset;
   final ValueChanged<int> onStartChanged;
   final ValueChanged<int> onDurationChanged;
+  final VoidCallback onStartUnset;
+  final VoidCallback onDurationUnset;
 
   const _TimePlanTab({
     required this.startMin,
     required this.durationMin,
+    required this.startUnset,
+    required this.durationUnset,
     required this.onStartChanged,
     required this.onDurationChanged,
+    required this.onStartUnset,
+    required this.onDurationUnset,
   });
 
   @override
@@ -607,6 +634,9 @@ class _TimePlanTab extends StatelessWidget {
           maxMinutes: 23 * 60 + 55,
           initialStepMinutes: 5,
           compact: true,
+          showUnsetOption: true,
+          isUnset: startUnset,
+          onUnsetTap: onStartUnset,
           onChanged: onStartChanged,
         ),
         const SizedBox(height: 10),
@@ -618,6 +648,9 @@ class _TimePlanTab extends StatelessWidget {
           initialStepMinutes: 5,
           isDuration: true,
           compact: true,
+          showUnsetOption: true,
+          isUnset: durationUnset,
+          onUnsetTap: onDurationUnset,
           onChanged: onDurationChanged,
         ),
       ],

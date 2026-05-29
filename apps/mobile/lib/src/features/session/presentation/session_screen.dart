@@ -103,9 +103,20 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     );
   }
 
+  Future<void> _applyPendingPlan(String planItemId) async {
+    await _c.selectPlanItemById(planItemId);
+    if (!mounted) return;
+    ref.read(sessionPendingPlanItemIdProvider.notifier).state = null;
+    setState(() {});
+  }
+
   Future<void> _init() async {
     try {
       await _c.init();
+      final pending = ref.read(sessionPendingPlanItemIdProvider);
+      if (pending != null) {
+        await _applyPendingPlan(pending);
+      }
       if (!mounted) return;
       if (widget.autoStart && !_autoStarted) {
         _autoStarted = true;
@@ -334,6 +345,13 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(todayPlanRevisionProvider, (prev, next) {
+      if (prev != next) unawaited(_c.reloadTodayPlan());
+    });
+    ref.listen<String?>(sessionPendingPlanItemIdProvider, (prev, id) {
+      if (id == null || id == prev) return;
+      unawaited(_applyPendingPlan(id));
+    });
     final s = _c.state;
     final running = _c.running;
     final focused = running ? (s?.focusedSeconds ?? 0) : 0;

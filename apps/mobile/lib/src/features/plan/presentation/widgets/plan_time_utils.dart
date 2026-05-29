@@ -58,14 +58,50 @@ String formatPlanSeconds(int seconds) => formatPlanMinutes((seconds / 60).round(
 
 /// 계획된 시작~종료 (예: 09:00~09:50).
 String formatPlanTimeRange(PlanItem item) {
-  if (item.scheduledStartAt == null || item.targetSeconds <= 0) {
-    return item.scheduledStartAt != null
-        ? _formatClock(item.scheduledStartAt!.toLocal())
+  final start = item.scheduledStartAt?.toLocal();
+  if (start == null && item.targetSeconds <= 0) return '시간 미정';
+  if (start == null) {
+    return item.targetSeconds > 0
+        ? '계획 ${formatPlanSeconds(item.targetSeconds)}'
         : '시간 미정';
   }
-  final start = item.scheduledStartAt!.toLocal();
+  if (item.targetSeconds <= 0) {
+    return '${_formatClock(start)}~';
+  }
   final end = start.add(Duration(seconds: item.targetSeconds));
   return '${_formatClock(start)}~${_formatClock(end)}';
+}
+
+bool sameCalendarDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// 지금 시각이 계획 구간 안이면 해당 항목 (미완료·시작·종료 시각이 모두 있을 때).
+PlanItem? activePlanItemForNow(TodayPlan? plan, DateTime now) {
+  if (plan == null) return null;
+  final t = now.toLocal();
+  for (final item in plan.items) {
+    if (item.isDone) continue;
+    final start = item.scheduledStartAt?.toLocal();
+    if (start == null) continue;
+    if (item.targetSeconds > 0) {
+      final end = start.add(Duration(seconds: item.targetSeconds));
+      if (!t.isBefore(start) && t.isBefore(end)) return item;
+    } else if (!t.isBefore(start)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/// 시간 구간 없을 때 과목명으로 오늘 계획 항목 매칭.
+PlanItem? planItemMatchingSubject(TodayPlan? plan, String subject) {
+  final s = subject.trim();
+  if (plan == null || s.isEmpty) return null;
+  for (final item in plan.items) {
+    if (item.isDone) continue;
+    if (item.subject.trim() == s) return item;
+  }
+  return null;
 }
 
 String _formatClock(DateTime dt) {

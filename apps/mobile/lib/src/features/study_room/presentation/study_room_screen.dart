@@ -390,7 +390,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     if (_controller.roomId == null) return;
     final messenger = ScaffoldMessenger.of(context);
 
-    final summary = _controller.endFocusTracking();
+    final summary = await _controller.endFocusTracking();
     await _persistRecentRoom();
     await _controller.leave();
     if (!mounted) return;

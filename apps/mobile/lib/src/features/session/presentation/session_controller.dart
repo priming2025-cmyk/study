@@ -8,6 +8,7 @@ import '../../../core/supabase/supabase_client.dart';
 import '../../plan/data/plan_models.dart';
 import '../../plan/data/plan_repository.dart';
 import '../../plan/infra/plan_alarm_service.dart';
+import '../../plan/presentation/widgets/plan_time_utils.dart';
 import '../data/session_repository.dart';
 import '../domain/attention_scoring.dart';
 import '../domain/attention_signals.dart';
@@ -126,8 +127,12 @@ class SessionController extends ChangeNotifier {
   /// 미완(완료 아님 & 목표 미달) 항목 중 첫 번째, 없으면 첫 항목.
   static PlanItem? pickDefaultIncompleteItem(TodayPlan? plan) {
     if (plan == null || plan.items.isEmpty) return null;
+    final now = DateTime.now();
+    final active = activePlanItemForNow(plan, now);
+    if (active != null) return active;
     for (final item in plan.items) {
-      if (!item.isDone && item.actualSeconds < item.targetSeconds) {
+      if (!item.isDone &&
+          (item.targetSeconds <= 0 || item.actualSeconds < item.targetSeconds)) {
         return item;
       }
     }
@@ -142,6 +147,18 @@ class SessionController extends ChangeNotifier {
     } else {
       selectedPlanItemId = null;
       selectedSubjectLabel = '';
+    }
+  }
+
+  Future<void> reloadTodayPlan() => _loadTodayPlan();
+
+  Future<void> selectPlanItemById(String planItemId) async {
+    await _loadTodayPlan();
+    for (final item in todayPlan?.items ?? const <PlanItem>[]) {
+      if (item.id == planItemId) {
+        selectPlanItem(item);
+        return;
+      }
     }
   }
 
@@ -219,7 +236,7 @@ class SessionController extends ChangeNotifier {
   }) async {
     final trimmed = subject.trim();
     if (trimmed.isEmpty) return;
-    final clampedMin = targetMinutes.clamp(1, 960);
+    final clampedMin = targetMinutes <= 0 ? 0 : targetMinutes.clamp(5, 240);
 
     final today = DateTime.now();
     DateTime? scheduledUtc;
@@ -263,7 +280,7 @@ class SessionController extends ChangeNotifier {
   }) async {
     final trimmed = subject.trim();
     if (trimmed.isEmpty) return;
-    final clampedMin = targetMinutes.clamp(1, 960);
+    final clampedMin = targetMinutes <= 0 ? 0 : targetMinutes.clamp(5, 240);
 
     final today = DateTime.now();
     final planDay = DateTime(today.year, today.month, today.day);

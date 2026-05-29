@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/plan_models.dart';
 import 'minute_scroll_picker.dart';
+import 'plan_time_utils.dart';
 
 /// 계획 카드 시계 버튼 — 시작 시각 + 소요 시간 (스크롤).
 class PlanItemTimeSheet extends StatefulWidget {
@@ -46,29 +47,35 @@ class PlanItemTimeSheet extends StatefulWidget {
 class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
   late int _durationMin;
   late int _startMin;
+  bool _startUnset = false;
+  bool _durationUnset = false;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _durationMin = (widget.item.targetSeconds / 60).round().clamp(5, 240);
+    _durationUnset = widget.item.targetSeconds <= 0;
+    _durationMin = _durationUnset
+        ? 50
+        : (widget.item.targetSeconds / 60).round().clamp(5, 240);
     final sched = widget.item.scheduledStartAt?.toLocal();
+    _startUnset = sched == null;
     if (sched != null) {
       _startMin = sched.hour * 60 + sched.minute;
     } else {
-      final n = TimeOfDay.now();
-      _startMin = n.hour * 60 + n.minute;
+      _startMin = nearestFiveMinuteOfDay(DateTime.now());
     }
   }
 
   Future<void> _submit() async {
     setState(() => _saving = true);
     try {
-      final start = TimeOfDay(hour: _startMin ~/ 60, minute: _startMin % 60);
       await widget.onSave(
-        targetMinutes: _durationMin,
-        startTime: start,
-        reminderEnabled: true,
+        targetMinutes: _durationUnset ? 0 : _durationMin,
+        startTime: _startUnset
+            ? null
+            : TimeOfDay(hour: _startMin ~/ 60, minute: _startMin % 60),
+        reminderEnabled: !_startUnset,
       );
       if (mounted) Navigator.pop(context);
     } finally {
@@ -95,7 +102,13 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
             maxMinutes: 23 * 60 + 55,
             initialStepMinutes: 5,
             compact: true,
-            onChanged: (m) => setState(() => _startMin = m),
+            showUnsetOption: true,
+            isUnset: _startUnset,
+            onUnsetTap: () => setState(() => _startUnset = true),
+            onChanged: (m) => setState(() {
+              _startMin = m;
+              _startUnset = false;
+            }),
           ),
           const SizedBox(height: 10),
           MinuteScrollPicker(
@@ -106,7 +119,13 @@ class _PlanItemTimeSheetState extends State<PlanItemTimeSheet> {
             initialStepMinutes: 5,
             isDuration: true,
             compact: true,
-            onChanged: (m) => setState(() => _durationMin = m),
+            showUnsetOption: true,
+            isUnset: _durationUnset,
+            onUnsetTap: () => setState(() => _durationUnset = true),
+            onChanged: (m) => setState(() {
+              _durationMin = m;
+              _durationUnset = false;
+            }),
           ),
           const SizedBox(height: 16),
           FilledButton(
