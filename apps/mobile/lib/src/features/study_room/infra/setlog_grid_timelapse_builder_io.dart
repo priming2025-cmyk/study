@@ -47,32 +47,39 @@ abstract final class SetlogGridTimelapseBuilderImpl {
 
     try {
       var globalFrameIndex = 0;
-      for (final hour in prep.validHours) {
-        final hourLabel = '${hour.toString().padLeft(2, '0')}:00';
+      final frameSpecs = SetlogGridTimelapseFrames.buildFrameSpecs(
+        input: input,
+        prep: prep,
+      );
+      if (frameSpecs.isEmpty) return null;
 
-        for (int minute = 0; minute < 60; minute++) {
-          final slots = SetlogGridTimelapseFrames.buildSlotFrames(
-            input: input,
-            prep: prep,
-            bytesCache: bytesCache,
-            hour: hour,
-            minute: minute,
-          );
+      for (final spec in frameSpecs) {
+        final timeLabel =
+            '${spec.hour.toString().padLeft(2, '0')}:${spec.minute.toString().padLeft(2, '0')}';
 
-          final rgba = await SetlogGridTimelapseFrames.renderGridFrame(
-            slots: slots,
-            hourLabel: hourLabel,
-            width: input.width,
-            height: input.height,
-            streakDays: prep.streakDays,
-            showStreak: globalFrameIndex == 0,
-            showHourLabel: minute == 0,
-          );
-          if (rgba != null) {
+        final slots = SetlogGridTimelapseFrames.buildSlotFrames(
+          input: input,
+          prep: prep,
+          bytesCache: bytesCache,
+          hour: spec.hour,
+          minute: spec.minute,
+        );
+
+        final rgba = await SetlogGridTimelapseFrames.renderGridFrame(
+          slots: slots,
+          hourLabel: timeLabel,
+          width: input.width,
+          height: input.height,
+          streakDays: prep.streakDays,
+          showStreak: globalFrameIndex == 0,
+          showHourLabel: true,
+        );
+        if (rgba != null) {
+          for (var i = 0; i < spec.repeat; i++) {
             await FlutterQuickVideoEncoder.appendVideoFrame(rgba);
           }
-          globalFrameIndex++;
         }
+        globalFrameIndex++;
       }
     } catch (e, st) {
       debugPrint('[GridTimelapse] 인코딩 오류: $e\n$st');

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
+import 'study_room_member_media.dart';
 import 'study_room_peer_dm_chip.dart';
 
 part 'study_room_member_card_part.dart';
@@ -31,10 +32,6 @@ class StudyRoomMemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final snapshotUrl = (member.snapshotUrl != null &&
-            member.snapshotUrl!.isNotEmpty)
-        ? member.snapshotUrl
-        : null;
     final displayLabel = () {
       final n = member.displayName?.trim();
       if (n != null && n.isNotEmpty) return n;
@@ -58,21 +55,10 @@ class StudyRoomMemberCard extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (snapshotUrl != null)
-            Image.network(
-              snapshotUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _Placeholder(cs: cs),
-              loadingBuilder: (_, child, progress) =>
-                  progress == null ? child : _Placeholder(cs: cs),
-            )
-          else if (member.publicViewerMode == 'rest')
-            _ProfilePlaceholder(
-              cs: cs,
-              label: displayLabel,
-            )
-          else
-            _Placeholder(cs: cs),
+          StudyRoomMemberMedia(
+            member: member,
+            displayLabel: displayLabel,
+          ),
 
           Positioned(
             top: 6,

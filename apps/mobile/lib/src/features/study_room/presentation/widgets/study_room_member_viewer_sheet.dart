@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/study_room_models.dart';
+import 'study_room_member_media.dart';
 
 /// 멤버 카드 우측 모니터 아이콘 → 3가지 뷰어 모드 시트.
 enum MemberViewerMode {
@@ -165,6 +166,22 @@ class _ModeContent extends StatelessWidget {
       );
     }
 
+    if (peerMode == 'video') {
+      return SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _VideoView(member: member),
+      );
+    }
+
+    if (peerMode == 'capture') {
+      return SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: _PhotoView(member: member),
+      );
+    }
+
     return SingleChildScrollView(
       controller: scroll,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -228,25 +245,36 @@ class _VideoView extends StatelessWidget {
 
   const _VideoView({required this.member});
 
+  String get _displayName =>
+      member.displayName ?? member.userId.substring(0, 8);
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final snapshotUrl = member.snapshotUrl;
     return Column(
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: AspectRatio(
             aspectRatio: 3 / 4,
-            child: snapshotUrl != null
-                ? Image.network(snapshotUrl, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _NoSnapshot(cs: cs))
-                : _NoSnapshot(cs: cs),
+            child: StudyRoomMemberMedia(
+              member: member,
+              displayLabel: _displayName,
+            ),
           ),
         ),
+        if (member.latestClipAt != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '마지막 2초 영상: ${_formatAgo(member.latestClipAt!)}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ],
         const SizedBox(height: 8),
         Text(
-          '매시 0·10·20·30·40·50분에 약 2초 MP4/WebM을 올려요 (24시간 보관)',
+          '10분마다 약 2초 MP4/WebM을 올려요 (24시간 보관)',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -254,6 +282,13 @@ class _VideoView extends StatelessWidget {
         const SizedBox(height: 16),
       ],
     );
+  }
+
+  String _formatAgo(DateTime at) {
+    final d = DateTime.now().difference(at);
+    if (d.inSeconds < 60) return '방금 전';
+    if (d.inMinutes < 60) return '${d.inMinutes}분 전';
+    return '${d.inHours}시간 전';
   }
 }
 

@@ -29,6 +29,9 @@ class StudyRoomMember {
   final int? focusScore;
   /// 사용자가 선택한 공개 모드. 예) capture/video/rest
   final String? publicViewerMode;
+  /// 2초 영상 모드: 최근 업로드 클립 URL (presence)
+  final String? latestClipUrl;
+  final DateTime? latestClipAt;
   final String? subjectName;
   final String? goalText;
   /// 셋터디 내 공개 “내 상태” (예: 수학 공부 중)
@@ -51,6 +54,8 @@ class StudyRoomMember {
     this.status,
     this.focusScore,
     this.publicViewerMode,
+    this.latestClipUrl,
+    this.latestClipAt,
     this.subjectName,
     this.goalText,
     this.statusText,

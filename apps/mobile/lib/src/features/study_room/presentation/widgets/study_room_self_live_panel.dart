@@ -51,6 +51,7 @@ class _StudyRoomSelfLifecycle extends WidgetsBindingObserver {
 class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
   final AttentionCameraService _camera = AttentionCameraService.instance;
   StreamSubscription<AttentionSignals>? _sub;
+  Timer? _streamWatchdog;
   bool _appInForeground = true;
   DateTime? _lastSignalAt;
   bool _ownsCamera = false;
@@ -120,6 +121,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   /// 탭 전환: 스트림 구독만 해제 (카메라 세션 유지 → 공부 탭·복귀 시 프리즈 방지).
   Future<void> _suspendForTab() async {
+    _stopStreamWatchdog();
     await _sub?.cancel();
     _sub = null;
     if (mounted) setState(() {});
@@ -143,6 +145,21 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
       widget.controller.feedFocusSignals(s);
       if (mounted) setState(() {});
     });
+    _startStreamWatchdog();
+  }
+
+  void _startStreamWatchdog() {
+    _streamWatchdog?.cancel();
+    if (!widget.cameraSlotActive) return;
+    _streamWatchdog = Timer.periodic(const Duration(seconds: 6), (_) {
+      if (!mounted || !widget.cameraSlotActive) return;
+      unawaited(_camera.ensurePreviewStreamRunning());
+    });
+  }
+
+  void _stopStreamWatchdog() {
+    _streamWatchdog?.cancel();
+    _streamWatchdog = null;
   }
 
   Future<void> _boot() async {
@@ -150,6 +167,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
     if (kIsWeb) {
       WebSharedCamera.instance.openFromUserGesture();
+      _startStreamWatchdog();
       if (mounted) setState(() {});
       return;
     }
@@ -214,6 +232,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
   @override
   void dispose() {
+    _stopStreamWatchdog();
     widget.engagedMinListenable.removeListener(_onEngagedChanged);
     widget.controller.removeListener(_onControllerChanged);
     WidgetsBinding.instance.removeObserver(_life);

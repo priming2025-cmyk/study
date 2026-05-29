@@ -1,9 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../domain/attention_signals.dart';
 import 'face_attention_sensor.dart';
+import 'web_camera.dart';
 
 /// 앱 전체 **단일** 전면 카메라·얼굴 센서 (공부 세션 ↔ 셋터디방 이중 점유 방지).
 final class AttentionCameraService {
@@ -64,6 +66,20 @@ final class AttentionCameraService {
     return _enqueue(() async {
       _holders = 0;
       await _sensor.stop();
+    });
+  }
+
+  /// 셋터디: 스냅샷·녹화 후 끊긴 이미지 스트림을 재연결 (자리이탈 시 프리뷰 검은 화면 방지).
+  Future<void> ensurePreviewStreamRunning() {
+    return _enqueue(() async {
+      if (kIsWeb) {
+        if (!WebSharedCamera.instance.isStreamReady) {
+          WebSharedCamera.instance.openFromUserGesture();
+        }
+        return;
+      }
+      if (!hasActiveCamera) return;
+      await _sensor.ensureImageStreamRunning();
     });
   }
 

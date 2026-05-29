@@ -487,6 +487,28 @@ class FaceAttentionSensor {
 
   int get previewGeneration => _streamGeneration;
 
+  /// 이미지 스트림이 끊겼을 때 프리뷰·센서를 살려 둡니다 (녹화/스냅샷 직후).
+  Future<void> ensureImageStreamRunning() async {
+    if (!_running) return;
+    final c = _controller;
+    final cam = _activeCam;
+    final appFg = _activeAppInForeground;
+    final gen = _activeStreamGeneration;
+    if (c == null ||
+        cam == null ||
+        appFg == null ||
+        !c.value.isInitialized ||
+        c.value.isRecordingVideo) {
+      return;
+    }
+    if (c.value.isStreamingImages) return;
+    try {
+      await _bindImageStream(cam: cam, appInForeground: appFg, gen: gen);
+    } catch (e) {
+      debugPrint('FaceAttentionSensor: ensureImageStreamRunning → $e');
+    }
+  }
+
   Future<void> stop() async {
     await _stopInternal();
   }

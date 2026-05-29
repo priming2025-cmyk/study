@@ -173,6 +173,13 @@ class FaceAttentionSensor {
 
   Future<String?> captureStudyClipPath() async => null;
 
+  Future<void> ensureImageStreamRunning() async {
+    if (!_running) return;
+    if (!WebSharedCamera.instance.isStreamReady) {
+      WebSharedCamera.instance.openFromUserGesture();
+    }
+  }
+
   Future<void> stop() async {
     _running = false;
     _streamGeneration++;

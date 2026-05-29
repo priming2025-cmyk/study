@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/study_room_photo_snap_row.dart';
 import '../domain/study_room_video_clip_row.dart';
+import '../domain/study_video_clip_config.dart';
 import 'setlog_grid_timelapse_builder.dart';
 
 /// 그리드 타임랩스 1프레임(1명 슬롯) 데이터
@@ -40,19 +41,46 @@ class GridTimelapsePrepareResult {
   });
 }
 
+/// 1시간 타임랩스에서 실제로 인코딩할 분·반복 횟수 (2초 클립은 3배속 ≈ 10프레임).
+class GridTimelapseFrameSpec {
+  final int hour;
+  final int minute;
+  final int repeat;
+
+  const GridTimelapseFrameSpec({
+    required this.hour,
+    required this.minute,
+    required this.repeat,
+  });
+}
+
 /// iOS/Android·웹 공통: 데이터 준비 + 그리드 프레임 렌더링
 abstract final class SetlogGridTimelapseFrames {
   static Future<GridTimelapsePrepareResult> prepare(GridBuildInput input) async {
-    return GridTimelapsePrepareResult(
-      photoMap: buildPhotoMap(input.allPhotos),
-      clipMap: buildClipMap(input.allClips),
-      validHours: getValidHours(input.allPhotos, input.allClips),
+    final photoMap = buildPhotoMap(input.allPhotos);
+    final clipMap = buildClipMap(input.allClips);
+    final allHours = getValidHours(input.allPhotos, input.allClips);
+    final prepWithoutHours = GridTimelapsePrepareResult(
+      photoMap: photoMap,
+      clipMap: clipMap,
+      validHours: allHours,
       focusByUserHour: buildFocusByUserHour(
         slots: input.slots,
         photos: input.allPhotos,
         clips: input.allClips,
       ),
       streakDays: await updateAndGetStreakDays(input.downloadedAt),
+    );
+    final activeHours = allHours
+        .where((h) => buildFrameSpecs(input: input, prep: prepWithoutHours)
+            .any((s) => s.hour == h))
+        .toList();
+    return GridTimelapsePrepareResult(
+      photoMap: photoMap,
+      clipMap: clipMap,
+      validHours: activeHours,
+      focusByUserHour: prepWithoutHours.focusByUserHour,
+      streakDays: prepWithoutHours.streakDays,
     );
   }
 
@@ -79,11 +107,14 @@ abstract final class SetlogGridTimelapseFrames {
     final frames = <GridSlotFrame>[];
 
     for (final slot in input.slots) {
-      // 1분 1장 사진 우선, 10분 단위 클립 포스터는 해당 분에만 사용 (캐리포워드 없음)
+      // 캡쳐 모드: 1분 1장 사진. 2초 영상 모드: 10분 슬롯(0·10·20…) 포스터만.
       final photoUrl = prep.photoMap[slot.userId]?[minuteKey];
-      final clipUrl = photoUrl == null
-          ? (prep.clipMap[slot.userId]?[clipKey])
-          : null;
+      final String? clipUrl;
+      if ((minute % 10) == 0) {
+        clipUrl = prep.clipMap[slot.userId]?[clipKey];
+      } else {
+        clipUrl = null;
+      }
       final url = photoUrl ?? clipUrl;
 
       final snap = photoUrl != null
@@ -128,7 +159,8 @@ abstract final class SetlogGridTimelapseFrames {
       final url = c.posterUrl;
       if (url == null || url.isEmpty) continue;
       final local = c.recordedAt.toLocal();
-      final key = local.hour * 60 + local.minute;
+      // 10분 슬롯(0·10·20…)에 맞춰 저장 — 촬영 시각이 :03이어도 :00 블록에 매핑
+      final key = local.hour * 60 + (local.minute ~/ 10) * 10;
       (map[c.userId] ??= {})[key] = url;
     }
     return map;
@@ -161,6 +193,77 @@ abstract final class SetlogGridTimelapseFrames {
       }
     }
     return hours.toList()..sort();
+  }
+
+  /// 2초 클립(≈2.5초)을 3배속으로 4초/시간에 맞추기 위한 프레임 반복 수.
+  static int clipBurstFrameCount(int fps) =>
+      ((StudyVideoClipConfig.slotDurationMs / 1000.0) / 3.0 * fps).round().clamp(8, 16);
+
+  static bool minuteHasMedia({
+    required GridBuildInput input,
+    required GridTimelapsePrepareResult prep,
+    required int hour,
+    required int minute,
+  }) {
+    final minuteKey = hour * 60 + minute;
+    final clipKey = hour * 60 + (minute ~/ 10) * 10;
+    for (final slot in input.slots) {
+      if (prep.photoMap[slot.userId]?[minuteKey] != null) return true;
+      if (prep.clipMap[slot.userId]?[clipKey] != null &&
+          minute % 10 == 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool minuteHasClipBurst({
+    required GridBuildInput input,
+    required GridTimelapsePrepareResult prep,
+    required int hour,
+    required int minute,
+  }) {
+    if (minute % 10 != 0) return false;
+    final clipKey = hour * 60 + minute;
+    for (final slot in input.slots) {
+      if (prep.clipMap[slot.userId]?[clipKey] != null) return true;
+    }
+    return false;
+  }
+
+  static List<GridTimelapseFrameSpec> buildFrameSpecs({
+    required GridBuildInput input,
+    required GridTimelapsePrepareResult prep,
+  }) {
+    final burst = clipBurstFrameCount(input.fps);
+    final specs = <GridTimelapseFrameSpec>[];
+
+    for (final hour in prep.validHours) {
+      for (var minute = 0; minute < 60; minute++) {
+        if (!minuteHasMedia(
+          input: input,
+          prep: prep,
+          hour: hour,
+          minute: minute,
+        )) {
+          continue;
+        }
+        final repeat = minuteHasClipBurst(
+          input: input,
+          prep: prep,
+          hour: hour,
+          minute: minute,
+        )
+            ? burst
+            : 1;
+        specs.add(GridTimelapseFrameSpec(
+          hour: hour,
+          minute: minute,
+          repeat: repeat,
+        ));
+      }
+    }
+    return specs;
   }
 
   static Map<String, Map<int, int>> buildFocusByUserHour({
@@ -260,7 +363,15 @@ abstract final class SetlogGridTimelapseFrames {
     await Future.wait(
       urls.map((url) async {
         try {
-          final res = await http.get(Uri.parse(url));
+          final uri = Uri.parse(url);
+          var res = await http.get(uri);
+          if (res.statusCode != 200 || res.bodyBytes.isEmpty) {
+            // 캐시 버스터 쿼리가 문제일 때 한 번 더 시도
+            final stripped = uri.replace(queryParameters: {});
+            if (stripped.toString() != uri.toString()) {
+              res = await http.get(stripped);
+            }
+          }
           if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
             result[url] = res.bodyBytes;
           }
