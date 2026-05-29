@@ -145,27 +145,32 @@ class _StudyRoomMemberMediaState extends State<StudyRoomMemberMedia> {
           controller != null &&
           controller.value.isInitialized;
 
-      if (showVideo) {
+      if (poster != null || showVideo) {
         return Stack(
           fit: StackFit.expand,
           children: [
             if (poster != null) _networkImage(poster, cs),
-            FittedBox(
-              fit: widget.fit,
-              clipBehavior: Clip.hardEdge,
-              alignment: Alignment.center,
-              child: SizedBox(
-                width: controller.value.size.width,
-                height: controller.value.size.height,
-                child: VideoPlayer(controller),
+            if (showVideo)
+              FittedBox(
+                fit: widget.fit,
+                clipBehavior: Clip.hardEdge,
+                alignment: Alignment.center,
+                child: SizedBox(
+                  width: controller.value.size.width,
+                  height: controller.value.size.height,
+                  child: VideoPlayer(controller),
+                ),
+              )
+            else if (_videoUrl != null && !_videoFailed)
+              const Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
-            ),
           ],
         );
-      }
-
-      if (poster != null) {
-        return _networkImage(poster, cs);
       }
 
       return StudyRoomMemberVideoPlaceholder(cs: cs);

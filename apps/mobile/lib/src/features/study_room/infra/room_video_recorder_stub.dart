@@ -76,6 +76,20 @@ class RoomVideoRecorder {
     } catch (e, st) {
       debugPrint('[RoomVideoRecorder] compress: $e\n$st');
       try {
+        final raw = File(path);
+        if (await raw.exists()) {
+          final bytes = await raw.readAsBytes();
+          if (bytes.isNotEmpty &&
+              bytes.length <= StudyVideoClipConfig.maxUploadBytes) {
+            await raw.delete();
+            return StudyVideoClipResult(
+              videoBytes: bytes,
+              mimeType: 'video/mp4',
+              fileExtension: 'mp4',
+              durationMs: StudyVideoClipConfig.slotDurationMs,
+            );
+          }
+        }
         await File(path).delete();
       } catch (_) {}
       return null;
