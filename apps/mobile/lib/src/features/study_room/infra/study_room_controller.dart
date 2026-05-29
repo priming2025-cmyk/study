@@ -32,8 +32,42 @@ class StudyRoomCreated {
 
 const _snapshotBucket = 'study-snapshots';
 const _captureInterval = Duration(minutes: 1);
-const _videoInterval = Duration(minutes: 10);
-const _videoCameraWarmup = Duration(milliseconds: 800);
+const _videoCameraWarmup = Duration(milliseconds: 1500);
+
+/// 2초 영상 시계 슬롯: 매시 00·10·20·30·40·50분 (로컬 시각).
+int _videoClockSlotKey(DateTime local) {
+  return local.year * 100000000 +
+      local.month * 1000000 +
+      local.day * 10000 +
+      local.hour * 100 +
+      (local.minute ~/ 10) * 10;
+}
+
+Duration _delayUntilNextVideoClockSlot(DateTime from) {
+  final local = from.toLocal();
+  var nextMinute = ((local.minute ~/ 10) + 1) * 10;
+  var hour = local.hour;
+  var year = local.year;
+  var month = local.month;
+  var day = local.day;
+  if (nextMinute >= 60) {
+    nextMinute = 0;
+    hour++;
+    if (hour >= 24) {
+      final tomorrow = DateTime(year, month, day).add(const Duration(days: 1));
+      year = tomorrow.year;
+      month = tomorrow.month;
+      day = tomorrow.day;
+      hour = 0;
+    }
+  }
+  final next = DateTime(year, month, day, hour, nextMinute);
+  final delay = next.difference(local);
+  if (delay.inMilliseconds <= 500) {
+    return const Duration(minutes: 10);
+  }
+  return delay;
+}
 
 class _ReactionEntry {
   final StudyRoomReactionOverlay overlay;
@@ -173,6 +207,8 @@ class StudyRoomController extends ChangeNotifier {
   RealtimeChannel? _messageChannel;
   Timer? _snapshotTimer;
   Timer? _videoSlotTimer;
+  int _videoScheduleGen = 0;
+  int? _lastVideoClockSlotKey;
   bool _snapshotInitialized = false;
 
   String _selfGoalText = '';
@@ -557,8 +593,7 @@ class StudyRoomController extends ChangeNotifier {
     cancelFocusTracking();
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
-    _videoSlotTimer?.cancel();
-    _videoSlotTimer = null;
+    _cancelVideoSchedule();
 
     for (final e in _reactions.values) {
       e.timer.cancel();
@@ -873,11 +908,21 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _cancelVideoSchedule() {
+    _videoScheduleGen++;
+    _videoSlotTimer?.cancel();
+    _videoSlotTimer = null;
+  }
+
+  bool _isCameraReadyForVideoClip() {
+    if (kIsWeb) return WebSharedCamera.instance.isStreamReady;
+    return AttentionCameraService.instance.hasActiveCamera;
+  }
+
   Future<void> _applyRestProfilePresence() async {
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
-    _videoSlotTimer?.cancel();
-    _videoSlotTimer = null;
+    _cancelVideoSchedule();
     final avatar = _selfAvatarUrl ?? '';
     selfSnapshotUrl = avatar.isNotEmpty ? avatar : null;
     await _trackSelfFull(snapshotUrl: avatar);
@@ -1098,13 +1143,12 @@ class StudyRoomController extends ChangeNotifier {
     }
 
     if (_selfPublicViewerMode == 'video') {
-      _videoSlotTimer?.cancel();
-      _videoSlotTimer = null;
+      _cancelVideoSchedule();
       unawaited(_runVideoSlotSchedule(roomId: rid, userId: uid));
       return;
     }
 
-    _videoSlotTimer?.cancel();
+    _cancelVideoSchedule();
 
     Future<void> tick() async {
       if (roomId != rid || _selfId != uid) return;
@@ -1128,35 +1172,93 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 2초 영상 모드: 카메라 준비 후 첫 클립 → 이후 10분마다 반복 (1분 사진 없음).
+  /// B-2: 입장·모드 전환 직후 즉시 1회 + 매시 00·10·20·30·40·50분(로컬) 2초 영상.
   Future<void> _runVideoSlotSchedule({
     required String roomId,
     required String userId,
   }) async {
-    await _captureFirstVideoWhenCameraReady(roomId: roomId, userId: userId);
-    if (this.roomId != roomId ||
+    _videoScheduleGen++;
+    final gen = _videoScheduleGen;
+    _lastVideoClockSlotKey = null;
+
+    unawaited(_captureFirstVideoWhenCameraReady(
+      roomId: roomId,
+      userId: userId,
+      scheduleGen: gen,
+    ));
+
+    if (gen != _videoScheduleGen ||
+        this.roomId != roomId ||
         _selfId != userId ||
         _selfPublicViewerMode != 'video') {
       return;
     }
-    _videoSlotTimer?.cancel();
-    _videoSlotTimer = Timer.periodic(
-      _videoInterval,
-      (_) => unawaited(_captureVideoSlot(roomId: roomId, userId: userId)),
+    _scheduleNextClockVideoCapture(
+      roomId: roomId,
+      userId: userId,
+      scheduleGen: gen,
     );
+  }
+
+  void _scheduleNextClockVideoCapture({
+    required String roomId,
+    required String userId,
+    required int scheduleGen,
+  }) {
+    _videoSlotTimer?.cancel();
+    final delay = _delayUntilNextVideoClockSlot(DateTime.now());
+    debugPrint(
+      '[StudyRoomController] next 2s video at clock slot in ${delay.inMinutes}m ${delay.inSeconds % 60}s',
+    );
+    _videoSlotTimer = Timer(delay, () {
+      if (scheduleGen != _videoScheduleGen) return;
+      if (this.roomId != roomId || _selfId != userId) return;
+      if (_selfPublicViewerMode != 'video') return;
+
+      unawaited(() async {
+        final slotKey = _videoClockSlotKey(DateTime.now().toLocal());
+        if (_lastVideoClockSlotKey == slotKey) {
+          _scheduleNextClockVideoCapture(
+            roomId: roomId,
+            userId: userId,
+            scheduleGen: scheduleGen,
+          );
+          return;
+        }
+        final ok = await _captureVideoSlot(roomId: roomId, userId: userId);
+        if (ok) _lastVideoClockSlotKey = slotKey;
+        if (scheduleGen != _videoScheduleGen) return;
+        if (this.roomId != roomId || _selfId != userId) return;
+        if (_selfPublicViewerMode != 'video') return;
+        _scheduleNextClockVideoCapture(
+          roomId: roomId,
+          userId: userId,
+          scheduleGen: scheduleGen,
+        );
+      }());
+    });
   }
 
   /// 입장·모드 전환 직후: 카메라가 준비될 때까지 재시도하며 첫 2초 영상을 올립니다.
   Future<void> _captureFirstVideoWhenCameraReady({
     required String roomId,
     required String userId,
+    required int scheduleGen,
   }) async {
     await Future<void>.delayed(_videoCameraWarmup);
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < 45; i++) {
+      if (scheduleGen != _videoScheduleGen) return;
       if (this.roomId != roomId || _selfId != userId) return;
       if (_selfPublicViewerMode != 'video') return;
+      if (!_isCameraReadyForVideoClip()) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        continue;
+      }
       final ok = await _captureVideoSlot(roomId: roomId, userId: userId);
-      if (ok) return;
+      if (ok) {
+        _lastVideoClockSlotKey = _videoClockSlotKey(DateTime.now().toLocal());
+        return;
+      }
       await Future<void>.delayed(const Duration(seconds: 2));
     }
   }
@@ -1167,7 +1269,7 @@ class StudyRoomController extends ChangeNotifier {
   }) async {
     if (this.roomId != roomId || _selfId != userId) return false;
     if (_selfPublicViewerMode != 'video') return false;
-    if (!_focusSignals.facePresent) return false;
+    if (!_isCameraReadyForVideoClip()) return false;
     try {
       final clip = await _videoRecorder.captureCompressedClip();
       if (clip == null) return false;
