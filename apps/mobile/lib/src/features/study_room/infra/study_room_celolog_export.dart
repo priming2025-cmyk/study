@@ -1,10 +1,8 @@
+import '../domain/celolog_export_speed.dart';
 import '../domain/study_room_photo_snap_row.dart';
-import '../domain/study_room_video_clip_row.dart';
 import 'setlog_grid_timelapse_builder.dart';
 import 'study_room_celolog_repository.dart';
 import 'study_room_controller.dart';
-import 'study_room_photo_snaps_repository.dart';
-import 'study_room_video_clips_repository.dart';
 
 enum CelologExportResult {
   success,
@@ -17,30 +15,23 @@ abstract final class StudyRoomCelologExport {
   static Future<CelologExportResult> saveTodayToGallery({
     required StudyRoomController controller,
     String? roomId,
+    CelologExportSpeed speed = CelologExportSpeed.x2,
   }) async {
     final rid = roomId ?? controller.roomId;
 
-    late final List<StudyRoomPhotoSnapRow> photos;
-    late final List<StudyRoomVideoClipRow> clips;
-
+    final List<StudyRoomPhotoSnapRow> photos;
     if (rid != null) {
       final room = await StudyRoomCelologRepository.fetchRoomToday(roomId: rid);
       photos = room.photos;
-      clips = room.clips;
     } else {
-      photos = await StudyRoomPhotoSnapsRepository.fetchMyToday(roomId: null);
-      clips = await StudyRoomVideoClipsRepository.fetchMyToday(roomId: null);
-    }
-
-    if (!_hasRenderableMedia(photos, clips)) {
       return CelologExportResult.noData;
     }
 
-    final slots = _resolveSlotsWithMedia(
-      controller: controller,
-      photos: photos,
-      clips: clips,
-    );
+    if (photos.isEmpty) {
+      return CelologExportResult.noData;
+    }
+
+    final slots = _resolveRoomSlots(controller: controller);
     if (slots.isEmpty) {
       return CelologExportResult.noData;
     }
@@ -50,8 +41,8 @@ abstract final class StudyRoomCelologExport {
         input: GridBuildInput(
           slots: slots,
           allPhotos: photos,
-          allClips: clips,
           downloadedAt: DateTime.now(),
+          speed: speed,
         ),
       );
       return path != null ? CelologExportResult.success : CelologExportResult.noData;
@@ -60,46 +51,19 @@ abstract final class StudyRoomCelologExport {
     }
   }
 
-  static bool _hasRenderableMedia(
-    List<StudyRoomPhotoSnapRow> photos,
-    List<StudyRoomVideoClipRow> clips,
-  ) {
-    if (photos.isNotEmpty) return true;
-    return clips.any((c) => c.posterUrl?.trim().isNotEmpty == true);
-  }
-
-  /// 오늘 실제 사진·클립이 있는 멤버만 슬롯에 포함 (Presence만 있는 유령 슬롯 제외).
-  static List<GridMemberSlot> _resolveSlotsWithMedia({
+  /// 방 멤버 고정 순서(나 → peers). 사진 유무와 관계없이 슬롯 유지.
+  static List<GridMemberSlot> _resolveRoomSlots({
     required StudyRoomController controller,
-    required List<StudyRoomPhotoSnapRow> photos,
-    required List<StudyRoomVideoClipRow> clips,
   }) {
-    final activeIds = <String>{
-      for (final p in photos) p.userId,
-      for (final c in clips)
-        if (c.posterUrl?.trim().isNotEmpty == true) c.userId,
-    };
-    if (activeIds.isEmpty) return const [];
-
-    final slotByUser = <String, GridMemberSlot>{};
-    for (final uid in activeIds) {
-      slotByUser[uid] = GridMemberSlot(
-        userId: uid,
-        displayName: controller.displayNameFor(uid),
+    final ordered = <GridMemberSlot>[];
+    for (final s in controller.celologMemberSlots) {
+      ordered.add(
+        GridMemberSlot(
+          userId: s.userId,
+          displayName: s.displayName ?? controller.displayNameFor(s.userId),
+        ),
       );
     }
-
-    final selfId = controller.selfId;
-    final ordered = <GridMemberSlot>[];
-    if (selfId != null && slotByUser.containsKey(selfId)) {
-      ordered.add(slotByUser.remove(selfId)!);
-    }
-    for (final s in controller.celologMemberSlots) {
-      if (s.userId == selfId) continue;
-      final slot = slotByUser.remove(s.userId);
-      if (slot != null) ordered.add(slot);
-    }
-    ordered.addAll(slotByUser.values);
     return ordered;
   }
 }

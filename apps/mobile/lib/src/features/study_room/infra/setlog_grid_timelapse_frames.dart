@@ -3,11 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/study_room_photo_snap_row.dart';
-import '../domain/study_room_video_clip_row.dart';
-import '../domain/study_video_clip_config.dart';
 import 'setlog_grid_timelapse_builder.dart';
 
 /// 그리드 타임랩스 1프레임(1명 슬롯) 데이터
@@ -15,33 +12,24 @@ class GridSlotFrame {
   final String? displayName;
   final String? statusText;
   final Uint8List? imageBytes;
-  final int? focusPercent;
 
   const GridSlotFrame({
     this.displayName,
     this.statusText,
     this.imageBytes,
-    this.focusPercent,
   });
 }
 
 class GridTimelapsePrepareResult {
   final Map<String, Map<int, String>> photoMap;
-  final Map<String, Map<int, String>> clipMap;
-  final List<int> validHours;
-  final Map<String, Map<int, int>> focusByUserHour;
-  final int streakDays;
+  final List<int> validMinuteKeys;
 
   const GridTimelapsePrepareResult({
     required this.photoMap,
-    required this.clipMap,
-    required this.validHours,
-    required this.focusByUserHour,
-    required this.streakDays,
+    required this.validMinuteKeys,
   });
 }
 
-/// 1시간 타임랩스에서 실제로 인코딩할 분·반복 횟수 (2초 클립은 3배속 ≈ 10프레임).
 class GridTimelapseFrameSpec {
   final int hour;
   final int minute;
@@ -56,31 +44,18 @@ class GridTimelapseFrameSpec {
 
 /// iOS/Android·웹 공통: 데이터 준비 + 그리드 프레임 렌더링
 abstract final class SetlogGridTimelapseFrames {
+  static const _introOutroSeconds = 2;
+
   static Future<GridTimelapsePrepareResult> prepare(GridBuildInput input) async {
     final photoMap = buildPhotoMap(input.allPhotos);
-    final clipMap = buildClipMap(input.allClips);
-    final allHours = getValidHours(input.allPhotos, input.allClips);
-    final prepWithoutHours = GridTimelapsePrepareResult(
-      photoMap: photoMap,
-      clipMap: clipMap,
-      validHours: allHours,
-      focusByUserHour: buildFocusByUserHour(
-        slots: input.slots,
-        photos: input.allPhotos,
-        clips: input.allClips,
-      ),
-      streakDays: await updateAndGetStreakDays(input.downloadedAt),
-    );
-    final activeHours = allHours
-        .where((h) => buildFrameSpecs(input: input, prep: prepWithoutHours)
-            .any((s) => s.hour == h))
-        .toList();
+    final keys = <int>{};
+    for (final um in photoMap.values) {
+      keys.addAll(um.keys);
+    }
+    final validMinuteKeys = keys.toList()..sort();
     return GridTimelapsePrepareResult(
       photoMap: photoMap,
-      clipMap: clipMap,
-      validHours: activeHours,
-      focusByUserHour: prepWithoutHours.focusByUserHour,
-      streakDays: prepWithoutHours.streakDays,
+      validMinuteKeys: validMinuteKeys,
     );
   }
 
@@ -89,11 +64,26 @@ abstract final class SetlogGridTimelapseFrames {
     for (final um in prep.photoMap.values) {
       allUrls.addAll(um.values);
     }
-    for (final um in prep.clipMap.values) {
-      allUrls.addAll(um.values);
-    }
     return allUrls;
   }
+
+  static List<GridTimelapseFrameSpec> buildFrameSpecs({
+    required GridBuildInput input,
+    required GridTimelapsePrepareResult prep,
+  }) {
+    final repeat = input.speed.frameRepeatAt(encoderFps: input.fps);
+    return [
+      for (final key in prep.validMinuteKeys)
+        GridTimelapseFrameSpec(
+          hour: key ~/ 60,
+          minute: key % 60,
+          repeat: repeat,
+        ),
+    ];
+  }
+
+  static int introOutroFrameCount(GridBuildInput input) =>
+      _introOutroSeconds * input.fps;
 
   static List<GridSlotFrame> buildSlotFrames({
     required GridBuildInput input,
@@ -103,25 +93,15 @@ abstract final class SetlogGridTimelapseFrames {
     required int minute,
   }) {
     final minuteKey = hour * 60 + minute;
-    final clipKey = hour * 60 + (minute ~/ 10) * 10;
     final frames = <GridSlotFrame>[];
 
     for (final slot in input.slots) {
-      // 캡쳐 모드: 1분 1장 사진. 2초 영상 모드: 10분 슬롯(0·10·20…) 포스터만.
       final photoUrl = prep.photoMap[slot.userId]?[minuteKey];
-      final String? clipUrl;
-      if ((minute % 10) == 0) {
-        clipUrl = prep.clipMap[slot.userId]?[clipKey];
-      } else {
-        clipUrl = null;
-      }
-      final url = photoUrl ?? clipUrl;
-
       final snap = photoUrl != null
           ? findSnap(input.allPhotos, slot.userId, minuteKey)
           : null;
       final imageBytes =
-          url != null ? bytesCache[url] : null;
+          photoUrl != null ? bytesCache[photoUrl] : null;
       final rawStatus = snap?.statusText?.trim();
       final statusText = imageBytes != null &&
               rawStatus != null &&
@@ -133,7 +113,6 @@ abstract final class SetlogGridTimelapseFrames {
         displayName: slot.displayName,
         statusText: statusText,
         imageBytes: imageBytes,
-        focusPercent: prep.focusByUserHour[slot.userId]?[hour],
       ));
     }
     return frames;
@@ -151,21 +130,6 @@ abstract final class SetlogGridTimelapseFrames {
     return map;
   }
 
-  static Map<String, Map<int, String>> buildClipMap(
-    List<StudyRoomVideoClipRow> clips,
-  ) {
-    final map = <String, Map<int, String>>{};
-    for (final c in clips) {
-      final url = c.posterUrl;
-      if (url == null || url.isEmpty) continue;
-      final local = c.recordedAt.toLocal();
-      // 10분 슬롯(0·10·20…)에 맞춰 저장 — 촬영 시각이 :03이어도 :00 블록에 매핑
-      final key = local.hour * 60 + (local.minute ~/ 10) * 10;
-      (map[c.userId] ??= {})[key] = url;
-    }
-    return map;
-  }
-
   static StudyRoomPhotoSnapRow? findSnap(
     List<StudyRoomPhotoSnapRow> photos,
     String userId,
@@ -179,185 +143,6 @@ abstract final class SetlogGridTimelapseFrames {
     return null;
   }
 
-  static List<int> getValidHours(
-    List<StudyRoomPhotoSnapRow> photos,
-    List<StudyRoomVideoClipRow> clips,
-  ) {
-    final hours = <int>{};
-    for (final p in photos) {
-      hours.add(p.recordedAt.toLocal().hour);
-    }
-    for (final c in clips) {
-      if (c.posterUrl?.isNotEmpty == true) {
-        hours.add(c.recordedAt.toLocal().hour);
-      }
-    }
-    return hours.toList()..sort();
-  }
-
-  /// 2초 클립(≈2.5초)을 3배속으로 4초/시간에 맞추기 위한 프레임 반복 수.
-  static int clipBurstFrameCount(int fps) =>
-      ((StudyVideoClipConfig.slotDurationMs / 1000.0) / 3.0 * fps).round().clamp(8, 16);
-
-  static bool minuteHasMedia({
-    required GridBuildInput input,
-    required GridTimelapsePrepareResult prep,
-    required int hour,
-    required int minute,
-  }) {
-    final minuteKey = hour * 60 + minute;
-    final clipKey = hour * 60 + (minute ~/ 10) * 10;
-    for (final slot in input.slots) {
-      if (prep.photoMap[slot.userId]?[minuteKey] != null) return true;
-      if (prep.clipMap[slot.userId]?[clipKey] != null &&
-          minute % 10 == 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static bool minuteHasClipBurst({
-    required GridBuildInput input,
-    required GridTimelapsePrepareResult prep,
-    required int hour,
-    required int minute,
-  }) {
-    if (minute % 10 != 0) return false;
-    final clipKey = hour * 60 + minute;
-    for (final slot in input.slots) {
-      if (prep.clipMap[slot.userId]?[clipKey] != null) return true;
-    }
-    return false;
-  }
-
-  static List<GridTimelapseFrameSpec> buildFrameSpecs({
-    required GridBuildInput input,
-    required GridTimelapsePrepareResult prep,
-  }) {
-    final burst = clipBurstFrameCount(input.fps);
-    final specs = <GridTimelapseFrameSpec>[];
-
-    for (final hour in prep.validHours) {
-      for (var minute = 0; minute < 60; minute++) {
-        if (!minuteHasMedia(
-          input: input,
-          prep: prep,
-          hour: hour,
-          minute: minute,
-        )) {
-          continue;
-        }
-        final repeat = minuteHasClipBurst(
-          input: input,
-          prep: prep,
-          hour: hour,
-          minute: minute,
-        )
-            ? burst
-            : 1;
-        specs.add(GridTimelapseFrameSpec(
-          hour: hour,
-          minute: minute,
-          repeat: repeat,
-        ));
-      }
-    }
-    return specs;
-  }
-
-  static Map<String, Map<int, int>> buildFocusByUserHour({
-    required List<GridMemberSlot> slots,
-    required List<StudyRoomPhotoSnapRow> photos,
-    required List<StudyRoomVideoClipRow> clips,
-  }) {
-    final focusScoresByUserHour = <String, Map<int, List<int>>>{};
-    final photoMinutesByUserHour = <String, Map<int, Set<int>>>{};
-    for (final p in photos) {
-      final l = p.recordedAt.toLocal();
-      final h = l.hour;
-      final m = l.minute;
-      final fs = p.focusScore;
-      if (fs != null) {
-        (focusScoresByUserHour[p.userId] ??= {})[h] ??= <int>[];
-        focusScoresByUserHour[p.userId]![h]!.add(fs.clamp(0, 100));
-      }
-      (photoMinutesByUserHour[p.userId] ??= {})[h] ??= <int>{};
-      photoMinutesByUserHour[p.userId]![h]!.add(m);
-    }
-
-    final clipBlocksByUserHour = <String, Map<int, Set<int>>>{};
-    for (final c in clips) {
-      if (c.posterUrl?.isNotEmpty != true) continue;
-      final l = c.recordedAt.toLocal();
-      final h = l.hour;
-      final block = (l.minute ~/ 10) * 10;
-      (clipBlocksByUserHour[c.userId] ??= {})[h] ??= <int>{};
-      clipBlocksByUserHour[c.userId]![h]!.add(block);
-    }
-
-    final out = <String, Map<int, int>>{};
-    for (final s in slots) {
-      final userId = s.userId;
-      final byHour = <int, int>{};
-      for (int h = 0; h < 24; h++) {
-        final scores = focusScoresByUserHour[userId]?[h];
-        if (scores != null && scores.isNotEmpty) {
-          final avg =
-              (scores.reduce((a, b) => a + b) / scores.length).round();
-          byHour[h] = avg.clamp(0, 100);
-          continue;
-        }
-
-        final mins = photoMinutesByUserHour[userId]?[h]?.length ?? 0;
-        final blocks = clipBlocksByUserHour[userId]?[h]?.length ?? 0;
-        final clipAsMinutes = blocks * 10;
-        final active = (mins + clipAsMinutes).clamp(0, 60);
-        if (active <= 0) continue;
-        final percent = ((active / 60.0) * 100).round();
-        byHour[h] = percent.clamp(0, 100);
-      }
-      out[userId] = byHour;
-    }
-    return out;
-  }
-
-  static Future<int> updateAndGetStreakDays(DateTime downloadedAt) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      const kCount = 'setudy.study_streak.count';
-      const kLast = 'setudy.study_streak.last_day_yyyymmdd';
-
-      final today = downloadedAt.toLocal();
-      final todayKey = today.year * 10000 + today.month * 100 + today.day;
-
-      final lastKey = prefs.getInt(kLast);
-      var count = prefs.getInt(kCount) ?? 0;
-
-      if (lastKey == null) {
-        count = 1;
-      } else if (lastKey != todayKey) {
-        final lastDate = DateTime(
-          lastKey ~/ 10000,
-          (lastKey % 10000) ~/ 100,
-          lastKey % 100,
-        );
-        final diffDays = today
-            .copyWith(hour: 0, minute: 0, second: 0, millisecond: 0)
-            .difference(lastDate.copyWith(
-                hour: 0, minute: 0, second: 0, millisecond: 0))
-            .inDays;
-        count = diffDays == 1 ? (count <= 0 ? 1 : count + 1) : 1;
-      }
-
-      await prefs.setInt(kLast, todayKey);
-      await prefs.setInt(kCount, count);
-      return count;
-    } catch (_) {
-      return 0;
-    }
-  }
-
   static Future<Map<String, Uint8List>> fetchAllBytes(Set<String> urls) async {
     final result = <String, Uint8List>{};
     await Future.wait(
@@ -366,7 +151,6 @@ abstract final class SetlogGridTimelapseFrames {
           final uri = Uri.parse(url);
           var res = await http.get(uri);
           if (res.statusCode != 200 || res.bodyBytes.isEmpty) {
-            // 캐시 버스터 쿼리가 문제일 때 한 번 더 시도
             final stripped = uri.replace(queryParameters: {});
             if (stripped.toString() != uri.toString()) {
               res = await http.get(stripped);
@@ -382,14 +166,75 @@ abstract final class SetlogGridTimelapseFrames {
     return result;
   }
 
+  static String formatDateTitle(DateTime dt) {
+    final l = dt.toLocal();
+    return '${l.year}년 ${l.month}월 ${l.day}일';
+  }
+
+  static Future<Uint8List?> renderTitleFrame({
+    required DateTime date,
+    required int width,
+    required int height,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+      Paint()..color = const Color(0xFF0D0D1A),
+    );
+    _drawCenteredLabel(
+      canvas,
+      formatDateTitle(date),
+      Offset(width / 2, height * 0.42),
+      28,
+      color: const Color(0xCCFFFFFF),
+      fontWeight: FontWeight.w800,
+    );
+    _drawCenteredLabel(
+      canvas,
+      'SETUDY',
+      Offset(width / 2, height * 0.52),
+      36,
+      color: const Color(0xEEFFFFFF),
+      fontWeight: FontWeight.w900,
+      letterSpacing: 6,
+    );
+    return _finishFrame(recorder, width, height);
+  }
+
+  static Future<Uint8List?> renderOutroFrame({
+    required int width,
+    required int height,
+  }) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(
+      recorder,
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+      Paint()..color = const Color(0xFF0D0D1A),
+    );
+    _drawCenteredLabel(
+      canvas,
+      '오늘도\n우리\n함께',
+      Offset(width / 2, height * 0.48),
+      32,
+      color: const Color(0xDDFFFFFF),
+      fontWeight: FontWeight.w800,
+      maxLines: 3,
+    );
+    return _finishFrame(recorder, width, height);
+  }
+
   static Future<Uint8List?> renderGridFrame({
     required List<GridSlotFrame> slots,
     required String hourLabel,
     required int width,
     required int height,
-    required int streakDays,
-    required bool showStreak,
-    bool showHourLabel = true,
   }) async {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(
@@ -448,7 +293,9 @@ abstract final class SetlogGridTimelapseFrames {
             canvas,
             slot.statusText!.trim(),
             rect.center,
-            14,
+            20,
+            color: const Color(0xB3FFFFFF),
+            fontWeight: FontWeight.w800,
             maxWidth: rect.width - 16,
           );
         }
@@ -461,11 +308,6 @@ abstract final class SetlogGridTimelapseFrames {
         _drawCornerLabel(canvas, name, Offset(rect.left + 8, rect.top + 8));
       }
 
-      final p = slot.focusPercent;
-      if (p != null) {
-        _drawBottomRightPill(canvas, '집중도 ${p.clamp(0, 100)}%', rect);
-      }
-
       canvas.drawRect(
         rect,
         Paint()
@@ -475,14 +317,16 @@ abstract final class SetlogGridTimelapseFrames {
       );
     }
 
-    if (showHourLabel) {
-      _drawTopHourLabel(canvas, hourLabel, width.toDouble());
-    }
+    _drawTopHourLabel(canvas, hourLabel, width.toDouble());
 
-    if (showStreak && streakDays >= 2) {
-      _drawStreakBadge(canvas, streakDays);
-    }
+    return _finishFrame(recorder, width, height);
+  }
 
+  static Future<Uint8List?> _finishFrame(
+    ui.PictureRecorder recorder,
+    int width,
+    int height,
+  ) async {
     final picture = recorder.endRecording();
     final image = await picture.toImage(width, height);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
@@ -564,7 +408,10 @@ abstract final class SetlogGridTimelapseFrames {
     Offset center,
     double fontSize, {
     Color color = const Color(0xCCFFFFFF),
+    FontWeight fontWeight = FontWeight.w600,
+    double letterSpacing = 0,
     double maxWidth = 200,
+    int maxLines = 2,
   }) {
     final tp = TextPainter(
       text: TextSpan(
@@ -572,14 +419,17 @@ abstract final class SetlogGridTimelapseFrames {
         style: TextStyle(
           color: color,
           fontSize: fontSize,
-          fontWeight: FontWeight.w600,
+          fontWeight: fontWeight,
+          letterSpacing: letterSpacing,
+          height: 1.15,
           shadows: const [
             Shadow(blurRadius: 4, color: Color(0xAA000000)),
           ],
         ),
       ),
+      textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
-      maxLines: 2,
+      maxLines: maxLines,
     )..layout(maxWidth: maxWidth);
     tp.paint(
       canvas,
@@ -604,44 +454,13 @@ abstract final class SetlogGridTimelapseFrames {
     tp.paint(canvas, topLeft);
   }
 
-  static void _drawBottomRightPill(Canvas canvas, String text, Rect rect) {
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          shadows: [Shadow(blurRadius: 3, color: Color(0xBB000000))],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout(maxWidth: rect.width - 16);
-
-    const padX = 8.0;
-    const padY = 5.0;
-    final pillW = tp.width + padX * 2;
-    final pillH = tp.height + padY * 2;
-    final x = rect.right - pillW - 8;
-    final y = rect.bottom - pillH - 8;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, y, pillW, pillH),
-        const Radius.circular(999),
-      ),
-      Paint()..color = const Color(0x66000000),
-    );
-    tp.paint(canvas, Offset(x + padX, y + padY));
-  }
-
   static void _drawTopHourLabel(Canvas canvas, String label, double width) {
     final tp = TextPainter(
       text: TextSpan(
         text: label,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
+          color: Color(0xB3FFFFFF),
+          fontSize: 20,
           fontWeight: FontWeight.w800,
           letterSpacing: 1,
           shadows: [Shadow(blurRadius: 6, color: Color(0xAA000000))],
@@ -649,44 +468,6 @@ abstract final class SetlogGridTimelapseFrames {
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: width);
-    final bgRect = Rect.fromLTWH(
-      (width - tp.width) / 2 - 8,
-      8,
-      tp.width + 16,
-      tp.height + 8,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bgRect, const Radius.circular(8)),
-      Paint()..color = const Color(0x88000000),
-    );
     tp.paint(canvas, Offset((width - tp.width) / 2, 12));
-  }
-
-  static void _drawStreakBadge(Canvas canvas, int days) {
-    final text = '🔥 $days일 연속 공부중';
-    final tp = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          shadows: [Shadow(blurRadius: 6, color: Color(0xAA000000))],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout(maxWidth: 320);
-
-    const x = 12.0;
-    const y = 54.0;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(x - 8, y - 6, tp.width + 16, tp.height + 12),
-        const Radius.circular(12),
-      ),
-      Paint()..color = const Color(0xAA000000),
-    );
-    tp.paint(canvas, const Offset(x, y));
   }
 }

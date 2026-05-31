@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart'
     show ChangeNotifier, VoidCallback, debugPrint, kIsWeb;
@@ -19,10 +18,7 @@ import '../domain/study_room_join_code.dart';
 import '../../social/domain/friend_dm_models.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
-import 'room_video_recorder.dart';
-import 'study_video_clip_uploader.dart';
 import 'study_room_ambient_player.dart';
-import 'study_room_public_video_capture.dart';
 import 'study_room_recent_room.dart';
 
 class StudyRoomCreated {
@@ -34,41 +30,10 @@ class StudyRoomCreated {
 
 const _snapshotBucket = 'study-snapshots';
 const _captureInterval = Duration(minutes: 1);
-const _videoCameraWarmup = Duration(milliseconds: 1500);
 
-/// 2초 영상 시계 슬롯: 매시 00·10·20·30·40·50분 (로컬 시각).
-int _videoClockSlotKey(DateTime local) {
-  return local.year * 100000000 +
-      local.month * 1000000 +
-      local.day * 10000 +
-      local.hour * 100 +
-      (local.minute ~/ 10) * 10;
-}
-
-Duration _delayUntilNextVideoClockSlot(DateTime from) {
-  final local = from.toLocal();
-  var nextMinute = ((local.minute ~/ 10) + 1) * 10;
-  var hour = local.hour;
-  var year = local.year;
-  var month = local.month;
-  var day = local.day;
-  if (nextMinute >= 60) {
-    nextMinute = 0;
-    hour++;
-    if (hour >= 24) {
-      final tomorrow = DateTime(year, month, day).add(const Duration(days: 1));
-      year = tomorrow.year;
-      month = tomorrow.month;
-      day = tomorrow.day;
-      hour = 0;
-    }
-  }
-  final next = DateTime(year, month, day, hour, nextMinute);
-  final delay = next.difference(local);
-  if (delay.inMilliseconds <= 500) {
-    return const Duration(minutes: 10);
-  }
-  return delay;
+DateTime _expiresAtEndOfLocalDay(DateTime now) {
+  final local = now.toLocal();
+  return DateTime(local.year, local.month, local.day + 1).toUtc();
 }
 
 class _ReactionEntry {
@@ -82,7 +47,6 @@ class StudyRoomController extends ChangeNotifier {
   StudyRoomController() : _ambient = StudyRoomAmbientPlayer();
 
   final RoomSnapshot _snapshot = RoomSnapshot();
-  final RoomVideoRecorder _videoRecorder = RoomVideoRecorder();
   final StudyRoomAmbientPlayer _ambient;
 
   String? roomId;
@@ -94,14 +58,13 @@ class StudyRoomController extends ChangeNotifier {
   String? _selfId;
   String? get selfId => _selfId;
   String? selfSnapshotUrl;
-  String? _selfLatestClipUrl;
-  DateTime? _selfLatestClipAt;
 
   String? roomOwnerId;
 
-  // ── 공개 모드(캡쳐/2초영상/휴식) ────────────────────────────────────────────
+  // ── 공개 모드: capture(1분 캡쳐) / rest(프로필 사진) ───────────────────────
   String _selfPublicViewerMode = 'capture';
   String get selfPublicViewerMode => _selfPublicViewerMode;
+  bool get isPublicCaptureEnabled => _selfPublicViewerMode == 'capture';
   bool get isRoomHost =>
       roomOwnerId != null && _selfId != null && roomOwnerId == _selfId;
 
@@ -193,10 +156,6 @@ class StudyRoomController extends ChangeNotifier {
     final uid = _selfId;
     if (rid != null && uid != null && _selfPublicViewerMode == 'capture') {
       await _uploadSnapshotWhenCameraReady(roomId: rid, userId: uid);
-    } else if (rid != null &&
-        uid != null &&
-        _selfPublicViewerMode == 'video') {
-      _restartSnapshotTimer();
     }
 
     if (_focusState != null && _focusState!.paused && !wasPaused) {
@@ -208,12 +167,9 @@ class StudyRoomController extends ChangeNotifier {
   RealtimeChannel? _presenceChannel;
   RealtimeChannel? _messageChannel;
   Timer? _snapshotTimer;
-  Timer? _videoSlotTimer;
-  int _videoScheduleGen = 0;
-  int? _lastVideoClockSlotKey;
-  /// 공개 모드 전환 시 진행 중인 2초 녹화·업로드를 중단합니다.
+  /// 공개 모드 전환 시 진행 중인 캡쳐를 중단합니다.
   int _mediaCaptureGen = 0;
-  /// 카메라 1분 JPEG vs 2초 MP4 녹화가 동시에 돌지 않도록 직렬화.
+  /// 연속 캡쳐가 겹치지 않도록 직렬화.
   Future<void> _mediaCaptureChain = Future<void>.value();
   bool _snapshotInitialized = false;
 
@@ -560,13 +516,10 @@ class StudyRoomController extends ChangeNotifier {
     try {
       if (!_snapshotInitialized) {
         await _snapshot.initialize();
-        await _videoRecorder.initialize();
         _snapshotInitialized = true;
       }
       if (_selfPublicViewerMode == 'rest') {
         await _applyRestProfilePresence();
-      } else if (_selfPublicViewerMode == 'video') {
-        _restartSnapshotTimer();
       } else {
         await _uploadSnapshotWhenCameraReady(roomId: roomId, userId: userId);
         _restartSnapshotTimer();
@@ -589,18 +542,15 @@ class StudyRoomController extends ChangeNotifier {
         return;
       }
       if (kIsWeb) {
-        if (!StudyRoomPublicVideoCapture.isReady) {
+        if (!WebSharedCamera.instance.isStreamReady) {
           WebSharedCamera.instance.openFromUserGesture();
           await WebSharedCamera.instance.acquire();
           await Future<void>.delayed(const Duration(seconds: 2));
           continue;
         }
       } else if (!AttentionCameraService.instance.hasActiveCamera) {
-        await StudyRoomPublicVideoCapture.ensureCameraReady();
-        if (!AttentionCameraService.instance.hasActiveCamera) {
-          await Future<void>.delayed(const Duration(seconds: 2));
-          continue;
-        }
+        await Future<void>.delayed(const Duration(seconds: 2));
+        continue;
       }
       final url = await _runMediaExclusive(
         () => _uploadSnapshot(roomId: roomId, userId: userId),
@@ -619,7 +569,6 @@ class StudyRoomController extends ChangeNotifier {
     cancelFocusTracking();
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
-    _cancelVideoSchedule();
 
     for (final e in _reactions.values) {
       e.timer.cancel();
@@ -641,8 +590,6 @@ class StudyRoomController extends ChangeNotifier {
     _dmReadAtByUser.clear();
     _fixedPeerOrder.clear();
     selfSnapshotUrl = null;
-    _selfLatestClipUrl = null;
-    _selfLatestClipAt = null;
 
     if (rid != null && uid != null) {
       try {
@@ -659,7 +606,6 @@ class StudyRoomController extends ChangeNotifier {
     await _leaveFriendDmChannel();
     try {
       await _snapshot.dispose();
-      await _videoRecorder.dispose();
     } catch (_) {}
     _snapshotInitialized = false;
     await releaseSharedCameraMedia();
@@ -677,7 +623,6 @@ class StudyRoomController extends ChangeNotifier {
     await leave();
     await _ambient.dispose();
     await _snapshot.dispose();
-    await _videoRecorder.dispose();
   }
 
   // ── 메시지 ─────────────────────────────────────────────────────────────────
@@ -913,9 +858,13 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setSelfPublicCaptureEnabled(bool enabled) async {
+    await setSelfPublicViewerMode(enabled ? 'capture' : 'rest');
+  }
+
   Future<void> setSelfPublicViewerMode(String mode) async {
     final m = mode.trim();
-    if (m.isEmpty) return;
+    if (m != 'capture' && m != 'rest') return;
     if (_selfPublicViewerMode == m) return;
     _mediaCaptureGen++;
     _selfPublicViewerMode = m;
@@ -924,17 +873,11 @@ class StudyRoomController extends ChangeNotifier {
       await _applyRestProfilePresence();
     } else {
       _selfStatus = 'focus';
-      if (m == 'capture') {
-        _selfLatestClipUrl = null;
-        _selfLatestClipAt = null;
-      }
       _restartSnapshotTimer();
-      if (m == 'capture') {
-        final rid = roomId;
-        final uid = _selfId;
-        if (rid != null && uid != null) {
-          unawaited(_uploadSnapshotWhenCameraReady(roomId: rid, userId: uid));
-        }
+      final rid = roomId;
+      final uid = _selfId;
+      if (rid != null && uid != null) {
+        unawaited(_uploadSnapshotWhenCameraReady(roomId: rid, userId: uid));
       }
     }
     await _trackSelfFull(snapshotUrl: selfSnapshotUrl);
@@ -947,21 +890,12 @@ class StudyRoomController extends ChangeNotifier {
     return next;
   }
 
-  void _cancelVideoSchedule() {
-    _videoScheduleGen++;
-    _videoSlotTimer?.cancel();
-    _videoSlotTimer = null;
-  }
-
-  bool _isCameraReadyForVideoClip() => StudyRoomPublicVideoCapture.isReady;
-
-  Future<bool> _ensureCameraForVideoClip() =>
-      StudyRoomPublicVideoCapture.ensureCameraReady();
+  bool get _hasRoomPeers =>
+      _members.any((m) => m.userId != _selfId);
 
   Future<void> _applyRestProfilePresence() async {
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
-    _cancelVideoSchedule();
     final avatar = _selfAvatarUrl ?? '';
     selfSnapshotUrl = avatar.isNotEmpty ? avatar : null;
     await _trackSelfFull(snapshotUrl: avatar);
@@ -1045,14 +979,11 @@ class StudyRoomController extends ChangeNotifier {
 
   Future<void> _trackSelfFull({
     String? snapshotUrl,
-    String? latestClipUrl,
   }) async {
     final ch = _presenceChannel;
     final uid = _selfId;
     if (ch == null || uid == null) return;
 
-    final inVideo = _selfPublicViewerMode == 'video';
-    final clipUrl = inVideo ? (latestClipUrl ?? _selfLatestClipUrl ?? '') : '';
     final snap = snapshotUrl ?? selfSnapshotUrl ?? '';
     final payload = <String, dynamic>{
       'user_id': uid,
@@ -1063,10 +994,8 @@ class StudyRoomController extends ChangeNotifier {
       'status': _selfPublicViewerMode == 'rest' ? 'rest' : _selfStatus,
       'focus_score': focusAverageScore,
       'public_viewer_mode': _selfPublicViewerMode,
-      'latest_clip_url': clipUrl,
-      'latest_clip_at': inVideo
-          ? (_selfLatestClipAt?.toUtc().toIso8601String() ?? '')
-          : '',
+      'latest_clip_url': '',
+      'latest_clip_at': '',
       'subject_name': _selfSubjectName,
       'goal_text': _selfGoalText,
       'status_text': _selfStatusText,
@@ -1180,14 +1109,6 @@ class StudyRoomController extends ChangeNotifier {
       return;
     }
 
-    if (_selfPublicViewerMode == 'video') {
-      _cancelVideoSchedule();
-      unawaited(_runVideoSlotSchedule(roomId: rid, userId: uid));
-      return;
-    }
-
-    _cancelVideoSchedule();
-
     Future<void> tick() async {
       if (roomId != rid || _selfId != uid) return;
       if (_selfPublicViewerMode != 'capture') return;
@@ -1214,252 +1135,6 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// B-2: 입장·모드 전환 직후 즉시 1회 + 매시 00·10·20·30·40·50분(로컬) 2초 영상.
-  Future<void> _runVideoSlotSchedule({
-    required String roomId,
-    required String userId,
-  }) async {
-    _videoScheduleGen++;
-    final gen = _videoScheduleGen;
-    _lastVideoClockSlotKey = null;
-
-    unawaited(_captureFirstVideoWhenCameraReady(
-      roomId: roomId,
-      userId: userId,
-      scheduleGen: gen,
-    ));
-
-    if (gen != _videoScheduleGen ||
-        this.roomId != roomId ||
-        _selfId != userId ||
-        _selfPublicViewerMode != 'video') {
-      return;
-    }
-    _scheduleNextClockVideoCapture(
-      roomId: roomId,
-      userId: userId,
-      scheduleGen: gen,
-    );
-  }
-
-  void _scheduleNextClockVideoCapture({
-    required String roomId,
-    required String userId,
-    required int scheduleGen,
-  }) {
-    _videoSlotTimer?.cancel();
-    final delay = _delayUntilNextVideoClockSlot(DateTime.now());
-    debugPrint(
-      '[StudyRoomController] next 2s video at clock slot in ${delay.inMinutes}m ${delay.inSeconds % 60}s',
-    );
-    _videoSlotTimer = Timer(delay, () {
-      if (scheduleGen != _videoScheduleGen) return;
-      if (this.roomId != roomId || _selfId != userId) return;
-      if (_selfPublicViewerMode != 'video') return;
-
-      unawaited(() async {
-        final slotKey = _videoClockSlotKey(DateTime.now().toLocal());
-        if (_lastVideoClockSlotKey == slotKey) {
-          _scheduleNextClockVideoCapture(
-            roomId: roomId,
-            userId: userId,
-            scheduleGen: scheduleGen,
-          );
-          return;
-        }
-        final ok = await _captureVideoSlot(roomId: roomId, userId: userId);
-        if (ok) _lastVideoClockSlotKey = slotKey;
-        if (scheduleGen != _videoScheduleGen) return;
-        if (this.roomId != roomId || _selfId != userId) return;
-        if (_selfPublicViewerMode != 'video') return;
-        _scheduleNextClockVideoCapture(
-          roomId: roomId,
-          userId: userId,
-          scheduleGen: scheduleGen,
-        );
-      }());
-    });
-  }
-
-  /// 입장·모드 전환 직후: 카메라가 준비될 때까지 재시도하며 첫 2초 영상을 올립니다.
-  Future<void> _captureFirstVideoWhenCameraReady({
-    required String roomId,
-    required String userId,
-    required int scheduleGen,
-  }) async {
-    await Future<void>.delayed(_videoCameraWarmup);
-    for (var i = 0; i < 45; i++) {
-      if (scheduleGen != _videoScheduleGen) return;
-      if (this.roomId != roomId || _selfId != userId) return;
-      if (_selfPublicViewerMode != 'video') return;
-      if (!_isCameraReadyForVideoClip()) {
-        await _ensureCameraForVideoClip();
-        if (!_isCameraReadyForVideoClip()) {
-          await Future<void>.delayed(const Duration(seconds: 2));
-          continue;
-        }
-      }
-      final ok = await _captureVideoSlot(roomId: roomId, userId: userId);
-      if (ok) {
-        _lastVideoClockSlotKey = _videoClockSlotKey(DateTime.now().toLocal());
-        return;
-      }
-      await Future<void>.delayed(const Duration(seconds: 2));
-    }
-    debugPrint('[StudyRoomController] first video slot: gave up after retries');
-  }
-
-  Future<bool> _captureVideoSlot({
-    required String roomId,
-    required String userId,
-  }) async {
-    final slotGen = _mediaCaptureGen;
-    return _runMediaExclusive(() async {
-      if (this.roomId != roomId || _selfId != userId) return false;
-      if (_selfPublicViewerMode != 'video' || slotGen != _mediaCaptureGen) {
-        return false;
-      }
-
-      if (!_isCameraReadyForVideoClip()) {
-        final ready = await _ensureCameraForVideoClip();
-        if (!ready) {
-          debugPrint('[StudyRoomController] captureVideoSlot: camera not ready');
-          return false;
-        }
-      }
-
-      var publishedPoster = false;
-      try {
-        // 1) 즉시 포스터(JPEG) → 다른 사람 화면에 바로 보이게
-        final posterBytes = await _snapshot.capture();
-        if (posterBytes != null && posterBytes.isNotEmpty) {
-          final posterUrl = await _uploadVideoPosterJpeg(
-            roomId: roomId,
-            userId: userId,
-            bytes: posterBytes,
-          );
-          if (posterUrl != null) {
-            selfSnapshotUrl = posterUrl;
-            await _trackSelfFull(snapshotUrl: posterUrl);
-            publishedPoster = true;
-            notifyListeners();
-          }
-        }
-
-        if (_selfPublicViewerMode != 'video' || slotGen != _mediaCaptureGen) {
-          return publishedPoster;
-        }
-
-        if (!kIsWeb) {
-          await AttentionCameraService.instance.ensurePreviewStreamRunning();
-          await Future<void>.delayed(const Duration(milliseconds: 400));
-        }
-
-        if (_selfPublicViewerMode != 'video' || slotGen != _mediaCaptureGen) {
-          return publishedPoster;
-        }
-
-        // 2) 2초 영상 녹화·업로드
-        final clip = await _videoRecorder.captureCompressedClip();
-        if (clip == null) {
-          debugPrint('[StudyRoomController] captureVideoSlot: record failed');
-          return publishedPoster;
-        }
-
-        final uploaded = await StudyVideoClipUploader.upload(
-          roomId: roomId,
-          userId: userId,
-          clip: clip,
-        );
-        if (uploaded == null) {
-          debugPrint('[StudyRoomController] captureVideoSlot: upload failed');
-          return publishedPoster;
-        }
-
-        final presenceUrl = uploaded.posterUrl ?? uploaded.publicUrl;
-        selfSnapshotUrl = presenceUrl;
-        _selfLatestClipUrl = uploaded.publicUrl;
-        _selfLatestClipAt = DateTime.now().toUtc();
-        await _trackSelfFull(
-          snapshotUrl: presenceUrl,
-          latestClipUrl: uploaded.publicUrl,
-        );
-
-        await _recordVideoClip(
-          roomId: roomId,
-          userId: userId,
-          storagePath: uploaded.storagePath,
-          publicUrl: uploaded.publicUrl,
-          posterUrl: uploaded.posterUrl,
-          mimeType: uploaded.mimeType,
-          sizeBytes: uploaded.sizeBytes,
-          durationMs: clip.durationMs,
-        );
-        notifyListeners();
-        return true;
-      } catch (e, st) {
-        debugPrint('[StudyRoomController] captureVideoSlot: $e\n$st');
-        return publishedPoster;
-      } finally {
-        if (!kIsWeb) {
-          unawaited(AttentionCameraService.instance.ensurePreviewStreamRunning());
-        }
-      }
-    });
-  }
-
-  Future<String?> _uploadVideoPosterJpeg({
-    required String roomId,
-    required String userId,
-    required Uint8List bytes,
-  }) async {
-    try {
-      final ts = DateTime.now().toUtc().millisecondsSinceEpoch;
-      final path = 'clips/$roomId/$userId/${ts}_live_poster.jpg';
-      await supabase.storage.from(_snapshotBucket).uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              contentType: 'image/jpeg',
-              upsert: true,
-            ),
-          );
-      final base = supabase.storage.from(_snapshotBucket).getPublicUrl(path);
-      return '$base?t=$ts';
-    } catch (e) {
-      debugPrint('[StudyRoomController] video poster upload: $e');
-      return null;
-    }
-  }
-
-  Future<void> _recordVideoClip({
-    required String roomId,
-    required String userId,
-    required String storagePath,
-    required String publicUrl,
-    String? posterUrl,
-    required String mimeType,
-    required int sizeBytes,
-    required int durationMs,
-  }) async {
-    try {
-      await supabase.from('study_room_video_clips').insert({
-        'room_id': roomId,
-        'user_id': userId,
-        'storage_path': storagePath,
-        'public_url': publicUrl,
-        'poster_url': posterUrl,
-        'mime_type': mimeType,
-        'size_bytes': sizeBytes,
-        'duration_ms': durationMs,
-        'expires_at':
-            DateTime.now().toUtc().add(const Duration(days: 1)).toIso8601String(),
-      });
-    } catch (e) {
-      debugPrint('[StudyRoomController] recordVideoClip: $e');
-    }
-  }
-
   Future<String?> _uploadSnapshot({
     required String roomId,
     required String userId,
@@ -1473,9 +1148,12 @@ class StudyRoomController extends ChangeNotifier {
       // 캡쳐 모드에서는 1분 사진 히스토리를 쌓아 셋로그(타임랩스)로 만들 수 있게 합니다.
       final nowUtc = DateTime.now().toUtc();
       final ts = nowUtc.millisecondsSinceEpoch;
-      final keepHistory = _selfPublicViewerMode == 'capture' && roomId == this.roomId;
+      final saveHistory =
+          _selfPublicViewerMode == 'capture' &&
+          roomId == this.roomId &&
+          _hasRoomPeers;
 
-      final path = keepHistory
+      final path = saveHistory
           ? 'snaps/$roomId/$userId/$ts.jpg'
           : (suffix.isEmpty ? '$roomId/$userId.jpg' : '$roomId/${userId}_$suffix.jpg');
       await supabase.storage.from(_snapshotBucket).uploadBinary(
@@ -1483,14 +1161,14 @@ class StudyRoomController extends ChangeNotifier {
             bytes,
             fileOptions: FileOptions(
               contentType: 'image/jpeg',
-              upsert: !keepHistory,
+              upsert: !saveHistory,
             ),
           );
 
       final base = supabase.storage.from(_snapshotBucket).getPublicUrl(path);
       final url = '$base?t=$ts';
 
-      if (keepHistory) {
+      if (saveHistory) {
         try {
           await supabase.from('study_room_photo_snaps').insert({
             'room_id': roomId,
@@ -1498,7 +1176,7 @@ class StudyRoomController extends ChangeNotifier {
             'storage_path': path,
             'public_url': url,
             'recorded_at': nowUtc.toIso8601String(),
-            'expires_at': nowUtc.add(const Duration(days: 1)).toIso8601String(),
+            'expires_at': _expiresAtEndOfLocalDay(nowUtc).toIso8601String(),
             'size_bytes': bytes.length,
             if (_selfStatusText.trim().isNotEmpty) 'status_text': _selfStatusText.trim(),
             // 집중도(0..100): StudyRoomController 내부 AttentionScoring 평균값

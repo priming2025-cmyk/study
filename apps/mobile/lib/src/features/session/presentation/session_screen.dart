@@ -570,7 +570,6 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                           onSelected: _c.selectPlanItem,
                           onDraftSubject: _c.setDraftSubject,
                           onDraftMinutes: _c.setDraftTargetMinutes,
-                          onOpenAdvancedAdd: _openSessionAddSheet,
                           onEditItem: _openEditSheet,
                           onDeleteItem: _onDeleteSessionPlanItem,
                           onReorder: _c.reorderPlanItems,

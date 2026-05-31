@@ -6,7 +6,6 @@ import '../../infra/study_room_controller.dart';
 import 'study_room_invite_sheet.dart';
 import 'study_room_member_card.dart';
 import 'study_room_self_live_panel.dart';
-import 'study_room_self_public_mode_sheet.dart';
 
 /// 인원수에 따른 가변 레이아웃 (Flutter 공통 — iOS · Android · Web 동일):
 ///   2명 → 1열 세로 (나, 1)
@@ -203,11 +202,6 @@ class StudyRoomMainStage extends StatelessWidget {
         height: h,
         cameraSlotActive: studyCameraSlotActive,
         engagedMinListenable: engagedMinListenable,
-        onOpenPublicMode: () => showStudyRoomSelfPublicModeSheet(
-          context,
-          current: controller.selfPublicViewerMode,
-          onSelect: controller.setSelfPublicViewerMode,
-        ),
       );
     }
     if (slot.isEmpty) {

@@ -134,6 +134,26 @@ class CompactSubjectGrid extends StatelessWidget {
     final scrollH = _scrollHeight;
 
     if (maxRows == null) {
+      if (pinAddButton) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildGrid(
+              sorted: sorted,
+              itemCount: sorted.length,
+              isAddSlot: (_) => false,
+              physics: const NeverScrollableScrollPhysics(),
+              shrinkWrap: true,
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: _rowH,
+              child: _newSubjectChip(cs),
+            ),
+          ],
+        );
+      }
       return _buildGrid(
         sorted: sorted,
         itemCount: itemCount,

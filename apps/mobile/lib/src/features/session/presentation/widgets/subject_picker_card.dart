@@ -16,7 +16,6 @@ class SubjectPickerCard extends StatefulWidget {
   final ValueChanged<PlanItem> onSelected;
   final ValueChanged<String> onDraftSubject;
   final ValueChanged<int> onDraftMinutes;
-  final VoidCallback onOpenAdvancedAdd;
   final void Function(PlanItem item) onEditItem;
   final Future<void> Function(PlanItem item) onDeleteItem;
   final void Function(int oldIndex, int newIndex)? onReorder;
@@ -31,7 +30,6 @@ class SubjectPickerCard extends StatefulWidget {
     required this.onSelected,
     required this.onDraftSubject,
     required this.onDraftMinutes,
-    required this.onOpenAdvancedAdd,
     required this.onEditItem,
     required this.onDeleteItem,
     this.onReorder,
@@ -161,23 +159,9 @@ class _SubjectPickerCardState extends State<SubjectPickerCard> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (hasPlan) ...[
-          Row(
-            children: [
-              Text(
-                '오늘 계획',
-                style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: widget.onOpenAdvancedAdd,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('+ 계획 추가'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-            ],
+          Text(
+            '오늘 계획',
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           if (widget.onReorder != null)

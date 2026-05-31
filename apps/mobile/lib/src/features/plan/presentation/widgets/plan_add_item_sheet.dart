@@ -532,6 +532,7 @@ class _SubjectTabState extends State<_SubjectTab> {
           onAddNew: _openNewSubjectForm,
           onEdit: _openEditSubjectForm,
           onDelete: widget.onDeleteSubject,
+          pinAddButton: true,
         ),
         if (_showNewSubjectForm) ...[
           const SizedBox(height: 16),

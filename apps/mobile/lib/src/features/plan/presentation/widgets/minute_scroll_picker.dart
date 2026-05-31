@@ -321,21 +321,19 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
 
   Widget _unsetChip(ColorScheme cs, TextTheme tt) {
     final sel = widget.isUnset;
-    return Center(
-      child: Material(
-        color: sel ? cs.primaryContainer : cs.surfaceContainerHighest,
+    return Material(
+      color: sel ? cs.primaryContainer : cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        onTap: widget.onUnsetTap,
         borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          onTap: widget.onUnsetTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            child: Text(
-              '미정',
-              style: tt.labelMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: sel ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-              ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          child: Text(
+            '미정',
+            style: tt.labelMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: sel ? cs.onPrimaryContainer : cs.onSurfaceVariant,
             ),
           ),
         ),
@@ -348,15 +346,19 @@ class _MinuteScrollPickerState extends State<MinuteScrollPicker> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (widget.sectionLabel != null) ...[
-          Text(
-            widget.sectionLabel!,
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        if (widget.sectionLabel != null || widget.showUnsetOption) ...[
+          Row(
+            children: [
+              if (widget.sectionLabel != null)
+                Expanded(
+                  child: Text(
+                    widget.sectionLabel!,
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              if (widget.showUnsetOption) _unsetChip(cs, tt),
+            ],
           ),
-          const SizedBox(height: 2),
-        ],
-        if (widget.showUnsetOption) ...[
-          _unsetChip(cs, tt),
           const SizedBox(height: 6),
         ],
         Opacity(

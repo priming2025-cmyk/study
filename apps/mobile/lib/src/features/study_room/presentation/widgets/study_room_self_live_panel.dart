@@ -22,7 +22,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
   final double height;
   final bool cameraSlotActive;
   final ValueListenable<int> engagedMinListenable;
-  final VoidCallback? onOpenPublicMode;
 
   const StudyRoomSelfLivePanel({
     super.key,
@@ -31,7 +30,6 @@ class StudyRoomSelfLivePanel extends StatefulWidget {
     required this.height,
     required this.cameraSlotActive,
     required this.engagedMinListenable,
-    this.onOpenPublicMode,
   });
 
   @override
@@ -269,10 +267,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     ),
                   ),
                   StudyRoomSelfFocusBadge(score: score, status: status),
-                  _SelfPanelBottomOverlays(
-                    controller: widget.controller,
-                    onOpenPublicMode: widget.onOpenPublicMode,
-                  ),
+                  _SelfPanelBottomOverlays(controller: widget.controller),
                 ],
               ),
             ),
@@ -329,10 +324,7 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
                     ),
                   ),
                 StudyRoomSelfFocusBadge(score: score, status: status),
-                _SelfPanelBottomOverlays(
-                  controller: widget.controller,
-                  onOpenPublicMode: widget.onOpenPublicMode,
-                ),
+                _SelfPanelBottomOverlays(controller: widget.controller),
               ],
             ),
           ),
@@ -344,75 +336,99 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
 
 class _SelfPanelBottomOverlays extends StatelessWidget {
   final StudyRoomController controller;
-  final VoidCallback? onOpenPublicMode;
 
-  const _SelfPanelBottomOverlays({
-    required this.controller,
-    this.onOpenPublicMode,
-  });
-
-  String _publicModeLabel(String mode) => switch (mode) {
-        'video' => '2초 영상',
-        'rest' => '휴식',
-        _ => '캡쳐',
-      };
+  const _SelfPanelBottomOverlays({required this.controller});
 
   Future<void> _editStatus(BuildContext context) async {
     final ctrl = TextEditingController(text: controller.statusText);
-    final result = await showModalBottomSheet<String>(
+    var captureOn = controller.isPublicCaptureEnabled;
+    final result = await showModalBottomSheet<({String text, bool captureOn})>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (ctx) {
         final bottom = MediaQuery.viewInsetsOf(ctx).bottom;
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 8,
-            bottom: 16 + bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '내 상태',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 8,
+                bottom: 16 + bottom,
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: ctrl,
-                autofocus: true,
-                textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(
-                  hintText: '예: 수학 공부 중',
-                  border: OutlineInputBorder(),
-                ),
-                onSubmitted: (_) => Navigator.of(ctx).pop(ctrl.text.trim()),
-              ),
-              const SizedBox(height: 12),
-              Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(null),
-                    child: const Text('취소'),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '내 상태',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: captureOn ? '공개 캡쳐 끄기' : '공개 캡쳐 켜기',
+                        onPressed: () =>
+                            setLocal(() => captureOn = !captureOn),
+                        icon: Icon(
+                          captureOn
+                              ? Icons.photo_camera
+                              : Icons.photo_camera_outlined,
+                          color: captureOn
+                              ? Theme.of(ctx).colorScheme.primary
+                              : Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: () => Navigator.of(ctx).pop(ctrl.text.trim()),
-                    child: const Text('저장'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      hintText: '예: 수학 공부 중',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => Navigator.of(ctx).pop((
+                      text: ctrl.text.trim(),
+                      captureOn: captureOn,
+                    )),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(null),
+                        child: const Text('취소'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: () => Navigator.of(ctx).pop((
+                          text: ctrl.text.trim(),
+                          captureOn: captureOn,
+                        )),
+                        child: const Text('저장'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
     ctrl.dispose();
     if (result != null) {
-      await controller.setMyStatusText(result);
+      await controller.setSelfPublicCaptureEnabled(result.captureOn);
+      await controller.setMyStatusText(result.text);
     }
   }
 
@@ -448,38 +464,6 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
                     Text(
                       '상태',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          right: 8,
-          bottom: 8,
-          child: Material(
-            color: Colors.black.withAlpha(140),
-            borderRadius: BorderRadius.circular(999),
-            child: InkWell(
-              onTap: onOpenPublicMode,
-              borderRadius: BorderRadius.circular(999),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.visibility_outlined,
-                        size: 16, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text(
-                      _publicModeLabel(controller.selfPublicViewerMode),
-                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,

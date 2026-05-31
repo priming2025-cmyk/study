@@ -31,6 +31,7 @@ import 'widgets/study_room_goal_sheet.dart';
 import 'widgets/study_room_host_sheet.dart';
 import 'widgets/study_room_invite_sheet.dart';
 import '../infra/study_room_celolog_export.dart';
+import 'widgets/study_room_celolog_download.dart';
 import 'widgets/study_room_settings_sheet.dart';
 
 class StudyRoomScreen extends ConsumerStatefulWidget {
@@ -425,14 +426,15 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
 
   Future<void> _downloadCelologToGallery() async {
     if (_celologExporting) return;
+    final speed = await showCelologSpeedPicker(context);
+    if (speed == null || !mounted) return;
+
     setState(() => _celologExporting = true);
 
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          kIsWeb ? '셀로그 영상 다운로드 중…' : '갤러리에 저장하는 중…',
-        ),
+        content: Text(celologExportProgressMessage()),
         duration: const Duration(minutes: 2),
       ),
     );
@@ -440,22 +442,15 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
     final result = await StudyRoomCelologExport.saveTodayToGallery(
       controller: _controller,
       roomId: _controller.roomId,
+      speed: speed,
     );
 
     if (!mounted) return;
     setState(() => _celologExporting = false);
     messenger.hideCurrentSnackBar();
-
-    final message = switch (result) {
-      CelologExportResult.success =>
-        kIsWeb ? '다운로드가 시작됐어요' : '갤러리에 저장됐어요',
-      CelologExportResult.noData =>
-        '오늘 저장된 사진·2초 영상이 없어요. 캡쳐·2초영상 모드로 공부한 뒤 다시 시도해 주세요.',
-      CelologExportResult.failed => '셀로그 영상을 만들지 못했어요',
-    };
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(celologExportResultMessage(result)),
         behavior: SnackBarBehavior.floating,
       ),
     );

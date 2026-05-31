@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 
 import '../../../core/providers/core_providers.dart';
@@ -130,20 +129,6 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
   void _bumpTodayPlanForSession() {
     if (!sameCalendarDay(_c.planDay, DateTime.now())) return;
     ref.read(todayPlanRevisionProvider.notifier).state++;
-  }
-
-  void _startStudyFromPlan(PlanItem item) {
-    if (!sameCalendarDay(_c.planDay, DateTime.now())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('오늘 날짜 계획만 집중공부에서 바로 시작할 수 있어요'),
-        ),
-      );
-      return;
-    }
-    ref.read(sessionPendingPlanItemIdProvider.notifier).state = item.id;
-    _bumpTodayPlanForSession();
-    context.go('/session');
   }
 
   void _openAddSheet() {
@@ -351,9 +336,6 @@ class _PlanEditorScreenState extends ConsumerState<PlanEditorScreen> {
                               onEdit: () => _openEditSheet(item),
                               onSchedule: () => _openTimeSheet(item),
                               onDelete: () => _deleteItem(item),
-                              onStartStudy: viewingToday
-                                  ? () => _startStudyFromPlan(item)
-                                  : null,
                               showDragHandle: items.length > 1,
                             ),
                           ),

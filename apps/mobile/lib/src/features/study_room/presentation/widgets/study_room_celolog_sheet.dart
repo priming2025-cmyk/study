@@ -89,16 +89,15 @@ class _CelologBodyState extends State<_CelologBody> {
   }) {
     final slotByUser = <String, GridMemberSlot>{};
 
-    void put(String userId, {String? displayName, String? statusText}) {
+    void put(String userId, {String? displayName}) {
       slotByUser[userId] = GridMemberSlot(
         userId: userId,
         displayName: displayName ?? widget.controller.displayNameFor(userId),
-        statusText: statusText,
       );
     }
 
     for (final s in controllerSlots) {
-      put(s.userId, displayName: s.displayName, statusText: s.statusText);
+      put(s.userId, displayName: s.displayName);
     }
 
     for (final p in photos) {
@@ -107,16 +106,6 @@ class _CelologBodyState extends State<_CelologBody> {
         () => GridMemberSlot(
           userId: p.userId,
           displayName: widget.controller.displayNameFor(p.userId),
-          statusText: p.statusText,
-        ),
-      );
-    }
-    for (final c in clips) {
-      slotByUser.putIfAbsent(
-        c.userId,
-        () => GridMemberSlot(
-          userId: c.userId,
-          displayName: widget.controller.displayNameFor(c.userId),
         ),
       );
     }
@@ -157,7 +146,6 @@ class _CelologBodyState extends State<_CelologBody> {
         input: GridBuildInput(
           slots: slots,
           allPhotos: data.allPhotos,
-          allClips: data.allClips,
           downloadedAt: DateTime.now(),
         ),
       );

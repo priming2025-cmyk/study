@@ -11,14 +11,10 @@ import 'setlog_grid_timelapse_frames.dart';
 /// 웹: iOS/Android와 동일한 그리드 합성 → Canvas + MediaRecorder → WebM 다운로드
 abstract final class SetlogGridTimelapseBuilderImpl {
   static Future<String?> buildAndSave({required GridBuildInput input}) async {
-    if (input.slots.isEmpty) return null;
-    if (input.allPhotos.isEmpty &&
-        !input.allClips.any((c) => c.posterUrl?.trim().isNotEmpty == true)) {
-      return null;
-    }
+    if (input.slots.isEmpty || input.allPhotos.isEmpty) return null;
 
     final prep = await SetlogGridTimelapseFrames.prepare(input);
-    if (prep.validHours.isEmpty) return null;
+    if (prep.validMinuteKeys.isEmpty) return null;
 
     final bytesCache =
         await SetlogGridTimelapseFrames.fetchAllBytes(SetlogGridTimelapseFrames.collectUrls(prep));
@@ -50,9 +46,21 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     recorder.start(100);
 
     final frameDelayMs = (1000 / input.fps).round();
-    var globalFrameIndex = 0;
+    final introFrames = SetlogGridTimelapseFrames.introOutroFrameCount(input);
 
     try {
+      final titleRgba = await SetlogGridTimelapseFrames.renderTitleFrame(
+        date: input.downloadedAt,
+        width: input.width,
+        height: input.height,
+      );
+      if (titleRgba != null) {
+        for (var i = 0; i < introFrames; i++) {
+          _blitRgba(ctx, titleRgba, input.width, input.height);
+          await Future<void>.delayed(Duration(milliseconds: frameDelayMs));
+        }
+      }
+
       final frameSpecs = SetlogGridTimelapseFrames.buildFrameSpecs(
         input: input,
         prep: prep,
@@ -76,9 +84,6 @@ abstract final class SetlogGridTimelapseBuilderImpl {
           hourLabel: timeLabel,
           width: input.width,
           height: input.height,
-          streakDays: prep.streakDays,
-          showStreak: globalFrameIndex == 0,
-          showHourLabel: true,
         );
 
         if (rgba != null) {
@@ -87,7 +92,17 @@ abstract final class SetlogGridTimelapseBuilderImpl {
             await Future<void>.delayed(Duration(milliseconds: frameDelayMs));
           }
         }
-        globalFrameIndex++;
+      }
+
+      final outroRgba = await SetlogGridTimelapseFrames.renderOutroFrame(
+        width: input.width,
+        height: input.height,
+      );
+      if (outroRgba != null) {
+        for (var i = 0; i < introFrames; i++) {
+          _blitRgba(ctx, outroRgba, input.width, input.height);
+          await Future<void>.delayed(Duration(milliseconds: frameDelayMs));
+        }
       }
     } catch (e, st) {
       debugPrint('[GridTimelapse web] 렌더 오류: $e\n$st');

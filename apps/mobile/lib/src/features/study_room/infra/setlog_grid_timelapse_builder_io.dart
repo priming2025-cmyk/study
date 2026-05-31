@@ -5,26 +5,15 @@ import 'package:flutter_quick_video_encoder/flutter_quick_video_encoder.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../domain/study_room_photo_snap_row.dart';
-import '../domain/study_room_video_clip_row.dart';
 import 'setlog_grid_timelapse_builder.dart';
 import 'setlog_grid_timelapse_frames.dart';
 
 abstract final class SetlogGridTimelapseBuilderImpl {
-  static bool _hasRenderableMedia(
-    List<StudyRoomPhotoSnapRow> photos,
-    List<StudyRoomVideoClipRow> clips,
-  ) {
-    if (photos.isNotEmpty) return true;
-    return clips.any((c) => c.posterUrl?.trim().isNotEmpty == true);
-  }
-
   static Future<String?> buildAndSave({required GridBuildInput input}) async {
-    if (input.slots.isEmpty) return null;
-    if (!_hasRenderableMedia(input.allPhotos, input.allClips)) return null;
+    if (input.slots.isEmpty || input.allPhotos.isEmpty) return null;
 
     final prep = await SetlogGridTimelapseFrames.prepare(input);
-    if (prep.validHours.isEmpty) return null;
+    if (prep.validMinuteKeys.isEmpty) return null;
 
     final bytesCache =
         await SetlogGridTimelapseFrames.fetchAllBytes(SetlogGridTimelapseFrames.collectUrls(prep));
@@ -46,7 +35,18 @@ abstract final class SetlogGridTimelapseBuilderImpl {
     );
 
     try {
-      var globalFrameIndex = 0;
+      final introFrames = SetlogGridTimelapseFrames.introOutroFrameCount(input);
+      final titleRgba = await SetlogGridTimelapseFrames.renderTitleFrame(
+        date: input.downloadedAt,
+        width: input.width,
+        height: input.height,
+      );
+      if (titleRgba != null) {
+        for (var i = 0; i < introFrames; i++) {
+          await FlutterQuickVideoEncoder.appendVideoFrame(titleRgba);
+        }
+      }
+
       final frameSpecs = SetlogGridTimelapseFrames.buildFrameSpecs(
         input: input,
         prep: prep,
@@ -70,16 +70,22 @@ abstract final class SetlogGridTimelapseBuilderImpl {
           hourLabel: timeLabel,
           width: input.width,
           height: input.height,
-          streakDays: prep.streakDays,
-          showStreak: globalFrameIndex == 0,
-          showHourLabel: true,
         );
         if (rgba != null) {
           for (var i = 0; i < spec.repeat; i++) {
             await FlutterQuickVideoEncoder.appendVideoFrame(rgba);
           }
         }
-        globalFrameIndex++;
+      }
+
+      final outroRgba = await SetlogGridTimelapseFrames.renderOutroFrame(
+        width: input.width,
+        height: input.height,
+      );
+      if (outroRgba != null) {
+        for (var i = 0; i < introFrames; i++) {
+          await FlutterQuickVideoEncoder.appendVideoFrame(outroRgba);
+        }
       }
     } catch (e, st) {
       debugPrint('[GridTimelapse] 인코딩 오류: $e\n$st');
