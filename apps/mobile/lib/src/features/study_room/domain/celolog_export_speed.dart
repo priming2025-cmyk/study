@@ -1,8 +1,7 @@
 /// 셀로그 타임랩스 재생 속도 (1초당 표시할 분 단위 사진 수).
 enum CelologExportSpeed {
   x2(photosPerSecond: 6, label: 'x2'),
-  x3(photosPerSecond: 9, label: 'x3'),
-  x4(photosPerSecond: 12, label: 'x4'),
+  x5(photosPerSecond: 15, label: 'x5'),
   x10(photosPerSecond: 30, label: 'x10');
 
   const CelologExportSpeed({

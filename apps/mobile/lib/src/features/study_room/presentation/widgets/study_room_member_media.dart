@@ -22,6 +22,18 @@ class StudyRoomMemberMedia extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     if (_isRestMode) {
+      final url = member.snapshotUrl?.trim();
+      if (url != null && url.isNotEmpty) {
+        return Image.network(
+          url,
+          fit: fit,
+          errorBuilder: (_, __, ___) =>
+              StudyRoomMemberProfilePlaceholder(cs: cs, label: displayLabel),
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : StudyRoomMemberProfilePlaceholder(cs: cs, label: displayLabel),
+        );
+      }
       return StudyRoomMemberProfilePlaceholder(
         cs: cs,
         label: displayLabel,

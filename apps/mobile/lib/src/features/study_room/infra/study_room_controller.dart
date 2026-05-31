@@ -869,10 +869,8 @@ class StudyRoomController extends ChangeNotifier {
     _mediaCaptureGen++;
     _selfPublicViewerMode = m;
     if (m == 'rest') {
-      _selfStatus = 'rest';
       await _applyRestProfilePresence();
     } else {
-      _selfStatus = 'focus';
       _restartSnapshotTimer();
       final rid = roomId;
       final uid = _selfId;
@@ -896,9 +894,9 @@ class StudyRoomController extends ChangeNotifier {
   Future<void> _applyRestProfilePresence() async {
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
-    final avatar = _selfAvatarUrl ?? '';
+    final avatar = (_selfAvatarUrl ?? '').trim();
     selfSnapshotUrl = avatar.isNotEmpty ? avatar : null;
-    await _trackSelfFull(snapshotUrl: avatar);
+    await _trackSelfFull(snapshotUrl: selfSnapshotUrl);
     notifyListeners();
   }
 
@@ -991,7 +989,7 @@ class StudyRoomController extends ChangeNotifier {
       'avatar_url': _selfAvatarUrl ?? '',
       'snapshot_url': snap,
       'snapshot_at': DateTime.now().toUtc().toIso8601String(),
-      'status': _selfPublicViewerMode == 'rest' ? 'rest' : _selfStatus,
+      'status': _selfStatus,
       'focus_score': focusAverageScore,
       'public_viewer_mode': _selfPublicViewerMode,
       'latest_clip_url': '',

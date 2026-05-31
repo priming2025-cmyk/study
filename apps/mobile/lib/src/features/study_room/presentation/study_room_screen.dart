@@ -426,7 +426,7 @@ class _StudyRoomScreenState extends ConsumerState<StudyRoomScreen> {
 
   Future<void> _downloadCelologToGallery() async {
     if (_celologExporting) return;
-    final speed = await showCelologSpeedPicker(context);
+    final speed = await showCelologDownloadSheet(context);
     if (speed == null || !mounted) return;
 
     setState(() => _celologExporting = true);

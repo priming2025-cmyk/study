@@ -372,22 +372,30 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
                           ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: captureOn ? '공개 캡쳐 끄기' : '공개 캡쳐 켜기',
-                        onPressed: () =>
-                            setLocal(() => captureOn = !captureOn),
-                        icon: Icon(
-                          captureOn
-                              ? Icons.photo_camera
-                              : Icons.photo_camera_outlined,
-                          color: captureOn
-                              ? Theme.of(ctx).colorScheme.primary
-                              : Theme.of(ctx).colorScheme.onSurfaceVariant,
-                        ),
+                      const Icon(
+                        Icons.photo_camera_outlined,
+                        size: 22,
+                        color: Colors.black54,
+                      ),
+                      const SizedBox(width: 8),
+                      _PublicCapturePowerToggle(
+                        value: captureOn,
+                        onChanged: (v) => setLocal(() => captureOn = v),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: Text(
+                      captureOn
+                          ? 'ON · 친구에게 1분마다 사진 공개'
+                          : 'OFF · 프로필 사진만 공개',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
                   TextField(
                     controller: ctrl,
                     autofocus: true,
@@ -447,7 +455,7 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
         ),
         Positioned(
           right: 8,
-          bottom: 54,
+          bottom: 8,
           child: Material(
             color: Colors.black.withAlpha(140),
             borderRadius: BorderRadius.circular(999),
@@ -476,6 +484,62 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 공개 캡쳐 ON/OFF — 전원 버튼 형태 토글.
+class _PublicCapturePowerToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _PublicCapturePowerToggle({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: value
+                ? cs.primary.withValues(alpha: 0.15)
+                : cs.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: value ? cs.primary : cs.outlineVariant,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.power_settings_new_rounded,
+                size: 18,
+                color: value ? cs.primary : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                value ? 'ON' : 'OFF',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: value ? cs.primary : cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
