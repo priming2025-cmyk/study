@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
+import 'study_room_chat_message_menu.dart';
 
 /// 채팅: 최신 메시지가 아래에 보이고, [visibleMessageLines]줄 높이만 노출 후 그 안에서 스크롤.
 class StudyRoomChatPanel extends StatefulWidget {
@@ -8,6 +9,7 @@ class StudyRoomChatPanel extends StatefulWidget {
   final Future<void> Function(String content) onSendMessage;
   final bool isFocusMode;
   final String Function(String userId)? displayNameForUser;
+  final void Function(StudyRoomMessage message)? onSetGroupNotice;
 
   /// 말풍선 리스트 영역 높이(텍스트 약 [lines]줄 분량 + 여백).
   static double messageListHeightForLines(BuildContext context, {int lines = 3}) {
@@ -37,6 +39,7 @@ class StudyRoomChatPanel extends StatefulWidget {
     required this.onSendMessage,
     required this.isFocusMode,
     this.displayNameForUser,
+    this.onSetGroupNotice,
   });
 
   @override
@@ -46,6 +49,31 @@ class StudyRoomChatPanel extends StatefulWidget {
 class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  StudyRoomMessage? _replyingTo;
+
+  String _labelFor(String userId) {
+    final fn = widget.displayNameForUser;
+    final name = fn != null ? fn(userId).trim() : null;
+    if (name != null && name.isNotEmpty) return name;
+    return userId.length > 8 ? userId.substring(0, 8) : userId;
+  }
+
+  Future<void> _onMessageLongPress(StudyRoomMessage msg) async {
+    final action = await showStudyRoomMessageActionSheet(
+      context,
+      message: msg,
+      senderLabel: _labelFor(msg.userId),
+    );
+    if (action == null || !mounted) return;
+    await handleStudyRoomMessageAction(
+      context: context,
+      action: action,
+      message: msg,
+      senderLabel: _labelFor(msg.userId),
+      onReply: (m) => setState(() => _replyingTo = m),
+      onNotice: widget.onSetGroupNotice,
+    );
+  }
 
   @override
   void didUpdateWidget(covariant StudyRoomChatPanel oldWidget) {
@@ -69,8 +97,19 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
   Future<void> _handleSend() async {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
+    var body = text;
+    final reply = _replyingTo;
+    if (reply != null) {
+      final quote = reply.content.trim();
+      if (quote.isNotEmpty) {
+        final excerpt =
+            quote.length > 60 ? '${quote.substring(0, 60)}…' : quote;
+        body = '↩ ${_labelFor(reply.userId)}: $excerpt\n$text';
+      }
+    }
     _textCtrl.clear();
-    await widget.onSendMessage(text);
+    setState(() => _replyingTo = null);
+    await widget.onSendMessage(body);
   }
 
   @override
@@ -154,7 +193,10 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                       itemBuilder: (context, index) {
                         final msg = widget.messages[n - 1 - index];
                         final isMine = msg.userId == widget.selfId;
-                        return Padding(
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: () => _onMessageLongPress(msg),
+                          child: Padding(
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Column(
                             crossAxisAlignment:
@@ -212,11 +254,33 @@ class _StudyRoomChatPanelState extends State<StudyRoomChatPanel> {
                               ),
                             ],
                           ),
-                        );
+                        ),
+                      );
                       },
                     ),
             ),
           ),
+          if (_replyingTo != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '답장 · ${_labelFor(_replyingTo!.userId)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    onPressed: () => setState(() => _replyingTo = null),
+                  ),
+                ],
+              ),
+            ),
           SafeArea(
             top: false,
             child: AnimatedPadding(

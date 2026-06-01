@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/study_room_models.dart';
 import '../../infra/study_room_controller.dart';
+import 'study_room_chat_message_menu.dart';
 
 /// 셋터디 방 단체 채팅 — DM과 동일하게 전체 화면으로 열립니다.
 class StudyRoomGroupChatScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class StudyRoomGroupChatScreen extends StatefulWidget {
 class _StudyRoomGroupChatScreenState extends State<StudyRoomGroupChatScreen> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  StudyRoomMessage? _replyingTo;
 
   @override
   void initState() {
@@ -46,25 +48,56 @@ class _StudyRoomGroupChatScreenState extends State<StudyRoomGroupChatScreen> {
     });
   }
 
-  Future<void> _send() async {
-    final text = _textCtrl.text.trim();
-    if (text.isEmpty) return;
-    await widget.controller.sendMessage(text);
-    if (!mounted) return;
-    _textCtrl.clear();
-    _scrollToBottom();
-  }
-
   String _labelFor(String userId) {
     final name = widget.controller.displayNameFor(userId)?.trim();
     if (name != null && name.isNotEmpty) return name;
     return userId.length > 8 ? userId.substring(0, 8) : userId;
   }
 
+  Future<void> _send() async {
+    final text = _textCtrl.text.trim();
+    if (text.isEmpty) return;
+
+    var body = text;
+    final reply = _replyingTo;
+    if (reply != null) {
+      final quote = reply.content.trim();
+      if (quote.isNotEmpty) {
+        final excerpt =
+            quote.length > 60 ? '${quote.substring(0, 60)}…' : quote;
+        body = '↩ ${_labelFor(reply.userId)}: $excerpt\n$text';
+      }
+    }
+
+    await widget.controller.sendMessage(body);
+    if (!mounted) return;
+    _textCtrl.clear();
+    setState(() => _replyingTo = null);
+    _scrollToBottom();
+  }
+
+  Future<void> _onMessageLongPress(StudyRoomMessage msg) async {
+    final action = await showStudyRoomMessageActionSheet(
+      context,
+      message: msg,
+      senderLabel: _labelFor(msg.userId),
+    );
+    if (action == null || !mounted) return;
+    await handleStudyRoomMessageAction(
+      context: context,
+      action: action,
+      message: msg,
+      senderLabel: _labelFor(msg.userId),
+      onReply: (m) => setState(() => _replyingTo = m),
+      onNotice: widget.controller.setGroupNotice,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selfId = widget.controller.selfId ?? '';
     final messages = widget.controller.roomChatMessages;
+    final notice = widget.controller.groupNotice;
 
     return Scaffold(
       appBar: AppBar(
@@ -83,6 +116,12 @@ class _StudyRoomGroupChatScreenState extends State<StudyRoomGroupChatScreen> {
       ),
       body: Column(
         children: [
+          if (notice != null)
+            StudyRoomGroupNoticeBanner(
+              notice: notice,
+              senderLabel: _labelFor(notice.userId),
+              onClear: widget.controller.clearGroupNotice,
+            ),
           Expanded(
             child: messages.isEmpty
                 ? Center(
@@ -101,14 +140,24 @@ class _StudyRoomGroupChatScreenState extends State<StudyRoomGroupChatScreen> {
                     itemCount: messages.length,
                     itemBuilder: (context, i) {
                       final msg = messages[i];
-                      return _MessageBubble(
-                        message: msg,
-                        isMine: msg.userId == selfId,
-                        senderLabel: _labelFor(msg.userId),
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onLongPress: () => _onMessageLongPress(msg),
+                        child: _MessageBubble(
+                          message: msg,
+                          isMine: msg.userId == selfId,
+                          senderLabel: _labelFor(msg.userId),
+                        ),
                       );
                     },
                   ),
           ),
+          if (_replyingTo != null)
+            _ReplyPreviewBar(
+              label: _labelFor(_replyingTo!.userId),
+              text: _replyingTo!.content,
+              onCancel: () => setState(() => _replyingTo = null),
+            ),
           SafeArea(
             top: false,
             child: Padding(
@@ -152,6 +201,56 @@ class _StudyRoomGroupChatScreenState extends State<StudyRoomGroupChatScreen> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplyPreviewBar extends StatelessWidget {
+  final String label;
+  final String text;
+  final VoidCallback onCancel;
+
+  const _ReplyPreviewBar({
+    required this.label,
+    required this.text,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final excerpt = text.trim();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.reply_rounded, size: 18, color: cs.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '답장 · $label: ${excerpt.length > 28 ? '${excerpt.substring(0, 28)}…' : excerpt}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: cs.onPrimaryContainer,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onCancel,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            tooltip: '답장 취소',
           ),
         ],
       ),

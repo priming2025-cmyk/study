@@ -590,6 +590,7 @@ class StudyRoomController extends ChangeNotifier {
     _dmReadAtByUser.clear();
     _fixedPeerOrder.clear();
     selfSnapshotUrl = null;
+    _groupNotice = null;
 
     if (rid != null && uid != null) {
       try {
@@ -858,6 +859,19 @@ class StudyRoomController extends ChangeNotifier {
     notifyListeners();
   }
 
+  StudyRoomMessage? _groupNotice;
+  StudyRoomMessage? get groupNotice => _groupNotice;
+
+  void setGroupNotice(StudyRoomMessage message) {
+    _groupNotice = message;
+    notifyListeners();
+  }
+
+  void clearGroupNotice() {
+    _groupNotice = null;
+    notifyListeners();
+  }
+
   Future<void> setSelfPublicCaptureEnabled(bool enabled) async {
     await setSelfPublicViewerMode(enabled ? 'capture' : 'rest');
   }
@@ -871,15 +885,33 @@ class StudyRoomController extends ChangeNotifier {
     if (m == 'rest') {
       await _applyRestProfilePresence();
     } else {
-      _restartSnapshotTimer();
       final rid = roomId;
       final uid = _selfId;
+      await _ensureCameraForCapture();
       if (rid != null && uid != null) {
-        unawaited(_uploadSnapshotWhenCameraReady(roomId: rid, userId: uid));
+        await _uploadSnapshotWhenCameraReady(roomId: rid, userId: uid);
       }
+      _restartSnapshotTimer(skipImmediate: true);
     }
     await _trackSelfFull(snapshotUrl: selfSnapshotUrl);
     notifyListeners();
+  }
+
+  Future<void> _ensureCameraForCapture() async {
+    if (kIsWeb) {
+      WebSharedCamera.instance.openFromUserGesture();
+      await WebSharedCamera.instance.acquire();
+      for (var i = 0; i < 30; i++) {
+        if (WebSharedCamera.instance.isStreamReady) return;
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      return;
+    }
+    await AttentionCameraService.instance.ensurePreviewStreamRunning();
+    for (var i = 0; i < 30; i++) {
+      if (AttentionCameraService.instance.hasActiveCamera) return;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
   }
 
   Future<T> _runMediaExclusive<T>(Future<T> Function() action) {
@@ -1095,7 +1127,7 @@ class StudyRoomController extends ChangeNotifier {
     }
   }
 
-  void _restartSnapshotTimer() {
+  void _restartSnapshotTimer({bool skipImmediate = false}) {
     _snapshotTimer?.cancel();
     _snapshotTimer = null;
     final rid = roomId;
@@ -1122,7 +1154,9 @@ class StudyRoomController extends ChangeNotifier {
       });
     }
 
-    unawaited(tick());
+    if (!skipImmediate) {
+      unawaited(tick());
+    }
     _snapshotTimer = Timer.periodic(_captureInterval, (_) => unawaited(tick()));
   }
 
