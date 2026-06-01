@@ -14,7 +14,9 @@ import '../../session/infra/web_camera.dart';
 import '../../plan/data/plan_repository.dart';
 import '../../plan/presentation/widgets/plan_time_utils.dart';
 import '../domain/study_room_default_name.dart';
+import '../domain/study_room_focus_timeline.dart';
 import '../domain/study_room_join_code.dart';
+import 'study_room_celolog_repository.dart';
 import '../../social/domain/friend_dm_models.dart';
 import '../domain/study_room_models.dart';
 import 'room_snapshot.dart';
@@ -202,7 +204,17 @@ class StudyRoomController extends ChangeNotifier {
   DateTime? _lastFocusSignalAt;
   int _engagedMinScore = 50;
 
+  static const int _focusHistoryCap = 360;
+  static const Duration _focusSampleEvery = Duration(seconds: 5);
+  final List<int> _focusScoreHistory = [];
+  DateTime? _lastFocusSampleAt;
+  final Map<String, List<StudyRoomFocusSample>> _focusSnapsByUser = {};
+  DateTime? _lastFocusSnapsFetchAt;
+
   StudyRoomAmbientPlayer get ambient => _ambient;
+
+  /// 본인 실시간 집중 흐름 (약 30분, 5초 간격).
+  List<int> get focusScoreHistory => List.unmodifiable(_focusScoreHistory);
 
   String get goalText => _selfGoalText;
   String get statusText => _selfStatusText;
@@ -236,6 +248,8 @@ class StudyRoomController extends ChangeNotifier {
     );
     _lastFocusSignalAt = null;
     _focusState = AttentionScoringState.started(DateTime.now());
+    _focusScoreHistory.clear();
+    _lastFocusSampleAt = null;
     _focusTimer = Timer.periodic(const Duration(seconds: 1), (_) => _onFocusTick());
     _onFocusTick();
     notifyListeners();
@@ -251,6 +265,8 @@ class StudyRoomController extends ChangeNotifier {
     _focusTimer = null;
     _focusState = null;
     _lastFocusSignalAt = null;
+    _focusScoreHistory.clear();
+    _lastFocusSampleAt = null;
   }
 
   Future<SessionSummary?> endFocusTracking() async {
@@ -294,7 +310,67 @@ class StudyRoomController extends ChangeNotifier {
       signals: tickSignals,
       engagedMinScore: _engagedMinScore,
     );
+    _appendFocusSample(tickSignals);
     notifyListeners();
+  }
+
+  void _appendFocusSample(AttentionSignals signals) {
+    final now = DateTime.now();
+    if (_lastFocusSampleAt != null &&
+        now.difference(_lastFocusSampleAt!) < _focusSampleEvery) {
+      return;
+    }
+    _lastFocusSampleAt = now;
+    final score = AttentionScoring.instantScore(signals);
+    _focusScoreHistory.add(score);
+    while (_focusScoreHistory.length > _focusHistoryCap) {
+      _focusScoreHistory.removeAt(0);
+    }
+  }
+
+  /// 카드 그래프용: 본인은 실시간, 타인은 오늘 분당 스냅샷.
+  List<int> focusTrendScoresFor(String userId, {int? fallbackScore}) {
+    if (userId == _selfId) {
+      if (_focusScoreHistory.isNotEmpty) return focusScoreHistory;
+      final fb = fallbackScore ?? focusAverageScore;
+      return fb > 0 ? [fb] : const [];
+    }
+    final snaps = _focusSnapsByUser[userId];
+    if (snaps != null && snaps.isNotEmpty) {
+      return StudyRoomFocusTimeline.scoresFromSnaps(snaps);
+    }
+    final fb = fallbackScore;
+    if (fb != null && fb > 0) return [fb];
+    return const [];
+  }
+
+  Future<void> refreshRoomFocusSnapshots({bool force = false}) async {
+    final rid = roomId;
+    if (rid == null) return;
+    final now = DateTime.now();
+    if (!force &&
+        _lastFocusSnapsFetchAt != null &&
+        now.difference(_lastFocusSnapsFetchAt!) < const Duration(minutes: 1)) {
+      return;
+    }
+    try {
+      final room = await StudyRoomCelologRepository.fetchRoomToday(roomId: rid);
+      _focusSnapsByUser.clear();
+      for (final p in room.photos) {
+        final fs = p.focusScore;
+        if (fs == null) continue;
+        (_focusSnapsByUser[p.userId] ??= []).add(
+          StudyRoomFocusSample(at: p.recordedAt, score: fs),
+        );
+      }
+      for (final list in _focusSnapsByUser.values) {
+        list.sort((a, b) => a.at.compareTo(b.at));
+      }
+      _lastFocusSnapsFetchAt = now;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[StudyRoomController] refreshRoomFocusSnapshots: $e');
+    }
   }
 
   // ── 방 만들기 ──────────────────────────────────────────────────────────────
@@ -492,6 +568,7 @@ class StudyRoomController extends ChangeNotifier {
       await _joinFriendDmChannel();
       unawaited(_refreshFriendDmPreviews());
       unawaited(_finishJoinSnapshot(roomId: resolvedId, userId: userId));
+      unawaited(refreshRoomFocusSnapshots(force: true));
       unawaited(ensureRoomMatesFriends());
       webSelfCamEpoch++;
       return true;
@@ -591,6 +668,10 @@ class StudyRoomController extends ChangeNotifier {
     _fixedPeerOrder.clear();
     selfSnapshotUrl = null;
     _groupNotice = null;
+    _focusSnapsByUser.clear();
+    _lastFocusSnapsFetchAt = null;
+    _focusScoreHistory.clear();
+    _lastFocusSampleAt = null;
 
     if (rid != null && uid != null) {
       try {
@@ -1217,6 +1298,7 @@ class StudyRoomController extends ChangeNotifier {
         } catch (e) {
           debugPrint('[StudyRoomController] photo_snaps insert error: $e');
         }
+        unawaited(refreshRoomFocusSnapshots(force: true));
       }
 
       return url;

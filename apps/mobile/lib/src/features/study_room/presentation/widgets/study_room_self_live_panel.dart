@@ -13,6 +13,8 @@ import '../../../session/infra/web_camera.dart';
 import '../../infra/study_room_controller.dart';
 import 'study_room_self_camera_preview_box.dart';
 import 'study_room_group_chat_chip.dart';
+import '../../domain/study_room_focus_timeline.dart';
+import 'study_room_focus_trend_overlay.dart';
 import 'study_room_self_focus_badge.dart';
 /// 스터디방 본인 실시간 프리뷰 — [AttentionCameraService] 단일 인스턴스 공유.
 /// 다른 탭으로 나갈 때는 카메라를 **끄지 않고** 구독만 끊습니다(공부 탭과 동일).
@@ -274,6 +276,16 @@ class _StudyRoomSelfLivePanelState extends State<StudyRoomSelfLivePanel> {
           );
         }
 
+        if (!widget.controller.isPublicCaptureEnabled) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: _SelfRestProfileWithTrend(
+              controller: widget.controller,
+              statusText: widget.controller.statusText.trim(),
+            ),
+          );
+        }
+
         return ClipRRect(
           borderRadius: BorderRadius.circular(14),
           child: ColoredBox(
@@ -484,6 +496,96 @@ class _SelfPanelBottomOverlays extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 캡쳐 OFF 시 타인에게 보이는 것과 동일: 프로필 + 하단 집중 흐름 그래프.
+class _SelfRestProfileWithTrend extends StatelessWidget {
+  final StudyRoomController controller;
+  final String statusText;
+
+  const _SelfRestProfileWithTrend({
+    required this.controller,
+    required this.statusText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final selfId = controller.selfId ?? '';
+    final avatar = controller.avatarUrlFor(selfId)?.trim();
+    final scores = controller.focusScoreHistory;
+    final display = controller.displayNameFor(selfId) ?? '나';
+
+    return ColoredBox(
+      color: cs.surfaceContainerHighest,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (avatar != null && avatar.isNotEmpty)
+            Image.network(
+              avatar,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fallbackAvatar(cs, display),
+            )
+          else
+            _fallbackAvatar(cs, display),
+          if (scores.isNotEmpty)
+            Positioned.fill(
+              child: StudyRoomFocusTrendOverlay(
+                scores: scores,
+                headlineScore: controller.focusAverageScore,
+                subtitle: scores.length >= StudyRoomFocusTimeline.minPointsForChart
+                    ? '실시간'
+                    : null,
+              ),
+            ),
+          if (statusText.isNotEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Text(
+                  statusText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                    height: 1.15,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 18,
+                        color: Colors.black54,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          _SelfPanelBottomOverlays(controller: controller),
+        ],
+      ),
+    );
+  }
+
+  Widget _fallbackAvatar(ColorScheme cs, String label) {
+    return Center(
+      child: CircleAvatar(
+        radius: 48,
+        backgroundColor: cs.primaryContainer,
+        child: Text(
+          label.isNotEmpty ? label.substring(0, 1) : '?',
+          style: TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.w800,
+            color: cs.onPrimaryContainer,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -211,6 +211,7 @@ class StudyRoomMainStage extends StatelessWidget {
     return StudyRoomMemberCard(
       member: m,
       isSelf: false,
+      roomController: controller,
       compact: true,
       floatingReaction: controller.reactionEmojiFor(m.userId),
       onQuickReact: (emoji) =>

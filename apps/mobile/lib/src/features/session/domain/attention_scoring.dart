@@ -126,6 +126,10 @@ class AttentionScoring {
     return score.clamp(0, 100);
   }
 
+  /// UI·집중 흐름 그래프용 순간 점수 (1초/5초 샘플).
+  static int instantScore(AttentionSignals signals) =>
+      _computeScore(_effectiveSignals(signals));
+
   /// UI용 단계. [engagedMinScore]를 ‘집중’ 하한에 맞추고, 그 아래는 보통·이탈 구간으로 나눕니다.
   static FocusStatus _statusFromScore(
     int score,

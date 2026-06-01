@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../domain/study_room_models.dart';
+import '../../infra/study_room_controller.dart';
 import 'study_room_member_media.dart';
 import 'study_room_peer_dm_chip.dart';
 
@@ -16,11 +17,13 @@ class StudyRoomMemberCard extends StatelessWidget {
   final VoidCallback? onChat;
   final String? dmPreview;
   final bool dmHasUnread;
+  final StudyRoomController? roomController;
 
   const StudyRoomMemberCard({
     super.key,
     required this.member,
     required this.isSelf,
+    this.roomController,
     this.compact = false,
     this.floatingReaction,
     this.onQuickReact,
@@ -58,6 +61,7 @@ class StudyRoomMemberCard extends StatelessWidget {
           StudyRoomMemberMedia(
             member: member,
             displayLabel: displayLabel,
+            controller: roomController,
           ),
 
           Positioned(
